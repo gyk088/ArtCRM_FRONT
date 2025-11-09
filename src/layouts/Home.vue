@@ -1,25 +1,34 @@
 <!-- src/layouts/HomeLayout.vue -->
 <template>
-  <a-layout style="min-height: 100vh">
+  <a-layout 
+  style="min-height: 100vh"
+  >
     <!-- Боковое меню -->
-    <a-layout-sider collapsible v-model:collapsed="collapsed">
-      <div class="logo">My App</div>
+    <a-layout-sider 
+    collapsible v-model:collapsed="collapsed">
+      <div class="logo">ART CRM</div>
       <a-menu
+        class="custom-menu"
         theme="dark"
         mode="inline"
         :selectedKeys="[selectedKey]"
         @click="onMenuClick"
       >
-        <a-menu-item key="dashboard" icon="dashboard">Панель</a-menu-item>
+        <a-menu-item key="dashboard" icon="dashboard">Мои работы</a-menu-item>
+        <a-menu-item key="bio" icon="bio">Биография</a-menu-item>
+        <a-menu-item key="cv" icon="cv">Резюме</a-menu-item>
         <a-menu-item key="settings" icon="setting">Настройки</a-menu-item>
       </a-menu>
     </a-layout-sider>
 
     <!-- Контент -->
     <a-layout>
-      <a-layout-header style="background: #fff; padding: 0 16px">
-        <h3>Главная страница</h3>
-      </a-layout-header>
+      <!-- <a-layout-header class="header"> -->
+        <!-- <div class="header-content">
+          <h3>Главная страница</h3>
+          <a-button type="primary" @click="showModal">Добавить</a-button>
+        </div> -->
+      <!-- </a-layout-header> -->
 
       <a-layout-content style="margin: 16px">
         <router-view />
@@ -44,6 +53,27 @@ function onMenuClick({ key }) {
 </script>
 
 <style scoped>
+.custom-menu .ant-menu-item-selected {
+  background-color: #4f4ec1 !important; /* цвет фона выбранного пункта */
+  color: #fff !important; /* цвет текста выбранного пункта */
+}
+
+/* При наведении */
+.custom-menu .ant-menu-item:hover {
+  background-color: #5761b3 !important;
+  color: #fff !important;
+}
+.header {
+  background: #fff;
+  padding: 0 16px;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 64px;
+}
 .logo {
   height: 64px;
   margin: 16px;
