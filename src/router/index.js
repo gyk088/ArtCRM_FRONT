@@ -48,7 +48,19 @@ const router = createRouter({
         meta: {
             title: '<Резюме>',
           },
-      },
+      },{
+        path: 'collection',
+        name: 'collection',
+        component: () => import('@/pages/CollectionList/index.vue'),
+        meta: {
+            title: '<Мои коллекции>',
+          },
+      }, {
+          path: '/home/collection/:id',
+          name: 'edit-collection',
+          component: () => import('@/pages/Collection/index.vue'),
+          meta: { title: 'Редактировать коллекцию' },
+        },
     ],
     },
     {

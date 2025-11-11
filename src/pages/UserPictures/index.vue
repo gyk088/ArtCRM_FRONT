@@ -97,6 +97,7 @@ const createCollection = () => {
   justify-content: space-between;
   align-items: end;
   margin-bottom: 16px;
+  font-size: 18px;
 }
 .header-buttons {
   display: flex;

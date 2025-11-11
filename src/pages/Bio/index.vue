@@ -121,6 +121,7 @@ function deleteBio(id) {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  font-size: 18px;
 }
 .bio-grid {
   display: grid;

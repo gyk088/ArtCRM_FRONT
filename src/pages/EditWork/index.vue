@@ -15,16 +15,16 @@
         <a-input v-model:value="form.email" class="fixed-input" />
       </a-form-item>
 
-      <a-form-item label="Коллекция">
+    <a-form-item label="Коллекция">
   <a-select
-    v-model:value="form.collection"
+    v-model:value="form.collections"
     mode="multiple"
     placeholder="Выберите коллекцию"
     class="fixed-input"
     allow-clear
   >
-    <a-select-option v-for="col in collections" :key="col" :value="col">
-      {{ col }}
+    <a-select-option v-for="col in collectionList" :key="col.id" :value="col.id">
+      {{ col.name }}
     </a-select-option>
   </a-select>
 </a-form-item>
@@ -87,7 +87,7 @@ import { PlusOutlined } from '@ant-design/icons-vue'
 const route = useRoute()
 const router = useRouter()
 const isEditing = ref(!!route.params.id)
-const collections = ref(['Коллекция 1', 'Коллекция 2', 'Коллекция 3'])
+const collectionList = ref([]);
 const form = reactive({
   name: '',
   address: '',
@@ -102,6 +102,8 @@ onMounted(() => {
     const work = storedData.find(w => w.id == route.params.id)
     if (work) Object.assign(form, work)
   }
+const saved = localStorage.getItem('collectionList');
+  if (saved) collectionList.value = JSON.parse(saved);
 })
 
 const handleBeforeUpload = (file) => {
@@ -151,14 +153,35 @@ function prevImage() {
 }
 
 const saveChanges = () => {
-  const storedData = JSON.parse(localStorage.getItem('works') || '[]')
-  if (route.params.id === 'new') {
-    storedData.push({ ...form, id: Date.now() })
+  let storedWorks = JSON.parse(localStorage.getItem('works') || '[]')
+  const workId = form.id || Date.now()
+
+  // Если новая работа, присваиваем id
+  if (!form.id) form.id = workId
+
+  const workIndex = storedWorks.findIndex(w => w.id == form.id)
+  if (workIndex !== -1) {
+    storedWorks[workIndex] = { ...form }
   } else {
-    const index = storedData.findIndex(w => w.id == route.params.id)
-    if (index !== -1) storedData[index] = { ...form, id: route.params.id }
+    storedWorks.push({ ...form })
   }
-  localStorage.setItem('works', JSON.stringify(storedData))
+
+  // Обновляем связи коллекции ↔ работа
+  const collectionsList = JSON.parse(localStorage.getItem('collectionList') || '[]')
+  // Сначала удаляем работу из всех коллекций, чтобы избежать дублирования
+  collectionsList.forEach(c => {
+  if (!c.works) c.works = []
+  c.works = c.works.filter(id => id !== form.id)
+})
+  // Добавляем работу в выбранные коллекции
+  form.collections.forEach(colId => {
+  const collection = collectionsList.find(c => c.id === colId)
+  if (collection) collection.works.push(form.id)
+})
+// Сохраняем в localStorage
+  localStorage.setItem('works', JSON.stringify(storedWorks))
+  localStorage.setItem('collectionList', JSON.stringify(collectionsList))
+
   router.push('/home/dashboard')
 }
 

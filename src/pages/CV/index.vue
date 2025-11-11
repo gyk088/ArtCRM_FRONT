@@ -121,6 +121,7 @@ function deleteCv(id) {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  font-size: 18px;
 }
 .cv-grid {
   display: grid;

@@ -4,11 +4,10 @@
   style="min-height: 100vh"
   >
     <!-- Боковое меню -->
-    <a-layout-sider 
+    <a-layout-sider :width="260"
     collapsible v-model:collapsed="collapsed">
       <div class="logo">ART CRM</div>
       <a-menu
-        class="custom-menu"
         theme="dark"
         mode="inline"
         :selectedKeys="[selectedKey]"
@@ -17,7 +16,8 @@
         <a-menu-item key="dashboard" icon="dashboard">Мои работы</a-menu-item>
         <a-menu-item key="bio" icon="bio">Биография</a-menu-item>
         <a-menu-item key="cv" icon="cv">Резюме</a-menu-item>
-        <a-menu-item key="settings" icon="setting">Настройки</a-menu-item>
+        <a-menu-item key="collection" icon="collection">Мои Коллекции</a-menu-item>
+        <!-- <a-menu-item key="settings" icon="setting">Настройки</a-menu-item> -->
       </a-menu>
     </a-layout-sider>
 
@@ -53,16 +53,6 @@ function onMenuClick({ key }) {
 </script>
 
 <style scoped>
-.custom-menu .ant-menu-item-selected {
-  background-color: #4f4ec1 !important; /* цвет фона выбранного пункта */
-  color: #fff !important; /* цвет текста выбранного пункта */
-}
-
-/* При наведении */
-.custom-menu .ant-menu-item:hover {
-  background-color: #5761b3 !important;
-  color: #fff !important;
-}
 .header {
   background: #fff;
   padding: 0 16px;
