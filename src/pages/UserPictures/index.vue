@@ -12,30 +12,51 @@
     </div>
 
     <!-- Таблица -->
-    <a-table class="custom-table" :columns="columns" :data-source="data" row-key="id" :row-selection="rowSelection">
-      <template #bodyCell="{ column, record }">
-        <!-- Кнопки действий -->
-        <template v-if="column.dataIndex === 'actions'">
-          <a-button type="text" @click="openEditPage(record)">
-            <EditOutlined />
-          </a-button>
-          <a-button type="text" danger @click="deleteRow(record.id)">
-            Удалить
-          </a-button>
-        </template>
+    <a-table
+  class="custom-table"
+  :columns="columns"
+  :data-source="data"
+  row-key="id"
+  :row-selection="rowSelection"
+>
+  <template #bodyCell="{ column, record }">
+    <!-- Колонка аватара -->
+    <template v-if="column.dataIndex === 'avatar'">
+      <img
+        v-if="record.avatar && record.avatar.url"
+        :src="record.avatar.url"
+        class="preview-img"
+      />
+      <div v-else class="img-placeholder">
+        <PictureOutlined />
+      </div>
+    </template>
+    <template v-else-if="column.dataIndex === 'series'">
+    {{ Array.isArray(record.series) ? record.series.join(', ') : record.series }}
+  </template>
 
-        <!-- Остальные поля -->
-        <template v-else>
-          {{ record[column.dataIndex] }}
-        </template>
-      </template>
-    </a-table>
+    <!-- Колонка действий -->
+    <template v-else-if="column.dataIndex === 'actions'">
+      <a-button type="text" @click="openEditPage(record)">
+        <EditOutlined />
+      </a-button>
+      <a-button type="text" danger @click="deleteRow(record.id)">
+        Удалить
+      </a-button>
+    </template>
+
+    <!-- Остальные колонки -->
+    <template v-else>
+      {{ record[column.dataIndex] }}
+    </template>
+  </template>
+</a-table>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { EditOutlined } from '@ant-design/icons-vue'
+import { EditOutlined, PictureOutlined } from '@ant-design/icons-vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -44,10 +65,15 @@ const selectedRowKeys = ref([])
 
 // Колонки таблицы
 const columns = [
+  { title: 'Изображение', dataIndex: 'avatar', key: 'avatar', width: 90 },
   { title: 'Название', dataIndex: 'name', key: 'name' },
-  { title: 'Адрес', dataIndex: 'address', key: 'address' },
-  { title: 'Email', dataIndex: 'email', key: 'email' },
-  { title: 'Действия', dataIndex: 'actions', key: 'actions' }
+  { title: 'Техника', dataIndex: 'technique', key: 'technique', width: 140  },
+  { title: 'Год', dataIndex: 'year', key: 'year', width: 90  },
+  { title: 'Описание', dataIndex: 'description', key: 'description', className: 'desc-col'},
+  { title: 'Локация', dataIndex: 'address', key: 'address', width: 140 },
+  { title: 'Серия', dataIndex: 'series', key: 'series', width: 120 },
+  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 100 },
+  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 100 },
 ]
 
 // Загрузка данных из localStorage при старте
@@ -91,7 +117,7 @@ const createCollection = () => {
 }
 </script>
 
-<style scoped>
+<style>
 .header-content {
   display: flex;
   justify-content: space-between;
@@ -103,6 +129,37 @@ const createCollection = () => {
   display: flex;
   gap: 8px;
 }
+/* фиксированная высота строки и минимальные паддинги */
+.ant-table-tbody > tr > td {
+  height: 60px !important;
+  padding: 4px 8px !important;
+  vertical-align: middle !important;
+}
+.desc-col {
+  max-width: 200px;
+  white-space: nowrap;     
+  overflow: hidden;         
+  text-overflow: ellipsis;   
+}
+.preview-img {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #eee;
+}
+.img-placeholder {
+  width: 60px;
+  height: 60px;
+  border-radius: 6px;
+  border: 1px dashed #bbb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: #999;
+  background: #fafafa;
+}
 .buttons {
   background-color: #4f4ec1;
   border-color: #5761b3;
@@ -113,9 +170,5 @@ const createCollection = () => {
   border-color: #2e2e9f; /* цвет рамки при наведении */
   background-color: #6c6bff; /* немного светлее фон */
   color: #fff;
-}
-.custom-table .tbody > tr:hover > td {
-  border: 1px solid #1890ff; /* цвет основной границы таблицы */
-  background-color: #f5faff;
 }
 </style>
