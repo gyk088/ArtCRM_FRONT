@@ -33,20 +33,72 @@
           </a-form-item>
 
           <a-form-item>
-            <a-input v-model:value="form.year" placeholder="Год" class="fixed-input" />
+            <a-date-picker v-model:value="form.year" picker="year" valueFormat="YYYY" format="YYYY" placeholder="Год"
+              @change="onYearSelect" ref="yearPicker" class="fixed-input calendar-input" :allowClear="false" />
           </a-form-item>
 
           <a-form-item>
-            <a-input v-model:value="form.description" placeholder="Описание" class="fixed-input" />
+            <a-textarea v-model:value="form.description" placeholder="Описание" class="fixed-input description-input" />
           </a-form-item>
 
           <a-form-item>
-            <a-input v-model:value="form.address" placeholder="Локация" class="fixed-input" />
+            <a-select v-model:value="form.address" placeholder="Выберите или введите город" class="series-select"
+              :options="items.map(item => ({ value: item }))" allowClear>
+              <template #dropdownRender="{ menuNode: menu }">
+                <VNodes :vnodes="menu" />
+                <a-divider style="margin: 4px 0" />
+                <div style="padding: 4px 8px; display:flex; flex-wrap: wrap; gap: 4px;">
+                  <span v-for="(item, idx) in items" :key="item"
+                    style="display:flex; align-items:center; background:#f0f0f0; padding:2px 6px; border-radius:4px;">
+                    {{ item }}
+                    <button @click.prevent="removeItem(idx)"
+                      style="margin-left:4px; border:none; background:none; cursor:pointer; color:red;">
+                      ×
+                    </button>
+                  </span>
+                </div>
+                <a-space style="padding: 4px 8px; margin-top:4px;">
+                  <a-input ref="inputRef" v-model:value="name" placeholder="Введите город" @keyup.enter="addItem" />
+                  <a-button type="text" @click="addItem">
+                    <template #icon>
+                      <PlusOutlined />
+                    </template>
+                    Добавить
+                  </a-button>
+                </a-space>
+              </template>
+            </a-select>
           </a-form-item>
 
           <a-form-item>
             <a-select v-model:value="form.series" mode="tags" :options="seriesOptions"
-              placeholder="Введите или выберите серию" @change="saveSeriesOptions" class="series-select" allowClear />
+              placeholder="Введите или выберите серию" @change="saveSeriesOptions" class="series-select" allowClear>
+              <template #dropdownRender="{ menuNode: menu }">
+                <VNodes :vnodes="menu" />
+
+                <a-divider style="margin: 4px 0" />
+
+                <!-- Блок списка серий с кнопками удаления -->
+                <div style="padding: 4px 8px; display:flex; flex-wrap:wrap; gap:6px;">
+                  <span v-for="(item, idx) in seriesOptions" :key="item.value"
+                    style="display:flex; align-items:center; background:#f0f0f0; padding:2px 6px; border-radius:4px;">
+                    {{ item.label }}
+                    <button @click.prevent="removeSeries(idx)"
+                      style="margin-left:4px; border:none; background:none; cursor:pointer; color:red;">
+                      ×
+                    </button>
+                  </span>
+                </div>
+              </template>
+            </a-select>
+          </a-form-item>
+
+          <a-form-item>
+            <a-select v-model:value="form.status" placeholder="Статус" class="status-select">
+              <a-select-option value="Доступно">Доступно</a-select-option>
+              <a-select-option value="Частная коллекция">Частная коллекция</a-select-option>
+              <a-select-option value="Резерв">Резерв</a-select-option>
+            </a-select>
           </a-form-item>
 
           <a-form-item>
@@ -78,14 +130,14 @@
         <a-form-item label="Изображения" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
           <div class="images-block">
             <!-- Кнопка загрузки -->
-             <div class="my-upload-block">
-            <a-upload list-type="picture-card" multiple :before-upload="handleBeforeUpload" show-upload-list="false"
-              @remove="handleRemove">
-              <div>
-                <PlusOutlined />
-                <div>Загрузить</div>
-              </div>
-            </a-upload>
+            <div class="my-upload-block">
+              <a-upload list-type="picture-card" multiple :before-upload="handleBeforeUpload" show-upload-list="false"
+                @remove="handleRemove">
+                <div>
+                  <PlusOutlined />
+                  <div>Загрузить</div>
+                </div>
+              </a-upload>
             </div>
 
             <!-- Галерея превью -->
@@ -95,8 +147,7 @@
                   <img :src="img.url" class="preview-image" @click="openViewer(index)" />
                   <button class="delete-btn" @click.stop="removeImage(index)">×</button>
                 </div>
-                <a-textarea v-model:value="img.comment" placeholder="Комментарий" class="image-comment"
-                  auto-size="{ minRows: 2, maxRows: 6 }" />
+                <a-textarea v-model:value="img.comment" placeholder="Комментарий" class="image-comment"/>
               </div>
             </div>
           </div>
@@ -105,14 +156,14 @@
         <a-form-item label="Экспозиция" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
           <div class="images-block">
             <!-- Кнопка загрузки -->
-             <div class="my-upload-block">
-            <a-upload list-type="picture-card" multiple :before-upload="handleBeforeUploadExposition" show-upload-list="false"
-              @remove="handleRemoveExposition">
-              <div>
-                <PlusOutlined />
-                <div>Загрузить</div>
-              </div>
-            </a-upload>
+            <div class="my-upload-block">
+              <a-upload list-type="picture-card" multiple :before-upload="handleBeforeUploadExposition"
+                show-upload-list="false" @remove="handleRemoveExposition">
+                <div>
+                  <PlusOutlined />
+                  <div>Загрузить</div>
+                </div>
+              </a-upload>
             </div>
 
             <!-- Галерея превью -->
@@ -122,8 +173,7 @@
                   <img :src="img.url" class="preview-image" @click="openViewer(index)" />
                   <button class="delete-btn" @click.stop="removeImageExposition(index)">×</button>
                 </div>
-                <a-textarea v-model:value="img.comment" placeholder="Комментарий" class="image-comment"
-                  auto-size="{ minRows: 2, maxRows: 6 }" />
+                <a-textarea v-model:value="img.comment" placeholder="Комментарий" class="image-comment"/>
               </div>
             </div>
           </div>
@@ -145,7 +195,7 @@
 
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, defineComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PlusOutlined } from '@ant-design/icons-vue'
 
@@ -153,14 +203,25 @@ const route = useRoute()
 const router = useRouter()
 const collectionList = ref([]);
 const seriesOptions = ref([])
+const yearPicker = ref(null)
+const VNodes = defineComponent({
+  props: { vnodes: { type: Object, required: true } },
+  render() { return this.vnodes }
+})
+
+const items = ref([])
+const value = ref(null)
+const inputRef = ref()
+const name = ref('')
 const form = reactive({
   avatar: null,
   name: '',
   technique: '',
   year: '',
   description: '',
-  address: '',
-  series: '',
+  address: null,
+  series: [],
+  status: null,
   price: '',
   collections: [],
   images: [],
@@ -168,15 +229,26 @@ const form = reactive({
 })
 
 onMounted(() => {
-  const save = localStorage.getItem("seriesOptions");
-  if (save) {
-    seriesOptions.value = JSON.parse(save);
+  const series = localStorage.getItem("seriesOptions");
+  if (series) {
+    seriesOptions.value = JSON.parse(series)
+    .filter(s => s.value && s.value.trim())
+  }
+
+   const address = localStorage.getItem("city")
+  if (address) {
+    items.value = JSON.parse(address)
+  } else {
+    items.value = ['Москва', 'Санкт-Петербург']
   }
 
   const storedData = JSON.parse(localStorage.getItem('works') || '[]')
   if (route.params.id !== 'new') {
     const work = storedData.find(w => w.id == route.params.id)
     if (work) Object.assign(form, work)
+    if (!work.series || work.series.length === 0) {
+      form.series = null
+    }
   }
 const saved = localStorage.getItem('collectionList');
   if (saved) collectionList.value = JSON.parse(saved);
@@ -272,8 +344,19 @@ function prevImage() {
     (currentIndex.value - 1 + form.images.length) % form.images.length
 }
 
+const onYearSelect = (value) => {
+  if (value) {
+    form.year = value // уже строка YYYY благодаря valueFormat
+  }
+  // закрываем календарь вручную
+  if (yearPicker.value) {
+    yearPicker.value.blur()
+  }
+}
+
 // сохраняем при изменении
 const saveSeriesOptions = (value) => {
+  form.series = value.filter(v => v && v.trim())
   value.forEach(v => {
     if (!seriesOptions.value.find(opt => opt.value === v)) {
       seriesOptions.value.push({ label: v, value: v });
@@ -281,6 +364,30 @@ const saveSeriesOptions = (value) => {
   });
   localStorage.setItem("seriesOptions", JSON.stringify(seriesOptions.value));
 };
+
+const removeSeries = (idx) => {
+  const removed = seriesOptions.value[idx].value
+  seriesOptions.value.splice(idx, 1)
+  form.series = form.series.filter(s => s !== removed)
+  localStorage.setItem("seriesOptions", JSON.stringify(seriesOptions.value))
+}
+
+const addItem = (e) => {
+  e?.preventDefault()
+  if (!name.value.trim()) return
+  if (!items.value.includes(name.value.trim())) {
+    items.value.push(name.value.trim())
+    localStorage.setItem('city', JSON.stringify(items.value))
+  }
+  name.value = ''
+  setTimeout(() => inputRef.value?.focus(), 0)
+}
+
+const removeItem = (idx) => {
+  if (items.value[idx] === value.value) value.value = ''
+  items.value.splice(idx, 1)
+  localStorage.setItem('city', JSON.stringify(items.value))
+}
 
 const saveChanges = () => {
   let storedWorks = JSON.parse(localStorage.getItem('works') || '[]')
@@ -295,6 +402,7 @@ const saveChanges = () => {
   } else {
     storedWorks.push({ ...form })
   }
+  form.address = value.value || ''
 
   localStorage.setItem('works', JSON.stringify(storedWorks))
 
@@ -310,8 +418,8 @@ function goBack() {
 /* === КОЛОНКИ === */
 .edit-container {
   display: flex;
-  gap: 30px;
-  margin-top: 24px;
+  gap: 20px;
+  margin-top: 20px;
 }
 .left-column {
   width: 40%;
@@ -329,7 +437,14 @@ function goBack() {
   border-color: #BDD6F4;
 }
 .fixed-input:hover {
-  border-color: #6c6bff;
+  border-color: #1E90FF;
+}
+.description-input {
+  height: 100px;
+  padding-top: 4px;
+}
+.calendar-input {
+width: 150px; 
 }
 .series-select {
   width: 500px; 
@@ -346,39 +461,50 @@ function goBack() {
 }
 /* hover */
 .series-select :deep(.ant-select-selector:hover) {
-  border-color: #6c6bff !important;
+  border-color: #1E90FF !important;
+}
+.series-select >>> .ant-select-arrow {
+  display: none;
+}
+.status-select {
+ width: 500px; 
+ max-width: 100%;
+}
+.status-select :deep(.ant-select-selector) {
+ border-color: #BDD6F4;
+  position: relative;
+  padding-right: 28px !important;
 }
 
 /* === Кнопка сохранения === */
 .save-btn {
-  background-color: #4f4ec1;
+  background-color: #1164B4;
   border-color: #5761b3;
   color: #fff;
   transition: all 0.3s ease;
 }
 .save-btn:hover {
-  border-color: #fff;
-  background-color: #6c6bff;
+  border-color: #1164B4;
+  background-color: #007FFF;
   color: #fff;
 }
 .back-btn {
-  border-color: #5761b3;
-  color: #5761b3;
+  border-color: #1164B4;
+  color: #1164B4;
 }
 .back-btn:hover {
-  background-color: #6c6bff;
-  border-color: #fff;
+  background-color: #007FFF;
+  border-color: #1164B4;
   color: #fff;
 }
 
 .images-item {
   display: block;
-  font-size: 20px;
 }
 .images-block {
   display: flex;
   flex-direction: column; 
-  gap: 16px;         
+  gap: 12px;         
   align-items: flex-start; 
 }
 :deep(.images-item .ant-form-item-label > label) {
@@ -393,10 +519,12 @@ function goBack() {
   gap: 12px;
 }
 .image-wrapper {
-  width: 90px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  flex-direction: row; /* картинка слева, комментарий справа */
+  width: calc(300px - 6px); /* 2 блока в ряд с учетом gap */
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
 }
 .image-container {
   position: relative;
@@ -404,19 +532,22 @@ function goBack() {
   height: 90px;
 }
 .image-comment {
-  margin-top: 6px;
+  flex: 1;
+  width: 100px;
+  height: 60px;
   font-size: 10px;
-  padding: 8px 6px;
-  border-color: #BDD6F4;
+  padding: 3px 6px;
+  border: 1px solid #BDD6F4;
+  border-radius: 4px;
 }
 .image-comment:hover {
-  border-color: #6c6bff;
+  border-color: 1E90FF;
 }
 .preview-image {
-  width: 90px;
-  height: 90px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   transition: transform 0.2s;
   border: 1px solid #fff;
@@ -424,7 +555,7 @@ function goBack() {
 }
 .preview-image:hover {
   transform: scale(1.08);
-  border-color: #6c6bff;
+  border-color: #1E90FF;
 }
 .my-upload-block :deep(.ant-upload-select-picture-card) {
   width: 90px !important;
@@ -436,26 +567,21 @@ function goBack() {
   height: 14px;
 }
 .my-upload-block :deep(.ant-upload-select-picture-card:hover) {
-  border-color: #4f4ec1 !important; /* твой цвет */
+  border-color: #1E90FF !important; /* твой цвет */
 }
 
 /* кнопка удаления */
 .delete-btn {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  background-color: rgba(0, 0, 0, 0.5);
-  color: white;
+  top: 2px;
+  right: 2px;
   border: none;
-  border-radius: 50%;
-  width: 16px;
-  height: 16px;
+  background: rgba(255,255,255,0.8);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0 4px;
+  border-radius: 2px;
 }
 .delete-btn:hover {
   background-color: rgba(255, 0, 0, 0.8);

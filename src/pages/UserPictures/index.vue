@@ -3,54 +3,44 @@
     <div class="header-content">
       <h3>Мои работы</h3>
       <!-- Кнопка появляется только если есть выбранные строки -->
-       <div class="header-buttons">
-      <a-button class="buttons" type="primary" v-if="selectedRowKeys.length > 0" @click="createCollection">
-        Создать коллекцию
-      </a-button>
-      <a-button class="buttons" type="primary" @click="openEditPage()">Добавить</a-button>
+      <div class="header-buttons">
+        <a-button class="buttons" type="primary" v-if="selectedRowKeys.length > 0" @click="createCollection">
+          Создать коллекцию
+        </a-button>
+        <a-button class="buttons" type="primary" @click="openEditPage()">Добавить</a-button>
       </div>
     </div>
 
     <!-- Таблица -->
-    <a-table
-  class="custom-table"
-  :columns="columns"
-  :data-source="data"
-  row-key="id"
-  :row-selection="rowSelection"
->
-  <template #bodyCell="{ column, record }">
-    <!-- Колонка аватара -->
-    <template v-if="column.dataIndex === 'avatar'">
-      <img
-        v-if="record.avatar && record.avatar.url"
-        :src="record.avatar.url"
-        class="preview-img"
-      />
-      <div v-else class="img-placeholder">
-        <PictureOutlined />
-      </div>
-    </template>
-    <template v-else-if="column.dataIndex === 'series'">
-    {{ Array.isArray(record.series) ? record.series.join(', ') : record.series }}
-  </template>
+    <a-table class="custom-table" :columns="columns" :data-source="data" row-key="id" :row-selection="rowSelection">
+      <template #bodyCell="{ column, record }">
+        <!-- Колонка аватара -->
+        <template v-if="column.dataIndex === 'avatar'">
+          <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="preview-img" />
+          <div v-else class="img-placeholder">
+            <PictureOutlined />
+          </div>
+        </template>
+        <template v-else-if="column.dataIndex === 'series'">
+          {{ Array.isArray(record.series) ? record.series.join(', ') : record.series }}
+        </template>
 
-    <!-- Колонка действий -->
-    <template v-else-if="column.dataIndex === 'actions'">
-      <a-button type="text" @click="openEditPage(record)">
-        <EditOutlined />
-      </a-button>
-      <a-button type="text" danger @click="deleteRow(record.id)">
-        Удалить
-      </a-button>
-    </template>
+        <!-- Колонка действий -->
+        <template v-else-if="column.dataIndex === 'actions'">
+          <a-button type="text" @click="openEditPage(record)">
+            <EditOutlined />
+          </a-button>
+          <a-button type="text" danger @click="deleteRow(record.id)">
+            Удалить
+          </a-button>
+        </template>
 
-    <!-- Остальные колонки -->
-    <template v-else>
-      {{ record[column.dataIndex] }}
-    </template>
-  </template>
-</a-table>
+        <!-- Остальные колонки -->
+        <template v-else>
+          {{ record[column.dataIndex] }}
+        </template>
+      </template>
+    </a-table>
   </div>
 </template>
 
@@ -65,13 +55,14 @@ const selectedRowKeys = ref([])
 
 // Колонки таблицы
 const columns = [
-  { title: 'Изображение', dataIndex: 'avatar', key: 'avatar', width: 90 },
+  { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: 90 },
   { title: 'Название', dataIndex: 'name', key: 'name' },
   { title: 'Техника', dataIndex: 'technique', key: 'technique', width: 140  },
   { title: 'Год', dataIndex: 'year', key: 'year', width: 90  },
   { title: 'Описание', dataIndex: 'description', key: 'description', className: 'desc-col'},
-  { title: 'Локация', dataIndex: 'address', key: 'address', width: 140 },
+  { title: 'Локация', dataIndex: 'address', key: 'address', width: 150 },
   { title: 'Серия', dataIndex: 'series', key: 'series', width: 120 },
+  { title: 'Статус', dataIndex: 'status', key: 'status', width: 120 },
   { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 100 },
   { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 100 },
 ]
