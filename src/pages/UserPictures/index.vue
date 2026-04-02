@@ -2,17 +2,31 @@
   <div>
     <div class="header-content">
       <h3>Мои работы</h3>
-      <!-- Кнопка появляется только если есть выбранные строки -->
-      <div class="header-buttons">
+    </div>
+
+    <div class="filters-panel">
+      <div class="filters-left">
+        <a-select v-model:value="filterAddress" placeholder="Локация" allowClear style="width: 200px"
+          :options="addressOptions" />
+        <a-select v-model:value="filterSeries" placeholder="Серия" allowClear style="width: 200px"
+          :options="seriesOptions" />
+        <a-select v-model:value="filterStatus" placeholder="Статус" allowClear style="width: 200px" :options="[
+          { text: 'Доступно', value: 'Доступно' },
+          { text: 'Частная коллекция', value: 'Частная коллекция' },
+          { text: 'Резерв', value: 'Резерв' }]" />
+        </div>
+
+        <div class="filters-right">
+        <!-- Кнопка появляется только если есть выбранные строки -->
         <a-button class="buttons" type="primary" v-if="selectedRowKeys.length > 0" @click="createCollection">
           Создать коллекцию
         </a-button>
         <a-button class="buttons" type="primary" @click="openEditPage()">Добавить</a-button>
-      </div>
+        </div>
     </div>
 
     <!-- Таблица -->
-    <a-table class="custom-table" :columns="columns" :data-source="data" row-key="id" :row-selection="rowSelection">
+    <a-table class="custom-table" :columns="columns" :data-source="filteredData" row-key="id" :row-selection="rowSelection">
       <template #bodyCell="{ column, record }">
         <!-- Колонка аватара -->
         <template v-if="column.dataIndex === 'avatar'">
@@ -27,8 +41,8 @@
 
         <!-- Колонка действий -->
         <template v-else-if="column.dataIndex === 'actions'">
-          <a-button type="text" @click="openEditPage(record)">
-            <EditOutlined />
+          <a-button type="text" class="edit-btn" @click="openEditPage(record)">
+            Редактировать
           </a-button>
           <a-button type="text" danger @click="deleteRow(record.id)">
             Удалить
@@ -45,27 +59,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { EditOutlined, PictureOutlined } from '@ant-design/icons-vue'
+import { ref, onMounted, computed } from 'vue'
+import { PictureOutlined } from '@ant-design/icons-vue'
+import { Modal } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const data = ref([])
 const selectedRowKeys = ref([])
-
-// Колонки таблицы
-const columns = [
-  { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: 90 },
-  { title: 'Название', dataIndex: 'name', key: 'name' },
-  { title: 'Техника', dataIndex: 'technique', key: 'technique', width: 140  },
-  { title: 'Год', dataIndex: 'year', key: 'year', width: 90  },
-  { title: 'Описание', dataIndex: 'description', key: 'description', className: 'desc-col'},
-  { title: 'Локация', dataIndex: 'address', key: 'address', width: 150 },
-  { title: 'Серия', dataIndex: 'series', key: 'series', width: 120 },
-  { title: 'Статус', dataIndex: 'status', key: 'status', width: 120 },
-  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 100 },
-  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 100 },
-]
+const filterAddress = ref(null)
+const filterSeries = ref(null)
+const filterStatus = ref(null)
 
 // Загрузка данных из localStorage при старте
 onMounted(() => {
@@ -74,6 +78,59 @@ onMounted(() => {
     data.value = JSON.parse(saved)
   }
 })
+
+// Уникальные локации из данных
+const addressOptions = computed(() => {
+  const set = new Set()
+  data.value.forEach(item => item.address && set.add(item.address))
+  return [...set].map(a => ({ label: a, value: a }))
+})
+
+// Уникальные серии 
+const seriesOptions = computed(() => {
+  const set = new Set()
+  data.value.forEach(item => {
+    if (item.series) {
+      item.series
+        .filter(Boolean)
+        .forEach(s => set.add(s))
+    }
+  })
+  return [...set].map(s => ({ label: s, value: s }))
+})
+
+// Фильтруем данные перед показом в таблице
+const filteredData = computed(() => {
+  return data.value.filter(item => {
+    if (filterAddress.value && item.address !== filterAddress.value)
+      return false
+
+    if (filterStatus.value && item.status !== filterStatus.value)
+      return false
+
+    if (filterSeries.value) {
+      const seriesList = item.series
+        ? item.series.map(s => s.trim()) : []
+      if (!seriesList.includes(filterSeries.value))
+        return false
+    }
+    return true
+  })
+})
+
+// Колонки таблицы
+const columns = computed(() => [
+  { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: 90 },
+  { title: 'Название', dataIndex: 'name', key: 'name' },
+  { title: 'Техника', dataIndex: 'technique', key: 'technique', width: 140  },
+  { title: 'Год', dataIndex: 'year', key: 'year', width: 90, sorter: (a, b) => a.year - b.year },
+  { title: 'Описание', dataIndex: 'description', key: 'description', className: 'desc-col'},
+  { title: 'Локация', dataIndex: 'address', key: 'address', width: 150 },
+  { title: 'Серия', dataIndex: 'series', key: 'series', width: 120 },
+  { title: 'Статус', dataIndex: 'status', key: 'status', width: 120 },
+  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 100, sorter: (a, b) => a.price - b.price },
+  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 100 },
+])
 
 // Открытие страницы редактирования или добавления
 const openEditPage = (record) => {
@@ -86,8 +143,17 @@ const openEditPage = (record) => {
 
 // Удаление записи
 const deleteRow = (id) => {
-  data.value = data.value.filter(item => item.id !== id)
-  localStorage.setItem('works', JSON.stringify(data.value))
+  Modal.confirm({
+    title: 'Удалить запись?',
+    content: 'Вы уверены, что хотите удалить эту работу?',
+    okText: 'Удалить',
+    okType: 'danger',
+    cancelText: 'Отмена',
+    onOk() {
+      data.value = data.value.filter(item => item.id !== id)
+      localStorage.setItem('works', JSON.stringify(data.value))
+    }
+  })
 }
 
 // выбранные строки
@@ -111,14 +177,27 @@ const createCollection = () => {
 <style>
 .header-content {
   display: flex;
-  justify-content: space-between;
-  align-items: end;
-  margin-bottom: 16px;
-  font-size: 18px;
+  margin-bottom: 8px;
+  font-size: 20px;
 }
-.header-buttons {
+
+.filters-panel {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.filters-panel .ant-space {
+  gap: 12px !important; /* расстояние между select */
+}
+.filters-panel .ant-select {
+  background: white;
+}
+
+.edit-btn {
+  color: #1E90FF !important;
+}
+.edit-btn:hover {
+  color: #4096ff !important;
 }
 /* фиксированная высота строки и минимальные паддинги */
 .ant-table-tbody > tr > td {
@@ -151,7 +230,27 @@ const createCollection = () => {
   color: #999;
   background: #fafafa;
 }
+.filters-panel {
+  display: flex;
+  justify-content: space-between; /* разделяем левую и правую части */
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap; /* чтобы красиво переносилось на маленьких экранах */
+  gap: 12px;
+}
+
+.filters-left {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filters-right {
+  display: flex;
+  gap: 12px;
+}
 .buttons {
+  width: 170px;
   background-color: #4f4ec1;
   border-color: #5761b3;
   color: #fff;

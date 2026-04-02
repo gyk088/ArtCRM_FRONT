@@ -573,15 +573,15 @@ width: 150px;
 /* кнопка удаления */
 .delete-btn {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 4px;
+  right: 4px;
   border: none;
   background: rgba(255,255,255,0.8);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1;
-  padding: 0 4px;
-  border-radius: 2px;
+  padding: 0 3px;
+  border-radius: 8px;
 }
 .delete-btn:hover {
   background-color: rgba(255, 0, 0, 0.8);

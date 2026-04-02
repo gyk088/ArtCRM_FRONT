@@ -80,9 +80,20 @@ function deleteСollection(id) {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
 }
+.collection-card {
+  height: 240px; /* фиксированная высота карточки */
+  display: flex;
+  flex-direction: column;
+}
 .collection-text {
-  min-height: 80px;
+  flex: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  line-clamp: 5;
+  -webkit-line-clamp: 5; /* сколько строк показывать */
+  -webkit-box-orient: vertical;
   margin-bottom: 12px;
+  color: #555;
 }
 .collection-actions {
   display: flex;
