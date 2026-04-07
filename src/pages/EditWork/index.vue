@@ -8,22 +8,6 @@
       <!-- Левая колонка — ФОРМА -->
       <div class="left-column">
         <a-form layout="vertical">
-          <!-- Кнопка загрузки -->
-          <a-form-item>
-            <a-upload v-if="!form.avatar" list-type="picture-card" :before-upload="handleBeforeUploadAvatar"
-              show-upload-list="false" @remove="removeAvatar">
-              <div>
-                <PlusOutlined />
-                <div>Загрузить</div>
-              </div>
-            </a-upload>
-
-            <div v-else class="avatar-preview">
-              <img :src="form.avatar.url" class="avatar-image" />
-              <button class="delete-btn" @click="removeAvatar">×</button>
-            </div>
-          </a-form-item>
-
           <a-form-item>
             <a-input v-model:value="form.name" placeholder="Имя" class="fixed-input" />
           </a-form-item>
@@ -89,6 +73,18 @@
                     </button>
                   </span>
                 </div>
+
+                <!-- Добавляем инпут для добавления новой серии (как у городов) -->
+                <a-space style="padding: 4px 8px; margin-top:4px;">
+                  <a-input ref="seriesInputRef" v-model:value="newSeries" placeholder="Введите серию"
+                    @keyup.enter="addSeries" />
+                  <a-button type="text" @click="addSeries">
+                    <template #icon>
+                      <PlusOutlined />
+                    </template>
+                    Добавить
+                  </a-button>
+                </a-space>
               </template>
             </a-select>
           </a-form-item>
@@ -126,6 +122,21 @@
 
       <!-- Правая колонка — ИЗОБРАЖЕНИЯ -->
       <div class="right-column">
+        <!-- Кнопка загрузки -->
+        <a-form-item label="Главная картинка" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
+          <a-upload v-if="!form.avatar" list-type="picture-card" :before-upload="handleBeforeUploadAvatar"
+            show-upload-list="false" @remove="removeAvatar">
+            <div>
+              <PlusOutlined />
+              <div>Загрузить</div>
+            </div>
+          </a-upload>
+
+          <div v-else class="avatar-preview">
+            <img :src="form.avatar.url" class="avatar-image" />
+            <button class="delete-btn" @click="removeAvatar">×</button>
+          </div>
+        </a-form-item>
 
         <a-form-item label="Изображения" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
           <div class="images-block">
@@ -147,7 +158,7 @@
                   <img :src="img.url" class="preview-image" @click="openViewer(index)" />
                   <button class="delete-btn" @click.stop="removeImage(index)">×</button>
                 </div>
-                <a-textarea v-model:value="img.comment" placeholder="Комментарий" class="image-comment"/>
+                <a-textarea v-model:value="img.comment" placeholder="Комментарий" class="image-comment" />
               </div>
             </div>
           </div>
@@ -173,7 +184,7 @@
                   <img :src="img.url" class="preview-image" @click="openViewer(index)" />
                   <button class="delete-btn" @click.stop="removeImageExposition(index)">×</button>
                 </div>
-                <a-textarea v-model:value="img.comment" placeholder="Комментарий" class="image-comment"/>
+                <a-textarea v-model:value="img.comment" placeholder="Комментарий" class="image-comment" />
               </div>
             </div>
           </div>
@@ -204,6 +215,8 @@ const router = useRouter()
 const collectionList = ref([]);
 const seriesOptions = ref([])
 const yearPicker = ref(null)
+const seriesInputRef = ref(null)
+const newSeries = ref('')
 const VNodes = defineComponent({
   props: { vnodes: { type: Object, required: true } },
   render() { return this.vnodes }
@@ -220,7 +233,7 @@ const form = reactive({
   year: '',
   description: '',
   address: null,
-  series: [],
+  series: null,
   status: null,
   price: '',
   collections: [],
@@ -232,10 +245,10 @@ onMounted(() => {
   const series = localStorage.getItem("seriesOptions");
   if (series) {
     seriesOptions.value = JSON.parse(series)
-    .filter(s => s.value && s.value.trim())
+      .filter(s => s.value && s.value.trim())
   }
 
-   const address = localStorage.getItem("city")
+  const address = localStorage.getItem("city")
   if (address) {
     items.value = JSON.parse(address)
   } else {
@@ -250,33 +263,51 @@ onMounted(() => {
       form.series = null
     }
   }
-const saved = localStorage.getItem('collectionList');
+  const saved = localStorage.getItem('collectionList');
   if (saved) collectionList.value = JSON.parse(saved);
 })
 
 const handleBeforeUpload = (file) => {
+  const isDuplicate = form.exposition.some(img =>
+    img.name === file.name || img.url === URL.createObjectURL(file)
+  );
+
+  if (isDuplicate) {
+    console.warn('Этот файл уже загружен:', file.name);
+    alert(`Файл "${file.name}" уже загружен!`);
+    return false; // Отменяем загрузку дубликата
+  }
   const reader = new FileReader()
   reader.onload = e => {
     form.images.push({
-  uid: file.uid,
-  name: file.name,
-  url: e.target.result,
-  comment: "" 
-})
+      uid: file.uid,
+      name: file.name,
+      url: e.target.result,
+      comment: ""
+    })
   }
   reader.readAsDataURL(file)
   return false
 }
 
 const handleBeforeUploadExposition = (file) => {
+  const isDuplicate = form.exposition.some(img =>
+    img.name === file.name || img.url === URL.createObjectURL(file)
+  );
+
+  if (isDuplicate) {
+    console.warn('Этот файл уже загружен:', file.name);
+    alert(`Файл "${file.name}" уже загружен!`);
+    return false; // Отменяем загрузку дубликата
+  }
   const reader = new FileReader()
   reader.onload = e => {
     form.exposition.push({
-  uid: file.uid,
-  name: file.name,
-  url: e.target.result,
-  comment: "" 
-})
+      uid: file.uid,
+      name: file.name,
+      url: e.target.result,
+      comment: ""
+    })
   }
   reader.readAsDataURL(file)
   return false
@@ -356,20 +387,42 @@ const onYearSelect = (value) => {
 
 // сохраняем при изменении
 const saveSeriesOptions = (value) => {
-  form.series = value.filter(v => v && v.trim())
-  value.forEach(v => {
+  const cleanValue = value.filter(v => v && v.trim())
+  form.series = cleanValue
+
+  // Сохраняем все серии в options
+  cleanValue.forEach(v => {
     if (!seriesOptions.value.find(opt => opt.value === v)) {
-      seriesOptions.value.push({ label: v, value: v });
+      seriesOptions.value.push({ label: v, value: v })
     }
-  });
-  localStorage.setItem("seriesOptions", JSON.stringify(seriesOptions.value));
-};
+  })
+  localStorage.setItem('seriesOptions', JSON.stringify(seriesOptions.value))
+}
 
 const removeSeries = (idx) => {
   const removed = seriesOptions.value[idx].value
   seriesOptions.value.splice(idx, 1)
-  form.series = form.series.filter(s => s !== removed)
-  localStorage.setItem("seriesOptions", JSON.stringify(seriesOptions.value))
+
+  if (form.series && Array.isArray(form.series)) {
+    form.series = form.series.filter(s => s !== removed)
+  }
+  localStorage.setItem('seriesOptions', JSON.stringify(seriesOptions.value))
+}
+
+// Функция добавления новой серии (как addItem для городов)
+const addSeries = (e) => {
+  e?.preventDefault()
+  if (!newSeries.value.trim()) return
+
+  if (!seriesOptions.value.find(opt => opt.value === newSeries.value.trim())) {
+    seriesOptions.value.push({
+      label: newSeries.value.trim(),
+      value: newSeries.value.trim()
+    })
+    localStorage.setItem('seriesOptions', JSON.stringify(seriesOptions.value))
+  }
+  newSeries.value = ''
+  setTimeout(() => seriesInputRef.value?.focus(), 0)
 }
 
 const addItem = (e) => {
@@ -420,14 +473,20 @@ function goBack() {
   display: flex;
   gap: 20px;
   margin-top: 20px;
+  height: calc(100vh - 120px);
 }
+
 .left-column {
   width: 40%;
 }
+
 .right-column {
   width: 60%;
   padding-left: 20px;
   border-left: 1px solid #eee;
+  overflow-y: auto;
+  height: 100%;
+  max-height: 100%;
 }
 
 /* === Инпуты === */
@@ -436,42 +495,53 @@ function goBack() {
   max-width: 100%;
   border-color: #BDD6F4;
 }
+
 .fixed-input:hover {
   border-color: #1E90FF;
 }
+
 .description-input {
   height: 100px;
   padding-top: 4px;
 }
+
 .calendar-input {
-width: 150px; 
+  width: 150px;
 }
+
 .series-select {
-  width: 500px; 
+  width: 500px;
   max-width: 100%;
 }
+
 .series-select :deep(.ant-select-selector) {
   border-color: #BDD6F4;
   position: relative;
   padding-right: 28px !important;
 }
+
 .series-select :deep(.ant-select-clear) {
-  right: 8px !important; /* возвращаем кнопку в конец */
+  right: 8px !important;
+  /* возвращаем кнопку в конец */
   inset-inline-end: 6px !important;
 }
+
 /* hover */
 .series-select :deep(.ant-select-selector:hover) {
   border-color: #1E90FF !important;
 }
-.series-select >>> .ant-select-arrow {
+
+.series-select :deep(.ant-select-arrow) {
   display: none;
 }
+
 .status-select {
- width: 500px; 
- max-width: 100%;
+  width: 500px;
+  max-width: 100%;
 }
+
 .status-select :deep(.ant-select-selector) {
- border-color: #BDD6F4;
+  border-color: #BDD6F4;
   position: relative;
   padding-right: 28px !important;
 }
@@ -483,15 +553,18 @@ width: 150px;
   color: #fff;
   transition: all 0.3s ease;
 }
+
 .save-btn:hover {
   border-color: #1164B4;
   background-color: #007FFF;
   color: #fff;
 }
+
 .back-btn {
   border-color: #1164B4;
   color: #1164B4;
 }
+
 .back-btn:hover {
   background-color: #007FFF;
   border-color: #1164B4;
@@ -501,12 +574,14 @@ width: 150px;
 .images-item {
   display: block;
 }
+
 .images-block {
   display: flex;
-  flex-direction: column; 
-  gap: 12px;         
-  align-items: flex-start; 
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
 }
+
 :deep(.images-item .ant-form-item-label > label) {
   font-size: 16px;
   font-weight: 500;
@@ -518,19 +593,24 @@ width: 150px;
   flex-wrap: wrap;
   gap: 12px;
 }
+
 .image-wrapper {
   display: flex;
-  flex-direction: row; /* картинка слева, комментарий справа */
-  width: calc(300px - 6px); /* 2 блока в ряд с учетом gap */
+  flex-direction: row;
+  /* картинка слева, комментарий справа */
+  width: calc(300px - 6px);
+  /* 2 блока в ряд с учетом gap */
   gap: 12px;
   align-items: flex-start;
   margin-bottom: 12px;
 }
+
 .image-container {
   position: relative;
   width: 90px;
   height: 90px;
 }
+
 .image-comment {
   flex: 1;
   width: 100px;
@@ -540,9 +620,11 @@ width: 150px;
   border: 1px solid #BDD6F4;
   border-radius: 4px;
 }
+
 .image-comment:hover {
   border-color: 1E90FF;
 }
+
 .preview-image {
   width: 100%;
   height: 100%;
@@ -553,21 +635,26 @@ width: 150px;
   border: 1px solid #fff;
   box-shadow: 0 -1px 6px #BDD6F4;
 }
+
 .preview-image:hover {
   transform: scale(1.08);
   border-color: #1E90FF;
 }
+
 .my-upload-block :deep(.ant-upload-select-picture-card) {
   width: 90px !important;
   height: 90px !important;
   font-size: 12px;
 }
+
 .my-upload-block :deep(.ant-upload-select-picture-card svg) {
   width: 14px;
   height: 14px;
 }
+
 .my-upload-block :deep(.ant-upload-select-picture-card:hover) {
-  border-color: #1E90FF !important; /* твой цвет */
+  border-color: #1E90FF !important;
+  /* твой цвет */
 }
 
 /* кнопка удаления */
@@ -576,29 +663,33 @@ width: 150px;
   top: 4px;
   right: 4px;
   border: none;
-  background: rgba(255,255,255,0.8);
+  background: rgba(255, 255, 255, 0.8);
   cursor: pointer;
   font-size: 12px;
   line-height: 1;
   padding: 0 3px;
   border-radius: 8px;
 }
+
 .delete-btn:hover {
   background-color: rgba(255, 0, 0, 0.8);
 }
 
 .avatar-preview {
-  position: relative; 
+  position: relative;
   display: inline-block;
 }
+
 .avatar-image {
   width: 110px;
   height: 110px;
   border-radius: 8px;
-  object-fit: cover; /* сохраняет пропорции, обрезая лишнее */
+  object-fit: cover;
+  /* сохраняет пропорции, обрезая лишнее */
   border: 1px solid #BDD6F4;
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.15);
 }
+
 .avatar-image:hover {
   border-color: #4f4ec1;
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
@@ -615,6 +706,7 @@ width: 150px;
   align-items: center;
   z-index: 3000;
 }
+
 .lightbox-image {
   max-width: 90%;
   max-height: 90%;
@@ -634,9 +726,11 @@ width: 150px;
   cursor: pointer;
   user-select: none;
 }
+
 .prev {
   left: 30px;
 }
+
 .next {
   right: 30px;
 }

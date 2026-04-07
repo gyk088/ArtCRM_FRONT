@@ -42,6 +42,13 @@ const router = createRouter({
             title: '<Биография>',
           },
       },{
+          path: 'workspace',
+          name: 'workspace',
+          component: () => import('@/pages/WorkSpace/index.vue'),
+        meta: {
+            title: '<Рабочее пространство>',
+          },
+      },{
         path: 'cv',
         name: 'cv',
         component: () => import('@/pages/CV/index.vue'),
