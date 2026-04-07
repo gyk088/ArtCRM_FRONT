@@ -59,10 +59,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onBeforeMount } from 'vue'
 import { PictureOutlined } from '@ant-design/icons-vue'
 import { Modal } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
+import { useMedia } from '@/stores/media.js' 
+
+const mediaStore = useMedia();
+// получаем все медиа для этого пользователя 
+mediaStore.getListMedia()
 
 const router = useRouter()
 const data = ref([])

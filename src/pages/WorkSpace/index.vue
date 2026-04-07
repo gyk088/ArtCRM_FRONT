@@ -254,6 +254,7 @@
 <script setup>
 import { ref, onMounted } from 'vue' // Добавлен onMounted
 import { useRouter } from 'vue-router' // Добавлен useRouter
+import { useMedia } from '@/stores/media.js' 
 import { message } from 'ant-design-vue' 
 import { 
   ColumnWidthOutlined, 
@@ -266,6 +267,7 @@ import {
   CopyOutlined
 } from '@ant-design/icons-vue'
 
+const mediaStore = useMedia();
 const router = useRouter() 
 const isSplitMode = ref(false)
 const menuVisible = ref(false)

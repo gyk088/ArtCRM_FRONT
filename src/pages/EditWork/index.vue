@@ -89,6 +89,42 @@
             </a-select>
           </a-form-item>
 
+
+          <a-form-item>
+            <a-select v-model:value="form.series" mode="tags" :options="seriesOptions"
+              placeholder="Введите или выберите медиа" @change="saveMediaOptions" class="series-select" allowClear>
+              <template #dropdownRender="{ menuNode: menu }">
+                <VNodes :vnodes="menu" />
+
+                <a-divider style="margin: 4px 0" />
+
+                <!-- Блок списка серий с кнопками удаления -->
+                <div style="padding: 4px 8px; display:flex; flex-wrap:wrap; gap:6px;">
+                  <span v-for="(item, idx) in seriesOptions" :key="item.value"
+                    style="display:flex; align-items:center; background:#f0f0f0; padding:2px 6px; border-radius:4px;">
+                    {{ item.label }}
+                    <button @click.prevent="removeSeries(idx)"
+                      style="margin-left:4px; border:none; background:none; cursor:pointer; color:red;">
+                      ×
+                    </button>
+                  </span>
+                </div>
+
+                <!-- Добавляем инпут для добавления новой серии (как у городов) -->
+                <a-space style="padding: 4px 8px; margin-top:4px;">
+                  <a-input ref="seriesInputRef" v-model:value="newSeries" placeholder="Введите серию"
+                    @keyup.enter="addSeries" />
+                  <a-button type="text" @click="addSeries">
+                    <template #icon>
+                      <PlusOutlined />
+                    </template>
+                    Добавить
+                  </a-button>
+                </a-space>
+              </template>
+            </a-select>
+          </a-form-item>
+
           <a-form-item>
             <a-select v-model:value="form.status" placeholder="Статус" class="status-select">
               <a-select-option value="Доступно">Доступно</a-select-option>
@@ -209,7 +245,10 @@
 import { ref, reactive, computed, onMounted, defineComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PlusOutlined } from '@ant-design/icons-vue'
-
+import { useMedia } from '@/stores/media.js' 
+const mediaStore = useMedia();
+ 
+console.log('Media store in EditWork:', mediaStore.listMedia)
 const route = useRoute()
 const router = useRouter()
 const collectionList = ref([]);
@@ -387,6 +426,20 @@ const onYearSelect = (value) => {
 
 // сохраняем при изменении
 const saveSeriesOptions = (value) => {
+  const cleanValue = value.filter(v => v && v.trim())
+  form.series = cleanValue
+
+  // Сохраняем все серии в options
+  cleanValue.forEach(v => {
+    if (!seriesOptions.value.find(opt => opt.value === v)) {
+      seriesOptions.value.push({ label: v, value: v })
+    }
+  })
+  localStorage.setItem('seriesOptions', JSON.stringify(seriesOptions.value))
+}
+
+// сохраняем при изменении
+const saveMediaOptions = (value) => {
   const cleanValue = value.filter(v => v && v.trim())
   form.series = cleanValue
 
