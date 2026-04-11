@@ -1,4 +1,4 @@
-// stores/art.js
+// stores/media.js
 import { defineStore } from 'pinia'
 import apiClient from '@/services/api.js'
 import { notifyServerError, notifyServerSuccess } from '@/services/notify.js'
@@ -15,7 +15,6 @@ export const useMedia = defineStore('media', {
   },
 
   getters: {
-    // Media getters
     getMediaById: (state) => (id) => {
       return state.listMedia.find(item => item.id === id)
     },
