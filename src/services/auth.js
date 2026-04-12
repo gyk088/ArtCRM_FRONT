@@ -16,12 +16,12 @@ export const setUser = (user) => {
   CACHE.user = user
   const str = JSON.stringify(user);
   const base64Str = utf8_to_b64(str);
-  localStorage.setItem('MY_OFFER_USER', base64Str);
+  localStorage.setItem('ATR_USER', base64Str);
 }
 
 export const getUser = () => {
   if (CACHE.user) return CACHE.user
-  const base64Str = localStorage.getItem('MY_OFFER_USER');
+  const base64Str = localStorage.getItem('ATR_USER');
   if (!base64Str) return;
   const str = b64_to_utf8(base64Str)
   CACHE.user = JSON.parse(str)
@@ -32,12 +32,12 @@ export const setSession = (session) => {
   CACHE.session = session
   const str = JSON.stringify(session);
   const base64Str = utf8_to_b64(str);
-  localStorage.setItem('MY_OFFER_SESSION', base64Str);
+  localStorage.setItem('ATR_SESSION', base64Str);
 }
 
 export const getSession = () => {
   if (CACHE.session) return CACHE.session
-  const base64Str = localStorage.getItem('MY_OFFER_SESSION');
+  const base64Str = localStorage.getItem('ATR_SESSION');
   if (!base64Str) return;
   const str = b64_to_utf8(base64Str)
   CACHE.session = JSON.parse(str)

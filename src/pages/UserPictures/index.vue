@@ -72,6 +72,12 @@ import { useMedia } from '@/stores/media.js'
 import { useSerias } from '@/stores/seria.js'
 import { useStatuses } from '@/stores/statuses.js'
 import { useLocations } from '@/stores/locations.js'
+import { useFile } from "@/stores/file.js"
+
+const fileStore = useFile()
+if (!fileStore.files.length) {
+  fileStore.getAllFiles() // Загружаем файлы при открытии страницы
+} 
 
 const artWorkStore = useArtWork()
 const mediaStore = useMedia()

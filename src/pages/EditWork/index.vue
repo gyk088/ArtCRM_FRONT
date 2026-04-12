@@ -55,8 +55,8 @@
           </a-form-item>
 
           <a-form-item>
-            <a-select v-model:value="form.seria" :options="seriesOptions"
-              placeholder="Введите или выберите серию" class="series-select" allowClear>
+            <a-select v-model:value="form.series" mode="tags" :options="seriesOptions"
+              placeholder="Введите или выберите серию" @change="saveSeriesOptions" class="series-select" allowClear>
               <template #dropdownRender="{ menuNode: menu }">
                 <VNodes :vnodes="menu" />
 
@@ -89,30 +89,32 @@
             </a-select>
           </a-form-item>
 
-          <!-- Поле Медиа (после серии) -->
+
           <a-form-item>
-            <a-select v-model:value="form.media" :options="mediaOptions" placeholder="Введите или выберите медиа"
-              class="series-select" allowClear>
+            <a-select v-model:value="form.series" mode="tags" :options="seriesOptions"
+              placeholder="Введите или выберите медиа" @change="saveMediaOptions" class="series-select" allowClear>
               <template #dropdownRender="{ menuNode: menu }">
                 <VNodes :vnodes="menu" />
 
                 <a-divider style="margin: 4px 0" />
 
+                <!-- Блок списка серий с кнопками удаления -->
                 <div style="padding: 4px 8px; display:flex; flex-wrap:wrap; gap:6px;">
-                  <span v-for="(item, idx) in mediaOptions" :key="item.value"
+                  <span v-for="(item, idx) in seriesOptions" :key="item.value"
                     style="display:flex; align-items:center; background:#f0f0f0; padding:2px 6px; border-radius:4px;">
                     {{ item.label }}
-                    <button @click.prevent="removeMedia(idx)"
+                    <button @click.prevent="removeSeries(idx)"
                       style="margin-left:4px; border:none; background:none; cursor:pointer; color:red;">
                       ×
                     </button>
                   </span>
                 </div>
 
+                <!-- Добавляем инпут для добавления новой серии (как у городов) -->
                 <a-space style="padding: 4px 8px; margin-top:4px;">
-                  <a-input ref="mediaInputRef" v-model:value="newMedia" placeholder="Введите медиа"
-                    @keyup.enter="addMedia" />
-                  <a-button type="text" @click="addMedia">
+                  <a-input ref="seriesInputRef" v-model:value="newSeries" placeholder="Введите серию"
+                    @keyup.enter="addSeries" />
+                  <a-button type="text" @click="addSeries">
                     <template #icon>
                       <PlusOutlined />
                     </template>
@@ -124,40 +126,10 @@
           </a-form-item>
 
           <a-form-item>
-            <a-select v-model:value="form.status" placeholder="Статус" class="status-select" allowClear>
-              <template #dropdownRender="{ menuNode: menu }">
-                <VNodes :vnodes="menu" />
-
-                <a-divider style="margin: 4px 0" />
-
-                <!-- Блок списка статусов с кнопками удаления -->
-                <div style="padding: 4px 8px; display:flex; flex-wrap:wrap; gap:6px;">
-                  <span v-for="(item, idx) in statusOptions" :key="item.value"
-                    style="display:flex; align-items:center; background:#f0f0f0; padding:2px 6px; border-radius:4px;">
-                    {{ item.label }}
-                    <button @click.prevent="removeStatus(idx)"
-                      style="margin-left:4px; border:none; background:none; cursor:pointer; color:red;">
-                      ×
-                    </button>
-                  </span>
-                </div>
-
-                <!-- Добавляем инпут для добавления нового статуса -->
-                <a-space style="padding: 4px 8px; margin-top:4px;">
-                  <a-input ref="statusInputRef" v-model:value="newStatus" placeholder="Введите статус"
-                    @keyup.enter="addStatus" />
-                  <a-button type="text" @click="addStatus">
-                    <template #icon>
-                      <PlusOutlined />
-                    </template>
-                    Добавить
-                  </a-button>
-                </a-space>
-              </template>
-
-              <a-select-option v-for="status in statusOptions" :key="status.value" :value="status.value">
-                {{ status.label }}
-              </a-select-option>
+            <a-select v-model:value="form.status" placeholder="Статус" class="status-select">
+              <a-select-option value="Доступно">Доступно</a-select-option>
+              <a-select-option value="Частная коллекция">Частная коллекция</a-select-option>
+              <a-select-option value="Резерв">Резерв</a-select-option>
             </a-select>
           </a-form-item>
 
@@ -189,7 +161,7 @@
         <!-- Кнопка загрузки -->
         <a-form-item label="Главная картинка" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
           <a-upload v-if="!form.avatar" list-type="picture-card" :before-upload="handleBeforeUploadAvatar"
-            :show-upload-list="false" @remove="removeAvatar">
+            show-upload-list="false" @remove="removeAvatar">
             <div>
               <PlusOutlined />
               <div>Загрузить</div>
@@ -206,7 +178,7 @@
           <div class="images-block">
             <!-- Кнопка загрузки -->
             <div class="my-upload-block">
-              <a-upload list-type="picture-card" multiple :before-upload="handleBeforeUpload" :show-upload-list="false"
+              <a-upload list-type="picture-card" multiple :before-upload="handleBeforeUpload" show-upload-list="false"
                 @remove="handleRemove">
                 <div>
                   <PlusOutlined />
@@ -233,7 +205,7 @@
             <!-- Кнопка загрузки -->
             <div class="my-upload-block">
               <a-upload list-type="picture-card" multiple :before-upload="handleBeforeUploadExposition"
-                :show-upload-list="false" @remove="handleRemoveExposition">
+                show-upload-list="false" @remove="handleRemoveExposition">
                 <div>
                   <PlusOutlined />
                   <div>Загрузить</div>
@@ -273,19 +245,10 @@
 import { ref, reactive, computed, onMounted, defineComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PlusOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
-import { useSerias } from '@/stores/seria.js'
-import { useLocations } from '@/stores/locations.js'
-import { useStatuses } from '@/stores/statuses.js'
-import { useMedia } from '@/stores/media.js'
-import { useArtWork } from '@/stores/artWork.js'
-
-const seriasStore = useSerias();
-const locationsStore = useLocations()
-const statusesStore = useStatuses()
-const mediaStore = useMedia()
-const artWorkStore = useArtWork()
-
+import { useMedia } from '@/stores/media.js' 
+const mediaStore = useMedia();
+ 
+console.log('Media store in EditWork:', mediaStore.listMedia)
 const route = useRoute()
 const router = useRouter()
 const collectionList = ref([]);
@@ -293,14 +256,6 @@ const seriesOptions = ref([])
 const yearPicker = ref(null)
 const seriesInputRef = ref(null)
 const newSeries = ref('')
-const statusOptions = ref([])
-const newStatus = ref('')
-const statusInputRef = ref(null)
-const mediaOptions = ref([])
-const newMedia = ref('')
-const mediaInputRef = ref(null)
-const loading = ref(false)
-
 const VNodes = defineComponent({
   props: { vnodes: { type: Object, required: true } },
   render() { return this.vnodes }
@@ -311,15 +266,13 @@ const value = ref(null)
 const inputRef = ref()
 const name = ref('')
 const form = reactive({
-  id: null,
   avatar: null,
   name: '',
   technique: '',
   year: '',
   description: '',
   address: null,
-  seria: null,
-  media: null,
+  series: null,
   status: null,
   price: '',
   collections: [],
@@ -327,131 +280,30 @@ const form = reactive({
   exposition: []
 })
 
-// Загрузка работы для редактирования
-const loadArtWork = async () => {
-  if (route.params.id === 'new') return
+onMounted(() => {
+  const series = localStorage.getItem("seriesOptions");
+  if (series) {
+    seriesOptions.value = JSON.parse(series)
+      .filter(s => s.value && s.value.trim())
+  }
 
-  loading.value = true
+  const address = localStorage.getItem("city")
+  if (address) {
+    items.value = JSON.parse(address)
+  } else {
+    items.value = ['Москва', 'Санкт-Петербург']
+  }
 
-  try {
-    const work = await artWorkStore.getArtWorkById(route.params.id)
-     let locationName = null
-      if (work.location) {
-        const location = locationsStore.listLocations.find(loc => loc.id === work.location)
-        locationName = location ? location.name : work.location
-      }
-      let seriaName = null
-      if (work.seria) {
-        const seria = seriasStore.listSerias.find(s => s.id === work.seria)
-        seriaName = seria ? seria.name : work.seria
-      }
-      
-    if (work) {
-      Object.assign(form, {
-        id: work.id,
-        name: work.name || '',
-        technique: work.technique || '',
-        year: work.year ? String(work.year) : '',
-        description: work.description || '',
-        address: locationName || null,
-        seria: seriaName || null,
-        media: work.media || null,
-        status: work.status || null,
-        price: work.price || '',
-        collections: work.collections || [],
-        images: work.images || [],
-        exposition: work.exposition || [],
-        avatar: work.avatar || null
-      })
-
-      console.log('Загружена работа:', form)
+  const storedData = JSON.parse(localStorage.getItem('works') || '[]')
+  if (route.params.id !== 'new') {
+    const work = storedData.find(w => w.id == route.params.id)
+    if (work) Object.assign(form, work)
+    if (!work.series || work.series.length === 0) {
+      form.series = null
     }
-  } catch (error) {
-    console.error('Error loading artwork:', error)
-    message.error('Ошибка загрузки работы')
-  } finally {
-    loading.value = false
   }
-}
-
-// Загрузка серий из API
-const loadSeriesFromAPI = async () => {
-  try {
-    await seriasStore.getListSerias()
-    const apiSeries = seriasStore.listSerias.map(seria => ({
-      label: seria.name,
-      value: seria.id
-    }))
-    const allSeries = [...apiSeries]
-
-    seriesOptions.value = allSeries
-    console.log('Series loaded:', seriesOptions.value)
-  } catch (error) {
-    console.error('Error loading series:', error)
-    seriesOptions.value = []
-  }
-}
-
-// Загрузка локаций из API
-const loadLocationsFromAPI = async () => {
-  try {
-    await locationsStore.getListLocations()
-    const apiLocations = locationsStore.listLocations.map(loc => loc.name)
-    items.value = apiLocations
-
-    console.log('Locations loaded:', locationsStore.listLocations)
-  } catch (error) {
-    console.error('Error loading locations:', error)
-
-    // items.value = JSON.parse(address)
-  }
-}
-
-// Загрузка статусов из API
-const loadStatusesFromAPI = async () => {
-  try {
-    await statusesStore.getListStatuses()
-    const apiStatuses = statusesStore.listStatuses.map(status => ({
-      label: status.name,
-      value: status.id
-    }))
-
-    const allStatuses = [...apiStatuses]
-
-    statusOptions.value = allStatuses
-    console.log('Statuses loaded:', statusOptions.value)
-  } catch (error) {
-    console.error('Error loading statuses:', error)
-    statusOptions.value = []
-    message.warning('Загружены локальные статусы (API недоступен)')
-  }
-}
-
-// Загрузка медиа из API
-const loadMediaFromAPI = async () => {
-  try {
-    await mediaStore.getListMedia()
-    const apiMedia = mediaStore.listMedia.map(media => ({
-      label: media.name,
-      value: media.id
-    }))
-
-    const allMedia = [...apiMedia]
-
-    mediaOptions.value = allMedia
-    console.log('Media loaded:', mediaOptions.value)
-  } catch (error) {
-    console.error('Error loading media:', error)
-    mediaOptions.value = []
-  }
-}
-
-onMounted(async () => {
-  await loadSeriesFromAPI()
-  await loadLocationsFromAPI()
-  await loadStatusesFromAPI()
-  await loadMediaFromAPI()
-  await loadArtWork()
+  const saved = localStorage.getItem('collectionList');
+  if (saved) collectionList.value = JSON.parse(saved);
 })
 
 const handleBeforeUpload = (file) => {
@@ -462,7 +314,7 @@ const handleBeforeUpload = (file) => {
   if (isDuplicate) {
     console.warn('Этот файл уже загружен:', file.name);
     alert(`Файл "${file.name}" уже загружен!`);
-    return false;
+    return false; // Отменяем загрузку дубликата
   }
   const reader = new FileReader()
   reader.onload = e => {
@@ -564,379 +416,103 @@ function prevImage() {
 
 const onYearSelect = (value) => {
   if (value) {
-    form.year = value
+    form.year = value // уже строка YYYY благодаря valueFormat
   }
+  // закрываем календарь вручную
   if (yearPicker.value) {
     yearPicker.value.blur()
   }
 }
 
-// Удаление серии из списка
-const removeSeries = async (idx) => {
-  const removed = seriesOptions.value[idx]
-  if (!removed) return
+// сохраняем при изменении
+const saveSeriesOptions = (value) => {
+  const cleanValue = value.filter(v => v && v.trim())
+  form.series = cleanValue
 
-  try {
-    await seriasStore.deleteSeria(removed.value)
-    seriasStore.listSerias = seriasStore.listSerias.filter(s => s.id !== removed.value)
-    message.success(`Серия "${removed.label}" удалена на сервере`)
-  } catch (error) {
-    console.error('Error deleting seria via API:', error)
-  }
-
-  // Если удалённая серия была выбрана, сбрасываем
-  if (form.seria === removed.value) {
-    form.seria = null
-  }
-
-  seriesOptions.value.splice(idx, 1)
+  // Сохраняем все серии в options
+  cleanValue.forEach(v => {
+    if (!seriesOptions.value.find(opt => opt.value === v)) {
+      seriesOptions.value.push({ label: v, value: v })
+    }
+  })
+  localStorage.setItem('seriesOptions', JSON.stringify(seriesOptions.value))
 }
 
-// Добавление новой серии
-const addSeries = async (e) => {
+// сохраняем при изменении
+const saveMediaOptions = (value) => {
+  const cleanValue = value.filter(v => v && v.trim())
+  form.series = cleanValue
+
+  // Сохраняем все серии в options
+  cleanValue.forEach(v => {
+    if (!seriesOptions.value.find(opt => opt.value === v)) {
+      seriesOptions.value.push({ label: v, value: v })
+    }
+  })
+  localStorage.setItem('seriesOptions', JSON.stringify(seriesOptions.value))
+}
+
+const removeSeries = (idx) => {
+  const removed = seriesOptions.value[idx].value
+  seriesOptions.value.splice(idx, 1)
+
+  if (form.series && Array.isArray(form.series)) {
+    form.series = form.series.filter(s => s !== removed)
+  }
+  localStorage.setItem('seriesOptions', JSON.stringify(seriesOptions.value))
+}
+
+// Функция добавления новой серии (как addItem для городов)
+const addSeries = (e) => {
   e?.preventDefault()
   if (!newSeries.value.trim()) return
 
-  const seriaName = newSeries.value.trim()
-  const existingOption = seriesOptions.value.find(opt => opt.label === seriaName)
-
-  if (existingOption) {
-    form.seria = existingOption.value
-    newSeries.value = ''
-    return
-  }
-
-  let newOption = null
-
-  try {
-    const userId = localStorage.getItem('userId') || "e56094b2-3faf-4a7b-b494-4640dabcf08a"
-    const newSeria = await seriasStore.createSeria({
-      user_id: userId,
-      name: seriaName
+  if (!seriesOptions.value.find(opt => opt.value === newSeries.value.trim())) {
+    seriesOptions.value.push({
+      label: newSeries.value.trim(),
+      value: newSeries.value.trim()
     })
-
-    if (newSeria) {
-      newOption = {
-        label: newSeria.name,
-        value: newSeria.id
-      }
-      message.success('Серия создана на сервере')
-    }
-  } catch (error) {
-    console.error('Ошибка при создании серии через API:', error)
-    message.warning('API недоступен, серия сохранена локально')
+    localStorage.setItem('seriesOptions', JSON.stringify(seriesOptions.value))
   }
-
-  seriesOptions.value.push(newOption)
-  form.seria = newOption.value
-
   newSeries.value = ''
   setTimeout(() => seriesInputRef.value?.focus(), 0)
 }
 
-// Удаление локации через API
-const deleteLocation = async (locationId) => {
-  try {
-    await locationsStore.deleteLocation(locationId)
-    console.log('Location deleted:', locationId)
-    return true
-  } catch (error) {
-    console.error('Error deleting location:', error)
-    return false
-  }
-}
-
-const addItem = async (e) => {
+const addItem = (e) => {
   e?.preventDefault()
   if (!name.value.trim()) return
-
-  const cityName = name.value.trim()
-  
-  // Проверяем, существует ли уже такой город в списке
-  const existingOption = items.value.find(item => item === cityName)
-
-  if (existingOption) {
-    // Если существует, выбираем его
-    if (!form.address || form.address !== existingOption) {
-      form.address = existingOption
-    }
-    name.value = ''
-    return
+  if (!items.value.includes(name.value.trim())) {
+    items.value.push(name.value.trim())
+    localStorage.setItem('city', JSON.stringify(items.value))
   }
-
-  let newLocation = null
-
-  try {
-    // Создаём новую локацию через API
-    const userId = localStorage.getItem('userId') || "e56094b2-3faf-4a7b-b494-4640dabcf08a"
-    const created = await locationsStore.createLocation({
-      user_id: userId,
-      name: cityName
-    })
-    
-    if (created) {
-      // Получаем обновлённый список локаций
-      await locationsStore.getListLocations()
-      const newLocationData = locationsStore.listLocations.find(l => l.name === cityName)
-      if (newLocationData) {
-        newLocation = newLocationData.name
-        message.success(`Город "${cityName}" создан на сервере`)
-      }
-    }
-  } catch (error) {
-    console.error('Ошибка при создании города через API:', error)
-    message.warning('API недоступен, город сохранён локально')
-  }
-
-  // Если не удалось создать через API, создаём локально
-  if (!newLocation) {
-    newLocation = cityName
-  }
-
-  // Добавляем город в список
-  items.value.push(newLocation)
-  form.address = newLocation
-
   name.value = ''
   setTimeout(() => inputRef.value?.focus(), 0)
 }
 
-const removeItem = async (idx) => {
-  const removedCity = items.value[idx]
-  const locationToDelete = locationsStore.listLocations.find(loc => loc.name === removedCity)
-
-  if (locationToDelete && locationToDelete.id) {
-    await deleteLocation(locationToDelete.id)
-    items.value.splice(idx, 1)
-    message.success(`Город "${removedCity}" удалён`)
-  }
+const removeItem = (idx) => {
+  if (items.value[idx] === value.value) value.value = ''
+  items.value.splice(idx, 1)
+  localStorage.setItem('city', JSON.stringify(items.value))
 }
 
-// Создание нового статуса через API
-const createStatus = async (statusName) => {
-  try {
-    const userId = localStorage.getItem('userId') || "e56094b2-3faf-4a7b-b494-4640dabcf08a"
-    const newStatusData = await statusesStore.createStatus({
-      user_id: userId,
-      name: statusName
-    })
-    if (newStatusData) {
-      console.log('Status created:', newStatusData)
-      return true
-    }
-  } catch (error) {
-    console.error('Error creating status:', error)
-    return false
+const saveChanges = () => {
+  let storedWorks = JSON.parse(localStorage.getItem('works') || '[]')
+  const workId = form.id || Date.now()
+
+  // Если новая работа, присваиваем id
+  if (!form.id) form.id = workId
+
+  const workIndex = storedWorks.findIndex(w => w.id == form.id)
+  if (workIndex !== -1) {
+    storedWorks[workIndex] = { ...form }
+  } else {
+    storedWorks.push({ ...form })
   }
-}
+  form.address = value.value || ''
 
-// Удаление статуса через API
-const deleteStatusAPI = async (statusId) => {
-  try {
-    await statusesStore.deleteStatus(statusId)
-    console.log('Status deleted:', statusId)
-    return true
-  } catch (error) {
-    console.error('Error deleting status:', error)
-    return false
-  }
-}
+  localStorage.setItem('works', JSON.stringify(storedWorks))
 
-// Добавление нового статуса
-const addStatus = async (e) => {
-  e?.preventDefault()
-  if (!newStatus.value.trim()) return
-
-  const statusName = newStatus.value.trim()
-  const existingOption = statusOptions.value.find(opt => opt.label === statusName)
-
-  if (existingOption) {
-    if (!form.status || form.status !== existingOption.value) {
-      form.status = existingOption.value
-    }
-    newStatus.value = ''
-    return
-  }
-  let newOption = null
-
-  try {
-    const created = await createStatus(statusName)
-    if (created) {
-      await statusesStore.getListStatuses()
-      const newStatusData = statusesStore.listStatuses.find(s => s.name === statusName)
-      if (newStatusData) {
-        newOption = {
-          label: newStatusData.name,
-          value: newStatusData.id
-        }
-        createdViaAPI = true
-        message.success('Статус создан на сервере')
-      }
-    }
-  } catch (error) {
-    console.error('Ошибка при создании статуса через API:', error)
-  }
-
-  statusOptions.value.push(newOption)
-  form.status = newOption.value
-
-  newStatus.value = ''
-  setTimeout(() => statusInputRef.value?.focus(), 0)
-}
-
-// Удаление статуса из списка
-const removeStatus = async (idx) => {
-  const removed = statusOptions.value[idx]
-  if (!removed) return
-
-  try {
-    await deleteStatusAPI(removed.value)
-    message.success(`Статус "${removed.label}" удалён на сервере`)
-  } catch (error) {
-    console.error('Error deleting status via API:', error)
-  }
-
-  if (form.status === removed.value) {
-    form.status = null
-  }
-  statusOptions.value.splice(idx, 1)
-}
-
-// Создание нового медиа через API
-const createMedia = async (mediaName) => {
-  try {
-    const userId = localStorage.getItem('userId') || "e56094b2-3faf-4a7b-b494-4640dabcf08a"
-    const newMediaData = await mediaStore.createMedia({
-      user_id: userId,
-      name: mediaName
-    })
-    if (newMediaData) {
-      console.log('Media created:', newMediaData)
-      return true
-    }
-  } catch (error) {
-    console.error('Error creating media:', error)
-    return false
-  }
-}
-
-// Удаление медиа через API
-const deleteMediaAPI = async (mediaId) => {
-  try {
-    await mediaStore.deleteMedia(mediaId)
-    console.log('Media deleted:', mediaId)
-    return true
-  } catch (error) {
-    console.error('Error deleting media:', error)
-    return false
-  }
-}
-
-// Добавление нового медиа
-const addMedia = async (e) => {
-  e?.preventDefault()
-  if (!newMedia.value.trim()) return
-
-  const mediaName = newMedia.value.trim()
-  const existingOption = mediaOptions.value.find(opt => opt.label === mediaName)
-
-  if (existingOption) {
-    form.media = existingOption.value
-    newMedia.value = ''
-    return
-  }
-
-  let newOption = null
-
-  try {
-    const created = await createMedia(mediaName)
-    if (created) {
-      await mediaStore.getListMedia()
-      const newMediaData = mediaStore.listMedia.find(m => m.name === mediaName)
-      if (newMediaData) {
-        newOption = {
-          label: newMediaData.name,
-          value: newMediaData.id
-        }
-        message.success('Медиа создано на сервере')
-      }
-    }
-  } catch (error) {
-    console.error('Ошибка при создании медиа через API:', error)
-  }
-
-  mediaOptions.value.push(newOption)
-  form.media = newOption.value
-
-  newMedia.value = ''
-  setTimeout(() => mediaInputRef.value?.focus(), 0)
-}
-
-// Удаление медиа из списка
-const removeMedia = async (idx) => {
-  const removed = mediaOptions.value[idx]
-  if (!removed) return
-
-  try {
-    await deleteMediaAPI(removed.value)
-    message.success(`Медиа "${removed.label}" удалено на сервере`)
-  } catch (error) {
-    console.error('Error deleting media via API:', error)
-  }
-
-  if (form.media === removed.value) {
-    form.media = null
-  }
-  mediaOptions.value.splice(idx, 1)
-}
-
-const getLocationIdByName = (locationName) => {
-  if (!locationName) return null
-  const location = locationsStore.listLocations.find(loc => loc.name === locationName)
-  return location ? location.id : null
-}
-
-const saveChanges = async () => {
-  loading.value = true
-  try {
-    const locationId = getLocationIdByName(form.address)
-    
-    const workData = {
-      user_id: localStorage.getItem('userId') || "e56094b2-3faf-4a7b-b494-4640dabcf08a",
-      name: form.name,
-      technique: form.technique,
-      year: form.year ? parseInt(form.year) : null,
-      description: form.description,
-      location: locationId,
-      seria: form.seria,
-      media: form.media,
-      status: form.status,
-      price: form.price ? parseFloat(form.price) : null,
-    }
-
-    console.log('Отправляемые данные:', workData)
-    console.log('Отправляемые данные:', form.seria)
-
-    let result
-    if (form.id && form.id !== 'new') {
-      result = await artWorkStore.updateArtWork({ ...workData, id: form.id })
-      if (result) {
-        message.success('Работа обновлена')
-      }
-    } else {
-      result = await artWorkStore.createArtWork(workData)
-      if (result) {
-        message.success('Работа создана')
-      }
-    }
-
-    router.push('/home/dashboard')
-  } catch (error) {
-    console.error('Error saving artwork:', error)
-    message.error('Ошибка при сохранении: ' + (error.response?.data?.error || error.message))
-  } finally {
-    loading.value = false
-  }
+  router.push('/home/dashboard')
 }
 
 function goBack() {

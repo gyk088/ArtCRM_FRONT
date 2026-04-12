@@ -30,6 +30,11 @@
           <span>Резюме</span>
         </a-menu-item>
 
+        <a-menu-item key="files">
+          <InboxOutlined />
+          <span>Файлы</span>
+        </a-menu-item>
+
       </a-menu>
     </a-layout-sider>
 
@@ -39,31 +44,54 @@
         <router-view />
       </a-layout-content>
     </a-layout>
+
+    <a-modal
+      v-model:open="isFilesModalOpen"
+      title="Файлы"
+      :footer="null"
+      width="600px"
+    >
+      <FileUploader :remove="true" :select="true" @select="test"/>
+    </a-modal>
   </a-layout>
 </template>
 
 <script setup>
 import { ref } from "vue";
 import { useRouter } from "vue-router";
+// 👉 импорт компонента загрузки
+import FileUploader from "@/components/FileUploader.vue"
 import {
   PictureOutlined,
   UserOutlined,
   FileTextOutlined,
   LinkOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  InboxOutlined
 } from '@ant-design/icons-vue'
+
+const test = (file) => {
+  console.log("Выбран файл", file)
+  isFilesModalOpen.value = false
+}
 
 const collapsed = ref(false);
 const router = useRouter();
 
 const selectedKey = ref(router.currentRoute.value.name);
 router.afterEach((to) => (selectedKey.value = to.name));
+// 🔥 состояние модалки
+const isFilesModalOpen = ref(false)
 
 const toggleCollapsed = () => {
   collapsed.value = !collapsed.value
 }
 
 function onMenuClick({ key }) {
+  if (key === "files") {
+    isFilesModalOpen.value = true
+    return
+  }
   router.push({ name: key });
 }
 </script>
