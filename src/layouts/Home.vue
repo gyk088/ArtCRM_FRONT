@@ -142,10 +142,62 @@ const handleLogout = () => {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
 .custom-sider {
+  --bg: #0f0f11;
+  --bg-elevated: #17161a;
+  --text-title: #fbfaf7;
+  --text-body: #e7e4dd;
+  --text-faint: #8f8c84;
+  --accent: #c8b789;
+  --accent-strong: #d8c896;
+  --border: rgba(255, 255, 255, 0.08);
+
   height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.custom-sider :deep(.ant-layout-sider-children) {
+  background: var(--bg);
+}
+
+.custom-sider :deep(.ant-menu-dark) {
+  background: transparent;
+  color: var(--text-body);
+}
+
+.custom-sider :deep(.ant-menu-dark .ant-menu-item) {
+  color: var(--text-body);
+  margin: 4px 12px;
+  width: calc(100% - 24px);
+  border-radius: 8px;
+}
+
+.custom-sider :deep(.ant-menu-dark .ant-menu-item .anticon) {
+  color: var(--text-faint);
+  transition: color 0.2s ease;
+}
+
+.custom-sider :deep(.ant-menu-dark .ant-menu-item-selected) {
+  background: rgba(200, 183, 137, 0.14) !important;
+  color: var(--accent-strong) !important;
+}
+
+.custom-sider :deep(.ant-menu-dark .ant-menu-item-selected .anticon) {
+  color: var(--accent-strong);
+}
+
+.custom-sider :deep(.ant-menu-dark .ant-menu-item:hover) {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--accent) !important;
+}
+
+.custom-sider :deep(.ant-menu-dark .ant-menu-item:hover .anticon) {
+  color: var(--accent);
 }
 
 .sidebar-content {
@@ -163,33 +215,38 @@ const handleLogout = () => {
   cursor: pointer;
   height: 64px;
   margin: 16px;
-  color: white;
-  font-size: 20px;
+  color: var(--text-title);
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: 0.06em;
   text-align: center;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
   border-radius: 8px;
   transition: all 0.3s ease;
 }
 
 .logo:hover {
-  background: rgba(255, 255, 255, 0.2);
+  border-color: var(--accent);
+  color: var(--accent-strong);
 }
 
 /* Кнопка выхода - всегда внизу */
 .logout-wrapper {
   padding: 20px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--border);
   margin-top: auto;
 }
 
 .logout-btn {
   width: 100%;
-  color: #ff4d4f !important;
-  background: rgba(255, 77, 79, 0.1);
-  border: 1px solid #ff4d4f;
+  color: #f09090 !important;
+  background: rgba(240, 144, 144, 0.08);
+  border: 1px solid rgba(240, 144, 144, 0.4);
   border-radius: 8px;
   height: 40px;
   display: flex;
@@ -201,10 +258,11 @@ const handleLogout = () => {
 }
 
 .logout-btn:hover {
-  background: #ff4d4f !important;
-  color: white !important;
+  background: #f09090 !important;
+  color: #17161a !important;
+  border-color: #f09090;
   transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.3);
+  box-shadow: 0 4px 12px rgba(240, 144, 144, 0.25);
 }
 
 .logout-btn .anticon {
@@ -227,16 +285,16 @@ const handleLogout = () => {
 }
 
 .sidebar-top::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 4px;
 }
 
 .sidebar-top::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(200, 183, 137, 0.35);
   border-radius: 4px;
 }
 
 .sidebar-top::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(200, 183, 137, 0.55);
 }
 </style>

@@ -123,7 +123,7 @@
 </template>
 
 <script setup>
-import { ref, computed, defineProps, defineEmits } from "vue"
+import { ref, computed, onMounted, defineProps, defineEmits } from "vue"
 import { message } from "ant-design-vue"
 import { useFile } from "@/stores/file.js"
 import FileView from "./FileView.vue"
@@ -133,16 +133,20 @@ const emit = defineEmits(["select"])
 
 const props = defineProps({
   select: {
-    type: Boolean    
+    type: Boolean
   },
   remove: {
-    type: Boolean    
+    type: Boolean
   }
 })
 
 
 const search = ref("")
 const fileStore = useFile()
+
+onMounted(() => {
+  fileStore.getAllFiles()
+})
 
 const pendingFiles = ref([])
  
@@ -199,16 +203,8 @@ const saveFile = async(item) => {
   })
 
   item.loading = false
- 
 
-  files.value.push({
-    id: item.id,
-    name: item.originalName,
-    title: item.title,
-    comment: item.comment,
-    raw: item.raw,
-    date: new Date()
-  })
+  if (!success) return
 
   pendingFiles.value = pendingFiles.value.filter(f => f.id !== item.id)
 

@@ -162,8 +162,9 @@ export const useArtWork = defineStore('art-objects', {
         }
       } catch (e) {
         console.error('Error creating artwork:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to create artwork')
-        this.error = e?.response?.data?.message || 'Failed to create artwork'
+        const reason = e?.response?.data?.message || e?.response?.data?.error || 'Failed to create artwork'
+        notifyServerError(reason)
+        this.error = reason
         result = null
       } finally {
         this.loading = false
@@ -197,8 +198,9 @@ export const useArtWork = defineStore('art-objects', {
         }
       } catch (e) {
         console.error('Error updating artwork:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to update artwork')
-        this.error = e?.response?.data?.message || 'Failed to update artwork'
+        const reason = e?.response?.data?.message || e?.response?.data?.error || 'Failed to update artwork'
+        notifyServerError(reason)
+        this.error = reason
         result = null
       } finally {
         this.loading = false

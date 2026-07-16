@@ -9,6 +9,7 @@ a-config-provider(:locale="locale")
 import { defineComponent, computed } from "vue";
 import EmptyLayout from "@/layouts/Empty.vue";
 import MainLayout from "@/layouts/Home.vue";
+import PublicLayout from "@/layouts/Public.vue";
 import { useRoute } from "vue-router";
 import ruRU from "ant-design-vue/es/locale/ru_RU";
 import dayjs from "dayjs";
@@ -23,6 +24,7 @@ export default defineComponent({
   components: {
     EmptyLayout,
     MainLayout,
+    PublicLayout,
   },
 
   setup() {
@@ -36,6 +38,8 @@ export default defineComponent({
           return "main-layout";
         case "empty":
           return "empty-layout";
+        case "public":
+          return "public-layout";
         default:
           return "empty-layout";
       }

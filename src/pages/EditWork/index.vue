@@ -1,6 +1,6 @@
 <template>
   <div class="edit-page">
-    <h2>Редактировать работу</h2>
+    <h2 class="page-title">Редактировать работу</h2>
     <div class="edit-container">
 
       <!-- Левая колонка — ФОРМА -->
@@ -29,17 +29,13 @@
               <template #dropdownRender="{ menuNode: menu }">
                 <VNodes :vnodes="menu" />
                 <a-divider style="margin: 4px 0" />
-                <div style="padding: 4px 8px; display:flex; flex-wrap: wrap; gap: 4px;">
-                  <span v-for="(item, idx) in items" :key="item"
-                    style="display:flex; align-items:center; background:#f0f0f0; padding:2px 6px; border-radius:4px;">
+                <div class="chip-list">
+                  <span v-for="(item, idx) in items" :key="item" class="chip">
                     {{ item }}
-                    <button @click.prevent="removeItem(idx)"
-                      style="margin-left:4px; border:none; background:none; cursor:pointer; color:red;">
-                      ×
-                    </button>
+                    <button @click.prevent="removeItem(idx)" class="chip-remove">×</button>
                   </span>
                 </div>
-                <a-space style="padding: 4px 8px; margin-top:4px;">
+                <a-space class="add-row">
                   <a-input ref="inputRef" v-model:value="name" placeholder="Введите город" @keyup.enter="addItem" />
                   <a-button type="text" @click="addItem">
                     <template #icon>
@@ -61,19 +57,15 @@
                 <a-divider style="margin: 4px 0" />
 
                 <!-- Блок списка серий с кнопками удаления -->
-                <div style="padding: 4px 8px; display:flex; flex-wrap:wrap; gap:6px;">
-                  <span v-for="(item, idx) in seriesOptions" :key="item.value"
-                    style="display:flex; align-items:center; background:#f0f0f0; padding:2px 6px; border-radius:4px;">
+                <div class="chip-list">
+                  <span v-for="(item, idx) in seriesOptions" :key="item.value" class="chip">
                     {{ item.label }}
-                    <button @click.prevent="removeSeries(idx)"
-                      style="margin-left:4px; border:none; background:none; cursor:pointer; color:red;">
-                      ×
-                    </button>
+                    <button @click.prevent="removeSeries(idx)" class="chip-remove">×</button>
                   </span>
                 </div>
 
                 <!-- Добавляем инпут для добавления новой серии (как у городов) -->
-                <a-space style="padding: 4px 8px; margin-top:4px;">
+                <a-space class="add-row">
                   <a-input ref="seriesInputRef" v-model:value="newSeries" placeholder="Введите серию"
                     @keyup.enter="addSeries" />
                   <a-button type="text" @click="addSeries">
@@ -96,18 +88,14 @@
 
                 <a-divider style="margin: 4px 0" />
 
-                <div style="padding: 4px 8px; display:flex; flex-wrap:wrap; gap:6px;">
-                  <span v-for="(item, idx) in mediaOptions" :key="item.value"
-                    style="display:flex; align-items:center; background:#f0f0f0; padding:2px 6px; border-radius:4px;">
+                <div class="chip-list">
+                  <span v-for="(item, idx) in mediaOptions" :key="item.value" class="chip">
                     {{ item.label }}
-                    <button @click.prevent="removeMedia(idx)"
-                      style="margin-left:4px; border:none; background:none; cursor:pointer; color:red;">
-                      ×
-                    </button>
+                    <button @click.prevent="removeMedia(idx)" class="chip-remove">×</button>
                   </span>
                 </div>
 
-                <a-space style="padding: 4px 8px; margin-top:4px;">
+                <a-space class="add-row">
                   <a-input ref="mediaInputRef" v-model:value="newMedia" placeholder="Введите медиа"
                     @keyup.enter="addMedia" />
                   <a-button type="text" @click="addMedia">
@@ -129,19 +117,15 @@
                 <a-divider style="margin: 4px 0" />
 
                 <!-- Блок списка статусов с кнопками удаления -->
-                <div style="padding: 4px 8px; display:flex; flex-wrap:wrap; gap:6px;">
-                  <span v-for="(item, idx) in statusOptions" :key="item.value"
-                    style="display:flex; align-items:center; background:#f0f0f0; padding:2px 6px; border-radius:4px;">
+                <div class="chip-list">
+                  <span v-for="(item, idx) in statusOptions" :key="item.value" class="chip">
                     {{ item.label }}
-                    <button @click.prevent="removeStatus(idx)"
-                      style="margin-left:4px; border:none; background:none; cursor:pointer; color:red;">
-                      ×
-                    </button>
+                    <button @click.prevent="removeStatus(idx)" class="chip-remove">×</button>
                   </span>
                 </div>
 
                 <!-- Добавляем инпут для добавления нового статуса -->
-                <a-space style="padding: 4px 8px; margin-top:4px;">
+                <a-space class="add-row">
                   <a-input ref="statusInputRef" v-model:value="newStatus" placeholder="Введите статус"
                     @keyup.enter="addStatus" />
                   <a-button type="text" @click="addStatus">
@@ -323,7 +307,7 @@ const loadArtWork = async () => {
         year: work.year ? String(work.year) : '',
         description: work.description || '',
         address: getNameById(work.location, locationsStore, 'listLocations'),
-        seria: getNameById(work.seria, seriasStore, 'listSerias'),
+        seria: work.seria || null,
         media: work.media || null,
         status: work.status || null,
         price: work.price || '',
@@ -815,6 +799,8 @@ const saveChanges = async () => {
       media: form.media,
       status: form.status,
       price: form.price ? parseFloat(form.price) : null,
+      avatar: form.avatar,
+      images: form.images,
     }
 
     console.log('Отправляемые данные:', workData)
@@ -833,7 +819,9 @@ const saveChanges = async () => {
       }
     }
 
-    router.push('/home/dashboard')
+    if (result) {
+      router.push('/home/dashboard')
+    }
   } catch (error) {
     console.error('Error saving artwork:', error)
     message.error('Ошибка при сохранении: ' + (error.response?.data?.error || error.message))
@@ -848,18 +836,39 @@ function goBack() {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
 /* === КОЛОНКИ === */
 .edit-page {
-  padding-top: 10px;
-  padding-left: 10px;
+  --bg: #f7f5f0;
+  --bg-elevated: #ffffff;
+  --card-bg: #efece4;
+  --text-title: #211f1a;
+  --text-body: #2c2a25;
+  --text-muted: #5a564c;
+  --text-faint: #7c7669;
+  --accent: #8a6d2f;
+  --accent-strong: #6f581f;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-soft: rgba(0, 0, 0, 0.07);
+
+  padding: 20px 24px 10px;
   height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--bg);
+  color: var(--text-body);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-.edit-page h2 {
+.page-title {
   flex-shrink: 0;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-title);
+  margin: 0 0 4px;
 }
 
 .edit-container {
@@ -886,25 +895,25 @@ function goBack() {
 
 .left-column::-webkit-scrollbar-track,
 .right-column::-webkit-scrollbar-track {
-  background: #f0f0f0;
+  background: var(--card-bg);
   border-radius: 4px;
 }
 
 .left-column::-webkit-scrollbar-thumb,
 .right-column::-webkit-scrollbar-thumb {
-  background: #BDD6F4;
+  background: rgba(138, 109, 47, 0.35);
   border-radius: 4px;
 }
 
 .left-column::-webkit-scrollbar-thumb:hover,
 .right-column::-webkit-scrollbar-thumb:hover {
-  background: #1E90FF;
+  background: var(--accent);
 }
 
 .right-column {
   width: 70%;
   padding-left: 20px;
-  border-left: 1px solid #eee;
+  border-left: 1px solid var(--border);
   overflow-y: auto;
   height: 100%;
 }
@@ -915,14 +924,19 @@ function goBack() {
   /* Было 24px по умолчанию */
 }
 
+:deep(.ant-form-item-label > label) {
+  color: var(--text-muted);
+}
+
 .fixed-input {
   width: 100%;
   max-width: 450px;
-  border-color: #BDD6F4;
+  border-color: var(--border);
+  background: var(--bg-elevated);
 }
 
 .fixed-input:hover {
-  border-color: #1E90FF;
+  border-color: var(--accent);
 }
 
 .description-input {
@@ -939,7 +953,8 @@ function goBack() {
 }
 
 .series-select :deep(.ant-select-selector) {
-  border-color: #BDD6F4;
+  border-color: var(--border);
+  background: var(--bg-elevated) !important;
   position: relative;
   padding-right: 28px !important;
 }
@@ -947,10 +962,11 @@ function goBack() {
 .series-select :deep(.ant-select-clear) {
   right: 8px !important;
   inset-inline-end: 6px !important;
+  background: var(--bg-elevated);
 }
 
 .series-select :deep(.ant-select-selector:hover) {
-  border-color: #1E90FF !important;
+  border-color: var(--accent) !important;
 }
 
 .series-select :deep(.ant-select-arrow) {
@@ -963,34 +979,77 @@ function goBack() {
 }
 
 .status-select :deep(.ant-select-selector) {
-  border-color: #BDD6F4;
+  border-color: var(--border);
+  background: var(--bg-elevated) !important;
   position: relative;
   padding-right: 28px !important;
 }
 
+.status-select :deep(.ant-select-selector:hover) {
+  border-color: var(--accent) !important;
+}
+
+/* === Чипы (города/серии/медиа/статусы) в выпадающих списках === */
+.chip-list {
+  padding: 4px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  background: var(--card-bg);
+  color: var(--text-body);
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 13px;
+}
+
+.chip-remove {
+  margin-left: 6px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #b43c3c;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.chip-remove:hover {
+  color: #8f2c2c;
+}
+
+.add-row {
+  padding: 4px 8px;
+  margin-top: 4px;
+}
+
 /* === Кнопка сохранения === */
 .save-btn {
-  background-color: #1164B4;
-  border-color: #5761b3;
+  background-color: var(--accent);
+  border-color: var(--accent);
   color: #fff;
   transition: all 0.3s ease;
   margin-bottom: 8px;
 }
 
 .save-btn:hover {
-  border-color: #1164B4;
-  background-color: #007FFF;
+  border-color: var(--accent-strong);
+  background-color: var(--accent-strong);
   color: #fff;
 }
 
 .back-btn {
-  border-color: #1164B4;
-  color: #1164B4;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
 }
 
 .back-btn:hover {
-  background-color: #007FFF;
-  border-color: #1164B4;
+  background-color: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
@@ -1015,6 +1074,8 @@ function goBack() {
 .images-item :deep(.ant-form-item-label > label) {
   font-size: 16px;
   font-weight: 500;
+  font-family: 'Cormorant Garamond', serif;
+  color: var(--text-title);
 }
 
 /* Галерея превью */
@@ -1025,9 +1086,9 @@ function goBack() {
 .upload-placeholder {
   width: 104px;
   height: 104px;
-  border: 1px dashed #d9d9d9;
+  border: 1px dashed var(--border);
   border-radius: 8px;
-  background-color: #fafafa;
+  background-color: var(--card-bg);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1036,19 +1097,19 @@ function goBack() {
 }
 
 .upload-placeholder:hover {
-  border-color: #1E90FF;
-  background-color: #f5f5f5;
+  border-color: var(--accent);
+  background-color: var(--bg-elevated);
 }
 
 .upload-placeholder .anticon {
   font-size: 20px;
-  color: #999;
+  color: var(--text-faint);
   margin-bottom: 8px;
 }
 
 .upload-placeholder div {
   font-size: 12px;
-  color: #999;
+  color: var(--text-faint);
 }
 
 .preview-gallery {
@@ -1077,16 +1138,16 @@ function goBack() {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   transition: transform 0.2s;
-  border: 1px solid #fff;
-  box-shadow: 0 -1px 6px #BDD6F4;
+  border: 1px solid var(--bg-elevated);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .preview-image:hover {
   transform: scale(1.08);
-  border-color: #1E90FF;
+  border-color: var(--accent);
 }
 
 .my-upload-block :deep(.ant-upload-select-picture-card) {
@@ -1101,7 +1162,7 @@ function goBack() {
 }
 
 .my-upload-block :deep(.ant-upload-select-picture-card:hover) {
-  border-color: #1E90FF !important;
+  border-color: var(--accent) !important;
 }
 
 /* кнопка удаления */
@@ -1110,7 +1171,7 @@ function goBack() {
   top: 4px;
   right: 4px;
   border: none;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.85);
   cursor: pointer;
   font-size: 12px;
   line-height: 1;
@@ -1120,7 +1181,8 @@ function goBack() {
 }
 
 .delete-btn:hover {
-  background-color: rgba(255, 0, 0, 0.8);
+  background-color: #d9534f;
+  color: #fff;
 }
 
 .avatar-preview {
@@ -1133,13 +1195,13 @@ function goBack() {
   height: 110px;
   border-radius: 8px;
   object-fit: cover;
-  border: 1px solid #BDD6F4;
-  box-shadow: 0 0 6px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
 }
 
 .avatar-image:hover {
-  border-color: #4f4ec1;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
+  border-color: var(--accent);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
   transition: all 0.2s ease;
 }
 
@@ -1147,7 +1209,7 @@ function goBack() {
 .lightbox {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(15, 15, 17, 0.9);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1158,7 +1220,7 @@ function goBack() {
   max-width: 90%;
   max-height: 90%;
   border-radius: 10px;
-  box-shadow: 0 0 10px #000;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
 }
 
 .nav-btn {
@@ -1166,11 +1228,15 @@ function goBack() {
   top: 50%;
   transform: translateY(-50%);
   background: none;
-  color: white;
+  color: #f2f0ec;
   font-size: 3rem;
   border: none;
   cursor: pointer;
   user-select: none;
+}
+
+.nav-btn:hover {
+  color: var(--accent-strong);
 }
 
 .prev {
@@ -1187,9 +1253,13 @@ function goBack() {
   right: 30px;
   font-size: 2rem;
   background: none;
-  color: white;
+  color: #f2f0ec;
   border: none;
   cursor: pointer;
+}
+
+.close-btn:hover {
+  color: var(--accent-strong);
 }
 
 /* === Адаптация для маленьких экранов === */
@@ -1209,7 +1279,7 @@ function goBack() {
     width: 100%;
     padding-left: 0;
     border-left: none;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--border);
     padding-top: 20px;
     max-height: 500px;
   }

@@ -1,6 +1,6 @@
 <template>
   <div class="edit-page">
-    <h2>{{ route.params.id === 'new' ? 'Создать коллекцию' : 'Редактировать коллекцию' }}</h2>
+    <h2 class="page-title">{{ route.params.id === 'new' ? 'Создать коллекцию' : 'Редактировать коллекцию' }}</h2>
 
     <a-form layout="vertical" class="edit-form">
       <a-form-item label="Название">
@@ -14,7 +14,7 @@
     <!-- Таблица выбранных работ под кнопкой -->
 <div class="selected-works-table">
     <div class="table-header">
-  <h3>Добавленные работы</h3>
+  <h3 class="section-title">Добавленные работы</h3>
 <a-button type="primary" @click="openWorksModal" class="add-more-btn">
       Добавить ещё
     </a-button>
@@ -34,8 +34,11 @@
             <PictureOutlined />
           </div>
         </template>
-        <template v-else-if="column.dataIndex === 'series'">
-          {{ Array.isArray(record.series) ? record.series.join(', ') : record.series }}
+        <template v-else-if="column.dataIndex === 'seria'">
+          {{ getSeriaName(record.seria) }}
+        </template>
+        <template v-else-if="column.dataIndex === 'status'">
+          {{ getStatusName(record.status) }}
         </template>
       <template v-else-if="column.dataIndex === 'actions'">
         <a-button type="link" danger @click="removeSelectedWork(record.id)">
@@ -55,12 +58,15 @@
       centered
       ok-text="Добавить"
       cancel-text="Отмена"
+      class="works-modal"
+      :get-container="false"
       @ok="addSelectedWorks"
     >
       <a-table
         :data-source="worksTable"
         :columns="columns"
         row-key="id"
+        :loading="worksLoading"
         :row-selection="rowSelection">
 
          <template #bodyCell="{ column, record }">
@@ -71,19 +77,22 @@
             <PictureOutlined />
           </div>
         </template>
+        <template v-else-if="column.dataIndex === 'status'">
+          {{ getStatusName(record.status) }}
+        </template>
         <!-- Остальные колонки -->
         <template v-else>
           {{ record[column.dataIndex] }}
         </template>
-       </template> 
+       </template>
        </a-table>
-    
+
     </a-modal>
-  
+
 <!-- === FOOTER (кнопки) === -->
     <div class="buttons-footer">
-      <a-button 
-        type="primary" 
+      <a-button
+        type="primary"
         @click="saveChanges"
         class="save-btn"
       >
@@ -98,13 +107,21 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { PictureOutlined } from '@ant-design/icons-vue'
+import { useArtWork } from '@/stores/artWork.js'
+import { useStatuses } from '@/stores/statuses.js'
+import { useSerias } from '@/stores/seria.js'
 
 const route = useRoute()
 const router = useRouter()
 
+const artWorkStore = useArtWork()
+const statusesStore = useStatuses()
+const seriasStore = useSerias()
+
 const isWorksModalOpen = ref(false)
 const worksTable = ref([])
+const worksLoading = ref(false)
 
 const form = reactive({
   id: route.params.id !== 'new' ? Number(route.params.id) : Date.now(),
@@ -114,9 +131,9 @@ const form = reactive({
 })
 
 // === Инициализация формы ===
-onMounted(() => {
+onMounted(async () => {
   const storedCollections = JSON.parse(localStorage.getItem('collectionList') || '[]')
-  
+
   if (route.params.id && route.params.id !== 'new') {
     const collectionId = Number(route.params.id)
     const collection = storedCollections.find(c => c.id === collectionId)
@@ -128,7 +145,11 @@ onMounted(() => {
     form.id = Date.now()
   }
 
-  loadWorksFromLocalStorage()
+  await Promise.all([
+    loadWorks(),
+    statusesStore.getListStatuses(),
+    seriasStore.getListSerias()
+  ])
 
   // Загружаем выбранные работы
   const savedSelectedWorks = JSON.parse(localStorage.getItem('selectedWorks') || '{}')
@@ -138,8 +159,26 @@ onMounted(() => {
   }
 })
 
-function loadWorksFromLocalStorage() {
-  worksTable.value = JSON.parse(localStorage.getItem('works') || '[]')
+async function loadWorks() {
+  worksLoading.value = true
+  try {
+    await artWorkStore.getListArtWorks()
+    worksTable.value = artWorkStore.listArtWorks
+  } finally {
+    worksLoading.value = false
+  }
+}
+
+function getStatusName(statusId) {
+  if (!statusId) return ''
+  const status = statusesStore.listStatuses.find(s => s.id === statusId)
+  return status ? status.name : statusId
+}
+
+function getSeriaName(seriaId) {
+  if (!seriaId) return ''
+  const seria = seriasStore.listSerias.find(s => s.id === seriaId)
+  return seria ? seria.name : seriaId
 }
 
 // колонки для модалки
@@ -154,14 +193,14 @@ const columns = [
 const selectedWorksColumns = [
   { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: 100 },
   { title: "Название", dataIndex: "name", key: "name", width: 300 },
-  { title: 'Серия', dataIndex: 'series', key: 'series', width: 200 },
+  { title: 'Серия', dataIndex: 'seria', key: 'seria', width: 200 },
   { title: 'Статус', dataIndex: 'status', key: 'status', width: 200 },
   { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 200 },
   { title: "Действия", dataIndex: "actions", key: "actions" }
 ]
 
 function openWorksModal() {
-  loadWorksFromLocalStorage()
+  loadWorks()
   selectedRowKeys.value = [...form.works];
   isWorksModalOpen.value = true
 }
@@ -220,26 +259,64 @@ function goBack() {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
 .edit-page {
+  --bg: #f7f5f0;
+  --bg-elevated: #ffffff;
+  --card-bg: #efece4;
+  --text-title: #211f1a;
+  --text-body: #2c2a25;
+  --text-muted: #5a564c;
+  --text-faint: #7c7669;
+  --accent: #8a6d2f;
+  --accent-strong: #6f581f;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-soft: rgba(0, 0, 0, 0.07);
+
   display: flex;
   flex-direction: column;
   min-height: 100vh; /* растягиваем */
   padding: 24px;
-  background: #fff;
+  background: var(--bg);
+  color: var(--text-body);
   border-radius: 8px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.page-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-title);
+  margin: 0 0 8px;
+}
+
+.section-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-title);
+  margin: 0;
 }
 
 .edit-form {
   flex: 1; /* занимает всё пространство */
   padding-top: 20px;
 }
+
+:deep(.ant-form-item-label > label) {
+  color: var(--text-muted);
+}
+
 .fixed-input {
   width: 500px; /* фиксированная ширина */
   max-width: 100%; /* чтобы не выходила за пределы контейнера */
-  border-color: #BDD6F4;
+  border-color: var(--border);
+  background: var(--bg-elevated);
 }
 .fixed-input:hover {
-  border-color: #4f4ec1;
+  border-color: var(--accent);
 }
 .description-input {
   height: 100px;
@@ -251,55 +328,15 @@ function goBack() {
   height: 50px;
   object-fit: cover;
   border-radius: 6px;
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
 }
 .img-placeholder {
   width: 50px;
   height: 50px;
   border-radius: 6px;
-  border: 1px dashed #bbb;
-  color: #999;
-  background: #fafafa;
-}
-.save-btn {
-  background-color: #4f4ec1;
-  border-color: #5761b3;
-  color: #fff;
-  transition: all 0.3s ease;
-}
-.save-btn:hover {
-  border-color: #2e2e9f; /* цвет рамки при наведении */
-  background-color: #6c6bff; /* немного светлее фон */
-  color: #fff;
-}
-
-.add-work-btn-wrapper {
-  margin-top: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.add-work-btn {
-  background: #57be5b !important; /* зелёная */
-  border: none;
-  color: #fff;
-  width: 40px;
-  height: 40px;
-  font-size: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.add-work-btn:hover {
-  background: #43a047 !important; 
-  color: #fff;
-}
-
-.add-work-text {
-  font-size: 16px;
-  color: #2c2b2b;
+  border: 1px dashed var(--border);
+  color: var(--text-faint);
+  background: var(--card-bg);
 }
 
 .table-header {
@@ -310,35 +347,133 @@ function goBack() {
 }
 
 .add-more-btn {
-  background-color: #4f4ec1;
-  border-color: #4f4ec1;
+  background-color: var(--accent);
+  border-color: var(--accent);
   color: #fff;
+  border-radius: 20px;
+}
+
+.add-more-btn:hover {
+  background-color: var(--accent-strong) !important;
+  border-color: var(--accent-strong) !important;
+}
+
+/* === Таблица выбранных работ === */
+.selected-works-table :deep(.ant-table) {
+  background: transparent;
+  color: var(--text-body);
+}
+
+.selected-works-table :deep(.ant-table-thead > tr > th) {
+  background: var(--card-bg) !important;
+  color: var(--accent) !important;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.selected-works-table :deep(.ant-table-thead > tr > th)::before {
+  display: none;
+}
+
+.selected-works-table :deep(.ant-table-tbody > tr > td) {
+  background: transparent;
+  color: var(--text-body);
+  border-bottom: 1px solid var(--border-soft) !important;
+}
+
+.selected-works-table :deep(.ant-table-tbody > tr:hover > td) {
+  background: rgba(138, 109, 47, 0.06) !important;
+}
+
+.selected-works-table :deep(.ant-empty-description) {
+  color: var(--text-faint);
 }
 
 /* Нижняя панель кнопок */
 .buttons-footer {
   display: flex;
-  justify-content: flex-start; 
+  justify-content: flex-start;
   gap: 12px;
   padding-top: 16px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-soft);
   margin-top: auto; /* прижимает вниз */
   padding-bottom: 8px;
 }
 
 /* Стили кнопок */
 .save-btn {
-  background-color: #4f4ec1;
-  border-color: #5761b3;
+  background-color: var(--accent);
+  border-color: var(--accent);
   color: #fff;
+  transition: all 0.3s ease;
 }
 
 .save-btn:hover {
-  border-color: #2e2e9f;
-  background-color: #6c6bff;
+  border-color: var(--accent-strong);
+  background-color: var(--accent-strong);
+  color: #fff;
 }
 
 .cancel-btn {
   margin-left: 8px;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
+}
+
+.cancel-btn:hover {
+  background-color: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #fff !important;
+}
+
+/* === Модалка выбора работ === */
+.works-modal :deep(.ant-modal-content) {
+  background: var(--bg-elevated);
+  border-radius: 14px;
+}
+
+.works-modal :deep(.ant-modal-header) {
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.works-modal :deep(.ant-modal-title) {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+
+.works-modal :deep(.ant-table-thead > tr > th) {
+  background: var(--card-bg) !important;
+  color: var(--accent) !important;
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.works-modal :deep(.ant-table-thead > tr > th)::before {
+  display: none;
+}
+
+.works-modal :deep(.ant-table-tbody > tr > td) {
+  border-bottom: 1px solid var(--border-soft) !important;
+}
+
+.works-modal :deep(.ant-table-tbody > tr:hover > td) {
+  background: rgba(138, 109, 47, 0.06) !important;
+}
+
+.works-modal :deep(.ant-btn-primary) {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.works-modal :deep(.ant-btn-primary:hover) {
+  background-color: var(--accent-strong) !important;
+  border-color: var(--accent-strong) !important;
 }
 </style>

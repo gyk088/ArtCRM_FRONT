@@ -1,7 +1,7 @@
 <template>
   <div class="collection-page">
     <div class="collection-header">
-      <h3>Мои Ссылки</h3>
+      <h3 class="page-title">Мои Ссылки</h3>
       <div class="header-actions">
         <div class="import-wrapper">
           <a-input v-model:value="importLink" placeholder="Ссылка для импорта" class="import-link-input"
@@ -56,35 +56,51 @@ onMounted(() => {
   if (saved) collectionList.value = JSON.parse(saved);
 });
 
-// Функция импорта
+// Достаём ID коллекции из вставленной ссылки (или принимаем чистый id)
+function extractCollectionId(link) {
+  const trimmed = link.trim()
+  try {
+    const url = new URL(trimmed)
+    const segments = url.pathname.split('/').filter(Boolean)
+    return segments[segments.length - 1] || ''
+  } catch {
+    // это не полноценный URL — считаем, что вставили сам id
+    return trimmed
+  }
+}
+
+// Импорт коллекции по ссылке — добавляем её карточку в "Мои Ссылки"
 const importCollection = () => {
   if (!importLink.value.trim()) {
-    alert('Пожалуйста, введите ссылку')
+    message.warning('Пожалуйста, введите ссылку')
     return
   }
 
-  // Здесь ваша логика импорта
-  console.log('Импорт по ссылке:', importLink.value)
-
-  // Пример: парсинг ссылки и добавление коллекции
-  try {
-    // Ваш код импорта
-    // ...
-
-    // Очистить поле после импорта
-    importLink.value = ''
-    alert('Коллекция успешно импортирована!')
-  } catch (error) {
-    console.error('Ошибка импорта:', error)
-    alert('Ошибка при импорте коллекции')
+  const collectionId = Number(extractCollectionId(importLink.value))
+  if (!collectionId) {
+    message.error('Не удалось распознать ссылку')
+    return
   }
+
+  const stored = JSON.parse(localStorage.getItem('collectionList') || '[]')
+  const found = stored.find(c => c.id === collectionId)
+
+  if (!found) {
+    message.error('Коллекция по этой ссылке не найдена')
+    return
+  } else {
+    collectionList.value.push(found)
+    message.success('Коллекция добавлена в список')
+  }
+
+  importLink.value = ''
 }
 
 // Функция копирования ссылки на коллекцию
 const copyCollectionLink = async (collection) => {
   // Формируем ссылку
   const link = `${window.location.origin}/collection/${collection.id}`
-  
+
   try {
     await navigator.clipboard.writeText(link)
     message.success('Ссылка на коллекцию скопирована!')
@@ -120,18 +136,42 @@ function deleteСollection(id) {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
 .collection-page {
-  padding: 16px;
-  background: #fff;
-  border-radius: 12px;
+  --bg: #f7f5f0;
+  --bg-elevated: #ffffff;
+  --card-bg: #efece4;
+  --text-title: #211f1a;
+  --text-body: #2c2a25;
+  --text-muted: #5a564c;
+  --text-faint: #7c7669;
+  --accent: #8a6d2f;
+  --accent-strong: #6f581f;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-soft: rgba(0, 0, 0, 0.07);
+
+  padding: 20px 24px;
+  background: var(--bg);
+  color: var(--text-body);
+  border-radius: 14px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .collection-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 36px;
+  margin-bottom: 32px;
   font-size: 18px;
+}
+
+.page-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-title);
+  margin: 0;
 }
 
 .collection-grid {
@@ -144,12 +184,22 @@ function deleteСollection(id) {
   width: 100%;
   transition: all 0.3s ease;
   cursor: pointer;
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px;
 }
 
 .collection-card :deep(.ant-card-head) {
   border-bottom: none !important;
    padding-top: 12px !important;
    min-height: auto !important;
+   color: var(--text-title);
+}
+
+.collection-card :deep(.ant-card-head-title) {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 19px;
+  font-weight: 600;
 }
 
 .collection-card :deep(.ant-card-head-wrapper) {
@@ -158,7 +208,8 @@ function deleteСollection(id) {
 
 .collection-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: var(--accent) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
 }
 
 .collection-text {
@@ -172,33 +223,39 @@ function deleteСollection(id) {
   line-height: 1.5;
   font-size: 13px !important;
   min-height: 63px; /* 3 строки * 1.5 * 14px = 63px */
-  color: #666;
+  color: var(--text-muted);
 }
 
 .collection-actions {
   display: flex;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-soft);
   padding-top: 24px;
 }
 
 .copy-link-btn {
-  border: 1px solid #bdd8f1 !important;
-  color: #1164B4 !important;
-  border-radius: 12px !important;
+  border: 1px solid var(--accent) !important;
+  color: var(--accent) !important;
+  background: transparent !important;
+  border-radius: 20px !important;
   padding: 4px 12px !important;
   height: auto !important;
   font-size: 12px !important;
 }
 
 .copy-link-btn:hover {
-  background-color: #3288d9 !important;
-  color: white !important;
-  border-color: #257dcf !important;
+  background-color: var(--accent) !important;
+  color: #fff !important;
+  border-color: var(--accent-strong) !important;
 }
 
 .collection-actions .ant-btn-link {
   padding: 0 10px;
   height: auto;
+  color: #b43c3c;
+}
+
+.collection-actions .ant-btn-link:hover {
+  color: #8f2c2c;
 }
 
 .header-actions {
@@ -218,16 +275,36 @@ function deleteСollection(id) {
 }
 
 .import-link-input :deep(.ant-input) {
-  border-radius: 8px;
+  border-radius: 20px;
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  color: var(--text-body);
+}
+
+.import-link-input :deep(.ant-input:hover),
+.import-link-input :deep(.ant-input:focus) {
+  border-color: var(--accent);
 }
 
 .import-link-btn {
-  background-color: #52c41a;
-  border-color: #52c41a;
+  background-color: var(--accent);
+  border-color: var(--accent);
+  border-radius: 20px;
 }
 
 .import-link-btn:hover {
-  background-color: #73d13d;
-  border-color: #73d13d;
+  background-color: var(--accent-strong) !important;
+  border-color: var(--accent-strong) !important;
+}
+
+.header-actions :deep(.ant-btn-primary:not(.import-link-btn)) {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  border-radius: 20px;
+}
+
+.header-actions :deep(.ant-btn-primary:not(.import-link-btn):hover) {
+  background-color: var(--accent-strong) !important;
+  border-color: var(--accent-strong) !important;
 }
 </style>

@@ -72,6 +72,15 @@ const router = createRouter({
     ],
     },
     {
+      path: '/collection/:id',
+      name: 'collection-landing',
+      component: () => import('@/pages/CollectionLanding/index.vue'),
+      meta: {
+        title: 'Коллекция',
+        layout: 'public',
+      },
+    },
+    {
       path: '/about',
       name: 'about',
       // route level code-splitting
