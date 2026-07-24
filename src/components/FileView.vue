@@ -65,12 +65,14 @@
         <component :is="iconComponent" />
          <div>
             <div class="modal-file-name">{{ file.name }}</div>
-            <div class="modal-file-comment">{{ file.comment }}</div>
             <a-button class="modal-file-btn" type="link" @click="downloadFile">
               Скачать
             </a-button>
         </div>
       </div>
+
+      <!-- 💬 Комментарий -->
+      <div v-if="file.comment" class="modal-file-comment">{{ file.comment }}</div>
 
     </a-drawer>
 

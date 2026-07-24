@@ -151,6 +151,12 @@
             </button>
           </a-tooltip>
 
+          <a-tooltip v-if="currentFolder" title="Убрать из папки">
+            <button class="file-action-btn" @click.stop="handleRemoveFromFolder(item)">
+              <RollbackOutlined />
+            </button>
+          </a-tooltip>
+
           <a-tooltip v-if="remove" title="Удалить">
             <button class="file-action-btn danger" @click.stop="removeFile(item)">
               <DeleteOutlined />
@@ -182,7 +188,8 @@ import {
   SearchOutlined,
   InboxOutlined,
   CheckOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  RollbackOutlined
 } from "@ant-design/icons-vue"
 import { useFile } from "@/stores/file.js"
 import FileView from "./FileView.vue"
@@ -205,6 +212,7 @@ const fileStore = useFile()
 
 onMounted(() => {
   fileStore.getAllFiles()
+  fileStore.getFolders()
 })
 
 const pendingFiles = ref([])
@@ -228,7 +236,7 @@ const currentFolder = computed(() =>
 
 const filteredFiles = computed(() => {
   const inCurrentFolder = files.value.filter(
-    f => (fileStore.fileFolderMap[f.id] || null) === fileStore.currentFolderId
+    f => (f.folder_id || null) === fileStore.currentFolderId
   )
 
   if (!search.value) return inCurrentFolder
@@ -246,7 +254,7 @@ const openFolder = (folderId) => {
   fileStore.setCurrentFolder(folderId)
 }
 
-const handleCreateFolder = () => {
+const handleCreateFolder = async () => {
   const name = newFolderName.value.trim()
 
   if (!name) {
@@ -254,7 +262,9 @@ const handleCreateFolder = () => {
     return
   }
 
-  const folder = fileStore.createFolder(name)
+  const folder = await fileStore.createFolder(name)
+  if (!folder) return
+
   newFolderName.value = ""
   showNewFolderForm.value = false
   fileStore.setCurrentFolder(folder.id) // сразу открываем новую папку для загрузки файлов
@@ -266,7 +276,15 @@ const cancelNewFolder = () => {
 }
 
 const handleDeleteFolder = (folder) => {
-  fileStore.deleteFolder(folder.id)
+  Modal.confirm({
+    title: "Удалить папку?",
+    icon: () => h(ExclamationCircleOutlined),
+    content: `Папка «${folder.name}» будет удалена. Файлы внутри останутся, но окажутся вне папок.`,
+    okText: "Удалить",
+    okType: "danger",
+    cancelText: "Отмена",
+    onOk: () => fileStore.deleteFolder(folder.id)
+  })
 }
 
 // 🖱 Перетаскивание файлов в папки
@@ -294,13 +312,28 @@ const handleDragLeaveFolder = (target) => {
   }
 }
 
-const handleDropOnFolder = (target) => {
-  if (draggingFileId.value) {
-    fileStore.assignFileToFolder(draggingFileId.value, target === "root" ? null : target)
-    message.success(target === "root" ? "Файл перемещён в «Все файлы»" : "Файл перемещён в папку")
+const handleRemoveFromFolder = async (item) => {
+  try {
+    await fileStore.moveFileToFolder(item.id, null)
+    message.success("Файл убран из папки")
+  } catch {
+    // ошибка уже показана через notifyServerError в сторе
   }
+}
+
+const handleDropOnFolder = async (target) => {
+  const fileId = draggingFileId.value
   draggingFileId.value = null
   dragOverTarget.value = null
+
+  if (!fileId) return
+
+  try {
+    await fileStore.moveFileToFolder(fileId, target === "root" ? null : target)
+    message.success(target === "root" ? "Файл перемещён в «Все файлы»" : "Файл перемещён в папку")
+  } catch {
+    // ошибка уже показана через notifyServerError в сторе
+  }
 }
 
 // 📥 добавление во временные

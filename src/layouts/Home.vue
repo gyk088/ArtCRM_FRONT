@@ -69,7 +69,7 @@
       placement="right"
       width="600px"
     >
-      <FileUploader :remove="true" :select="true" @select="test"/>
+      <FileUploader :remove="true" />
     </a-drawer>
   </a-layout>
 </template>
@@ -90,11 +90,6 @@ import {
   InboxOutlined,
   LogoutOutlined
 } from '@ant-design/icons-vue'
-
-const test = (file) => {
-  console.log("Выбран файл", file)
-  isFilesModalOpen.value = false
-}
 
 const collapsed = ref(false);
 const router = useRouter();

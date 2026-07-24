@@ -3,27 +3,6 @@ import { defineStore } from 'pinia'
 import apiClient from '@/services/api.js'
 import { notifyServerError, notifyServerSuccess } from '@/services/notify.js'
 
-// 📁 Папки — чисто клиентская сущность (бэкенд файлов папки не поддерживает),
-// поэтому список папок и привязка файл→папка хранятся в localStorage.
-const FOLDERS_STORAGE_KEY = 'artcrm_file_folders'
-const FOLDER_MAP_STORAGE_KEY = 'artcrm_file_folder_map'
-
-function loadFolders() {
-  try {
-    return JSON.parse(localStorage.getItem(FOLDERS_STORAGE_KEY)) || []
-  } catch {
-    return []
-  }
-}
-
-function loadFolderMap() {
-  try {
-    return JSON.parse(localStorage.getItem(FOLDER_MAP_STORAGE_KEY)) || {}
-  } catch {
-    return {}
-  }
-}
-
 export const useFile = defineStore('file', {
   state: () => {
     return {
@@ -41,11 +20,12 @@ export const useFile = defineStore('file', {
         search: '',
         mimetype: '',
         ext: ''
-      },      error: null,
+      },
+      error: null,
 
       // 📁 Папки
-      folders: loadFolders(),
-      fileFolderMap: loadFolderMap(),
+      folders: [],
+      foldersLoading: false,
       currentFolderId: null
     }
   },
@@ -64,12 +44,16 @@ export const useFile = defineStore('file', {
             'Content-Type': 'multipart/form-data'
           }
         })
-        this.files.unshift(resp.data) // Добавляем новый файл в начало списка
+
+        let uploaded = resp.data
+
         if (this.currentFolderId) {
-          this.assignFileToFolder(resp.data.id, this.currentFolderId)
+          uploaded = await this.moveFileToFolder(uploaded.id, this.currentFolderId)
         }
+
+        this.files.unshift(uploaded) // Добавляем новый файл в начало списка
         notifyServerSuccess('Файл успешно загружен')
-        console.log('Upload Response', resp.data)
+        console.log('Upload Response', uploaded)
       } catch (e) {
         console.error('Error fetching data:', e)
         notifyServerError(e?.response?.data?.message || 'Failed to load user data')
@@ -84,7 +68,6 @@ export const useFile = defineStore('file', {
       try {
         await apiClient.delete(`/api/v1/file/${fileId}`)
         this.files = this.files.filter(f => f.id !== fileId) // Удаляем файл из списка
-        this.assignFileToFolder(fileId, null) // убираем привязку к папке
         notifyServerSuccess('Файл успешно удален')
       } catch (e) {
         console.error('Error deleting file:', e)
@@ -95,54 +78,81 @@ export const useFile = defineStore('file', {
       return success
     },
 
-    // ==================== ПАПКИ (клиентские) ====================
+    // ==================== ПАПКИ ====================
 
-    saveFolders() {
-      localStorage.setItem(FOLDERS_STORAGE_KEY, JSON.stringify(this.folders))
-    },
-
-    saveFolderMap() {
-      localStorage.setItem(FOLDER_MAP_STORAGE_KEY, JSON.stringify(this.fileFolderMap))
-    },
-
-    createFolder(name) {
-      const folder = {
-        id: `folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        name
+    async getFolders() {
+      this.foldersLoading = true
+      try {
+        const resp = await apiClient.get('/api/v1/file/folder')
+        this.folders = resp.data
+        return this.folders
+      } catch (e) {
+        console.error('Error fetching folders:', e)
+        notifyServerError(e?.response?.data?.error || 'Failed to load folders')
+        this.error = e?.response?.data?.error || 'Failed to load folders'
+        return []
+      } finally {
+        this.foldersLoading = false
       }
-      this.folders.push(folder)
-      this.saveFolders()
-      return folder
     },
 
-    deleteFolder(folderId) {
-      this.folders = this.folders.filter(f => f.id !== folderId)
+    async createFolder(name) {
+      try {
+        const resp = await apiClient.post('/api/v1/file/folder', { name })
+        this.folders.push(resp.data)
+        notifyServerSuccess('Папка создана')
+        return resp.data
+      } catch (e) {
+        console.error('Error creating folder:', e)
+        notifyServerError(e?.response?.data?.error || 'Failed to create folder')
+        this.error = e?.response?.data?.error || 'Failed to create folder'
+        return null
+      }
+    },
 
-      Object.keys(this.fileFolderMap).forEach(fileId => {
-        if (this.fileFolderMap[fileId] === folderId) {
-          delete this.fileFolderMap[fileId]
+    async deleteFolder(folderId) {
+      let success = true
+      try {
+        await apiClient.delete(`/api/v1/file/folder/${folderId}`)
+
+        this.folders = this.folders.filter(f => f.id !== folderId)
+
+        // Файлы этой папки отвязаны на бэкенде (folder_id = null)
+        this.files = this.files.map(f =>
+          f.folder_id === folderId ? { ...f, folder_id: null } : f
+        )
+
+        if (this.currentFolderId === folderId) {
+          this.currentFolderId = null
         }
-      })
 
-      if (this.currentFolderId === folderId) {
-        this.currentFolderId = null
+        notifyServerSuccess('Папка удалена')
+      } catch (e) {
+        console.error('Error deleting folder:', e)
+        notifyServerError(e?.response?.data?.error || 'Failed to delete folder')
+        this.error = e?.response?.data?.error || 'Failed to delete folder'
+        success = false
       }
-
-      this.saveFolders()
-      this.saveFolderMap()
+      return success
     },
 
     setCurrentFolder(folderId) {
       this.currentFolderId = folderId
     },
 
-    assignFileToFolder(fileId, folderId) {
-      if (folderId) {
-        this.fileFolderMap[fileId] = folderId
-      } else {
-        delete this.fileFolderMap[fileId]
+    async moveFileToFolder(fileId, folderId) {
+      try {
+        const resp = await apiClient.patch(`/api/v1/file/${fileId}/folder`, { folderId })
+
+        this.files = this.files.map(f => f.id === fileId ? resp.data : f)
+
+        return resp.data
+      } catch (e) {
+        console.error('Error moving file to folder:', e)
+        notifyServerError(e?.response?.data?.error || 'Failed to move file')
+        this.error = e?.response?.data?.error || 'Failed to move file'
+        throw e
       }
-      this.saveFolderMap()
     },
 
 
@@ -153,7 +163,7 @@ export const useFile = defineStore('file', {
     async getAllFiles(params = {}) {
       this.loading = true;
       this.error = null;
-      
+
       try {
         // Объединяем текущие фильтры с новыми параметрами
         const queryParams = {
@@ -161,18 +171,18 @@ export const useFile = defineStore('file', {
           limit: params.limit || this.pagination.limit,
           ...params
         };
-        
+
         // Удаляем undefined значения
         Object.keys(queryParams).forEach(key => {
           if (queryParams[key] === undefined || queryParams[key] === '') {
             delete queryParams[key];
           }
         });
-        
-        const response = await apiClient.get('/api/v1/file/list', { 
-          params: queryParams 
+
+        const response = await apiClient.get('/api/v1/file/list', {
+          params: queryParams
         });
-        
+
         // Проверяем, пришли ли данные с пагинацией или просто массив
         if (response.data.files && Array.isArray(response.data.files)) {
           // С пагинацией
@@ -188,7 +198,7 @@ export const useFile = defineStore('file', {
             totalPages: 1
           };
         }
-        
+
         return this.files;
       } catch (e) {
         console.error('Error fetching files:', e);
@@ -199,13 +209,13 @@ export const useFile = defineStore('file', {
         this.loading = false;
       }
     },
- 
+
     /**
      * Сбросить все состояние локаций
      */
     resetLocationsState() {
       this.user = null
-      this.session = null    
+      this.session = null
     }
   }
 })

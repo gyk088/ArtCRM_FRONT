@@ -18,7 +18,7 @@
 
       <div class="filters-right">
         <a-button class="buttons" type="primary" v-if="selectedRowKeys.length > 0" @click="createCollection">
-          Создать коллекцию
+          Создать ссылку
         </a-button>
         <a-button class="buttons" type="primary" @click="openEditPage()">Добавить</a-button>
       </div>

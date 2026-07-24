@@ -850,7 +850,7 @@ const saveChanges = async () => {
       media: form.media,
       status: form.status,
       price: form.price ? parseFloat(form.price) : null,
-      avatar: form.avatar,
+      avatar_id: form.avatar?.id || null,
       images: form.images,
     }
 
