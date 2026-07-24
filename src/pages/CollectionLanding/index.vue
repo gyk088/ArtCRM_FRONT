@@ -29,9 +29,9 @@
     <!-- ==== Лендинг коллекции ==== -->
     <div v-else class="collection-landing">
 
-      <!-- Hero -->
-      <header class="hero" :class="{ 'no-image': !heroImage }">
-        <div v-if="heroImage" class="hero-bg" :style="{ backgroundImage: `url(${heroImage})` }"></div>
+      <!-- Hero — фон зафиксирован во весь экран, пока не появится контент -->
+      <header class="hero" :class="{ 'no-image': !coverImage }">
+        <div v-if="coverImage" class="hero-bg" :style="{ backgroundImage: `url(${coverImage})` }"></div>
         <div class="hero-overlay"></div>
         <div class="hero-content">
           <div class="hero-eyebrow">ART CRM · КОЛЛЕКЦИЯ</div>
@@ -45,45 +45,49 @@
         </div>
       </header>
 
-      <!-- Галерея -->
-      <main class="gallery-wrap">
-        <div v-if="!works.length" class="empty-state">
-          <a-empty description="В этой коллекции пока нет работ" />
-        </div>
+      <!-- Контент — непрозрачный, при прокрутке "накрывает" зафиксированный фон -->
+      <div class="page-content">
 
-        <div v-else class="gallery-grid">
-          <article
-            v-for="work in works"
-            :key="work.id"
-            class="art-card"
-            @click="openViewer(work)"
-          >
-            <div class="art-image-wrap">
-              <img v-if="work.avatar?.url" :src="work.avatar.url" :alt="work.name" class="art-image" />
-              <div v-else class="art-placeholder">
-                <PictureOutlined />
+        <!-- Галерея -->
+        <main class="gallery-wrap">
+          <div v-if="!works.length" class="empty-state">
+            <a-empty description="В этой коллекции пока нет работ" />
+          </div>
+
+          <div v-else class="gallery-grid">
+            <article
+              v-for="work in works"
+              :key="work.id"
+              class="art-card reveal-on-scroll"
+              @click="openViewer(work)"
+            >
+              <div class="art-image-wrap">
+                <img v-if="work.avatar?.url" :src="work.avatar.url" :alt="work.name" class="art-image" />
+                <div v-else class="art-placeholder">
+                  <PictureOutlined />
+                </div>
+                <span v-if="getStatusName(work.status)" class="status-badge" :class="statusClass(work.status)">
+                  {{ getStatusName(work.status) }}
+                </span>
               </div>
-              <span v-if="getStatusName(work.status)" class="status-badge" :class="statusClass(work.status)">
-                {{ getStatusName(work.status) }}
-              </span>
-            </div>
-            <div class="art-info">
-              <h3 class="art-name">{{ work.name || 'Без названия' }}</h3>
-              <p class="art-technique">
-                <span v-if="work.technique">{{ work.technique }}</span>
-                <span v-if="work.technique && work.year"> · </span>
-                <span v-if="work.year">{{ work.year }}</span>
-              </p>
-              <p v-if="work.price" class="art-price">{{ formatPrice(work.price) }}</p>
-            </div>
-          </article>
-        </div>
-      </main>
+              <div class="art-info">
+                <h3 class="art-name">{{ work.name || 'Без названия' }}</h3>
+                <p class="art-technique">
+                  <span v-if="work.technique">{{ work.technique }}</span>
+                  <span v-if="work.technique && work.year"> · </span>
+                  <span v-if="work.year">{{ work.year }}</span>
+                </p>
+                <p v-if="work.price" class="art-price">{{ formatPrice(work.price) }}</p>
+              </div>
+            </article>
+          </div>
+        </main>
 
-      <footer class="landing-footer">
-        <span class="footer-brand">ART CRM</span>
-        <span v-if="artistName" class="footer-artist">{{ artistName }}</span>
-      </footer>
+        <footer class="landing-footer">
+          <span class="footer-brand">ART CRM</span>
+          <span v-if="artistName" class="footer-artist">{{ artistName }}</span>
+        </footer>
+      </div>
     </div>
 
     <!-- ==== Модалка просмотра работы ==== -->
@@ -98,13 +102,49 @@
     >
       <div v-if="activeWork" class="work-modal-content">
         <div class="work-modal-image">
-          <img
-            v-if="activeImage"
-            :src="activeImage"
-            :alt="activeWork.name"
-          />
-          <div v-else class="art-placeholder large">
-            <PictureOutlined />
+
+          <!--
+            Свайп-вьювер между работами.
+            Три слоя переднего плана (prev / current / next) и три слоя
+            параллакс-фона всегда смонтированы одновременно — переключение
+            происходит через transform/opacity, а не через v-if/пересоздание
+            DOM, поэтому изображения соседних работ уже предзагружены и
+            не мигают при переходе.
+          -->
+          <div
+            class="swipe-viewer"
+            ref="viewerEl"
+            @pointerdown="onPointerDown"
+            @pointermove="onPointerMove"
+            @pointerup="onPointerUp"
+            @pointercancel="onPointerUp"
+          >
+            <!-- Параллакс-фон — движется медленнее переднего плана (0.4×) -->
+            <div class="swipe-bg" ref="bgPrevEl" v-if="prevWork">
+              <img :src="workImage(prevWork)" alt="" />
+            </div>
+            <div class="swipe-bg" ref="bgCurrentEl">
+              <img v-if="activeImage" :src="activeImage" alt="" />
+            </div>
+            <div class="swipe-bg" ref="bgNextEl" v-if="nextWork">
+              <img :src="workImage(nextWork)" alt="" />
+            </div>
+
+            <!-- Передний план -->
+            <div class="swipe-slide" ref="slidePrevEl" v-if="prevWork">
+              <img :src="workImage(prevWork)" :alt="prevWork.name" class="swipe-image" />
+            </div>
+
+            <div class="swipe-slide swipe-slide-current" ref="slideCurrentEl">
+              <img v-if="activeImage" :src="activeImage" :alt="activeWork.name" class="swipe-image" />
+              <div v-else class="art-placeholder large">
+                <PictureOutlined />
+              </div>
+            </div>
+
+            <div class="swipe-slide" ref="slideNextEl" v-if="nextWork">
+              <img :src="workImage(nextWork)" :alt="nextWork.name" class="swipe-image" />
+            </div>
           </div>
 
           <div v-if="thumbnails.length > 1" class="thumb-row">
@@ -120,48 +160,50 @@
           </div>
         </div>
 
-        <div class="work-modal-details">
-          <span v-if="getStatusName(activeWork.status)" class="status-badge" :class="statusClass(activeWork.status)">
-            {{ getStatusName(activeWork.status) }}
-          </span>
-          <h2 class="work-modal-title">{{ activeWork.name || 'Без названия' }}</h2>
+        <transition name="details-fade" mode="out-in">
+          <div class="work-modal-details" :key="activeWork.id">
+            <span v-if="getStatusName(activeWork.status)" class="status-badge" :class="statusClass(activeWork.status)">
+              {{ getStatusName(activeWork.status) }}
+            </span>
+            <h2 class="work-modal-title">{{ activeWork.name || 'Без названия' }}</h2>
 
-          <dl class="detail-list">
-            <div v-if="activeWork.technique" class="detail-row">
-              <dt>Техника</dt>
-              <dd>{{ activeWork.technique }}</dd>
-            </div>
-            <div v-if="activeWork.year" class="detail-row">
-              <dt>Год</dt>
-              <dd>{{ activeWork.year }}</dd>
-            </div>
-            <div v-if="getSeriaName(activeWork.seria)" class="detail-row">
-              <dt>Серия</dt>
-              <dd>{{ getSeriaName(activeWork.seria) }}</dd>
-            </div>
-            <div v-if="getMediaName(activeWork.media)" class="detail-row">
-              <dt>Медиа</dt>
-              <dd>{{ getMediaName(activeWork.media) }}</dd>
-            </div>
-            <div v-if="getLocationName(activeWork.location)" class="detail-row">
-              <dt>Локация</dt>
-              <dd>{{ getLocationName(activeWork.location) }}</dd>
-            </div>
-          </dl>
+            <dl class="detail-list">
+              <div v-if="activeWork.technique" class="detail-row">
+                <dt>Техника</dt>
+                <dd>{{ activeWork.technique }}</dd>
+              </div>
+              <div v-if="activeWork.year" class="detail-row">
+                <dt>Год</dt>
+                <dd>{{ activeWork.year }}</dd>
+              </div>
+              <div v-if="getSeriaName(activeWork.seria)" class="detail-row">
+                <dt>Серия</dt>
+                <dd>{{ getSeriaName(activeWork.seria) }}</dd>
+              </div>
+              <div v-if="getMediaName(activeWork.media)" class="detail-row">
+                <dt>Медиа</dt>
+                <dd>{{ getMediaName(activeWork.media) }}</dd>
+              </div>
+              <div v-if="getLocationName(activeWork.location)" class="detail-row">
+                <dt>Локация</dt>
+                <dd>{{ getLocationName(activeWork.location) }}</dd>
+              </div>
+            </dl>
 
-          <p v-if="activeWork.description" class="work-description">{{ activeWork.description }}</p>
+            <p v-if="activeWork.description" class="work-description">{{ activeWork.description }}</p>
 
-          <div v-if="activeWork.price" class="work-price">
-            {{ formatPrice(activeWork.price) }}
+            <div v-if="activeWork.price" class="work-price">
+              {{ formatPrice(activeWork.price) }}
+            </div>
           </div>
-        </div>
+        </transition>
       </div>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { PictureOutlined } from '@ant-design/icons-vue'
 import { useArtWork } from '@/stores/artWork.js'
@@ -212,6 +254,9 @@ const heroImage = computed(() => {
   return withAvatar?.avatar?.url || ''
 })
 
+// 👉 обложка коллекции — приоритет у обложки, заданной на экране редактирования
+const coverImage = computed(() => collection.value?.avatar?.url || heroImage.value)
+
 const workWord = computed(() => {
   const n = works.value.length % 100
   const n1 = n % 10
@@ -230,6 +275,257 @@ const thumbnails = computed(() => {
 })
 
 const activeImage = computed(() => thumbnails.value[activeImageIndex.value]?.url || '')
+
+// ============================================================
+// СВАЙП МЕЖДУ РАБОТАМИ
+// ============================================================
+// Идея: три слоя переднего плана (prev/current/next) и три слоя
+// параллакс-фона всегда смонтированы. Во время жеста они двигаются
+// строго 1:1 за пальцем/курсором ("gesture directly controls progress").
+// При отпускании решение — довести переход или вернуться — принимается
+// по скорости (флик) либо по пройденному расстоянию, а движение до цели
+// выполняет пружинный интегратор (демпфированный гармонический
+// осциллятор), а не CSS-easing — отсюда естественное, "физическое"
+// затухание без резких остановок.
+//
+// Все стили применяются напрямую через template refs (el.style.transform/
+// opacity), минуя реактивность Vue: во время жеста и анимации settle
+// компонент не перерендеривается ни разу — обновляются только
+// transform/opacity, которые браузер анимирует на compositor-потоке.
+
+// --- refs на DOM-слои ---
+const viewerEl = ref(null)
+const slidePrevEl = ref(null)
+const slideCurrentEl = ref(null)
+const slideNextEl = ref(null)
+const bgPrevEl = ref(null)
+const bgCurrentEl = ref(null)
+const bgNextEl = ref(null)
+
+// --- соседи текущей работы в списке (для свайпа между ними) ---
+const activeWorkIndex = computed(() => {
+  if (!activeWork.value) return -1
+  return works.value.findIndex(w => w.id === activeWork.value.id)
+})
+
+const prevWork = computed(() => {
+  const i = activeWorkIndex.value
+  return i > 0 ? works.value[i - 1] : null
+})
+
+const nextWork = computed(() => {
+  const i = activeWorkIndex.value
+  return i >= 0 && i < works.value.length - 1 ? works.value[i + 1] : null
+})
+
+function workImage(work) {
+  return work?.avatar?.url || ''
+}
+
+// --- нереактивное состояние жеста/пружины (обычный объект, НЕ ref —
+//     обновляется на каждом кадре, реактивность Vue тут не нужна и вредна) ---
+const swipe = {
+  dragging: false,
+  pointerId: null,
+  width: 0,             // ширина вьювера, px — единица измерения прогресса
+  startX: 0,
+  lastX: 0,
+  lastT: 0,
+  velocity: 0,          // px/мс, экспоненциально сглаженная скорость пальца
+  x: 0,                 // текущее смещение переднего плана, px (0 = состояние покоя)
+  v: 0,                 // скорость пружины, px/с (используется после отпускания)
+  target: 0,            // цель пружины: 0 — остаться, ±width — уйти к соседу
+  raf: 0,
+  pendingDirection: 0   // -1 => переключить на next, +1 => на prev, 0 => остаться
+}
+
+// Константы пружины и порогов жеста — подобраны под "premium, museum-like"
+// ощущение: не слишком упругая, не слишком вязкая.
+const SPRING_STIFFNESS = 210         // жёсткость пружины
+const SPRING_DAMPING = 26            // демпфирование — гасит колебания без "дребезга"
+const FLING_VELOCITY_THRESHOLD = 0.5 // px/мс — выше этого порога считаем жест "фликом"
+const DISTANCE_THRESHOLD_RATIO = 0.32 // доля ширины — порог для медленного перетаскивания
+const RUBBER_BAND_FACTOR = 0.55       // сопротивление при попытке уйти за пределы коллекции
+const SETTLE_EPSILON = 0.5            // px — порог, после которого анимация считается завершённой
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value))
+}
+
+// Линейная интерполяция значения из одного диапазона в другой (с зажимом
+// по краям) — используется вместо дискретных if/else состояний везде,
+// где меняются scale/opacity в зависимости от прогресса жеста.
+function interpolate(value, inMin, inMax, outMin, outMax) {
+  const t = clamp((value - inMin) / (inMax - inMin), 0, 1)
+  return outMin + (outMax - outMin) * t
+}
+
+// "Резиновое" сопротивление на краях коллекции (первая/последняя работа) —
+// чем дальше тянут, тем меньше реальное смещение, как в iOS UIScrollView.
+function rubberBand(delta, width) {
+  const sign = delta < 0 ? -1 : 1
+  const abs = Math.abs(delta)
+  return sign * (width * RUBBER_BAND_FACTOR * (1 - 1 / (abs / width + 1)))
+}
+
+// --- обработчики жеста (Pointer Events — единый API для мыши/тача/пера) ---
+
+function onPointerDown(event) {
+  if (!activeWork.value) return
+  cancelAnimationFrame(swipe.raf)
+
+  swipe.dragging = true
+  swipe.pointerId = event.pointerId
+  swipe.width = viewerEl.value?.clientWidth || 1
+  swipe.startX = event.clientX
+  swipe.lastX = event.clientX
+  swipe.lastT = performance.now()
+  swipe.velocity = 0
+  viewerEl.value?.setPointerCapture(event.pointerId)
+}
+
+function onPointerMove(event) {
+  if (!swipe.dragging || event.pointerId !== swipe.pointerId) return
+
+  const now = performance.now()
+  const dt = Math.max(now - swipe.lastT, 1)
+  const instantVelocity = (event.clientX - swipe.lastX) / dt
+
+  // Экспоненциальное сглаживание скорости — убирает дрожание на "рваных" move-событиях
+  swipe.velocity = swipe.velocity * 0.75 + instantVelocity * 0.25
+
+  swipe.lastX = event.clientX
+  swipe.lastT = now
+
+  let delta = event.clientX - swipe.startX
+
+  if (delta > 0 && !prevWork.value) delta = rubberBand(delta, swipe.width)
+  if (delta < 0 && !nextWork.value) delta = rubberBand(delta, swipe.width)
+
+  // "Gesture movement should directly control animation progress" — 1:1 во время драга
+  swipe.x = delta
+  applyTransforms()
+}
+
+function onPointerUp(event) {
+  if (!swipe.dragging || event.pointerId !== swipe.pointerId) return
+  swipe.dragging = false
+  viewerEl.value?.releasePointerCapture(event.pointerId)
+
+  const progress = swipe.x / swipe.width
+  let direction = 0 // -1 => к next, +1 => к prev, 0 => вернуться на место
+
+  // Скорость решает исход при быстром флике, дистанция — при медленном драге
+  if (Math.abs(swipe.velocity) > FLING_VELOCITY_THRESHOLD) {
+    direction = swipe.velocity < 0 ? -1 : 1
+  } else if (Math.abs(progress) > DISTANCE_THRESHOLD_RATIO) {
+    direction = progress < 0 ? -1 : 1
+  }
+
+  if (direction === -1 && !nextWork.value) direction = 0
+  if (direction === 1 && !prevWork.value) direction = 0
+
+  swipe.pendingDirection = direction
+  swipe.target = direction === 0 ? 0 : direction * swipe.width
+  swipe.v = swipe.velocity * 1000 // px/мс -> px/с для интегратора
+
+  runSpring()
+}
+
+// Пружинный интегратор (демпфированный гармонический осциллятор,
+// полу-неявный метод Эйлера) — именно он даёт "natural deceleration"
+// вместо CSS-кривых.
+function runSpring() {
+  cancelAnimationFrame(swipe.raf)
+  let lastTime = performance.now()
+
+  const step = (now) => {
+    const dt = Math.min((now - lastTime) / 1000, 0.032) // сек; ограничение от скачков при лагах
+    lastTime = now
+
+    const displacement = swipe.x - swipe.target
+    const springForce = -SPRING_STIFFNESS * displacement
+    const dampingForce = -SPRING_DAMPING * swipe.v
+    const acceleration = springForce + dampingForce
+
+    swipe.v += acceleration * dt
+    swipe.x += swipe.v * dt
+
+    applyTransforms()
+
+    const settled = Math.abs(swipe.x - swipe.target) < SETTLE_EPSILON && Math.abs(swipe.v) < SETTLE_EPSILON * 10
+    if (!settled) {
+      swipe.raf = requestAnimationFrame(step)
+    } else {
+      swipe.x = swipe.target
+      applyTransforms()
+      onSpringSettled()
+    }
+  }
+
+  swipe.raf = requestAnimationFrame(step)
+}
+
+function onSpringSettled() {
+  if (swipe.pendingDirection !== 0) {
+    const newIndex = activeWorkIndex.value - swipe.pendingDirection
+    const newWork = works.value[newIndex]
+    if (newWork) {
+      activeWork.value = newWork
+      activeImageIndex.value = 0
+    }
+  }
+
+  // Сброс в состояние покоя без визуального скачка — соседние слайды уже
+  // предзагружены (всегда смонтированы), поэтому смены src не видно.
+  swipe.x = 0
+  swipe.v = 0
+  swipe.target = 0
+  swipe.pendingDirection = 0
+  applyTransforms()
+}
+
+// Применяет transform/opacity к DOM-слоям напрямую — вызывается на каждом
+// кадре жеста/пружины. Единственное место, где считается визуальный вид.
+function applyTransforms() {
+  const width = swipe.width || 1
+  const x = swipe.x
+  const t = clamp(x / width, -1, 1) // -1 = полностью ушли к next, +1 = к prev
+
+  // Текущий (центральный) слайд — лёгкое уменьшение и затухание по мере ухода
+  // ("Previous image gently fades while shrinking")
+  const currentScale = interpolate(Math.abs(t), 0, 1, 1, 0.94)
+  const currentOpacity = interpolate(Math.abs(t), 0, 1, 1, 0.85)
+  setLayer(slideCurrentEl.value, x, currentScale, currentOpacity)
+  setLayer(bgCurrentEl.value, x * 0.4, currentScale, currentOpacity)
+
+  // Слайд, который раскрывается (prev — тянем вправо, next — тянем влево):
+  // масштаб 0.96 → 1.0, непрозрачность едва заметно 0.9 → 1
+  const revealScale = interpolate(Math.abs(t), 0, 1, 0.96, 1)
+  const revealOpacity = interpolate(Math.abs(t), 0, 1, 0.9, 1)
+
+  if (slidePrevEl.value) {
+    setLayer(slidePrevEl.value, x - width, revealScale, x > 0 ? revealOpacity : 0)
+  }
+  if (bgPrevEl.value) {
+    setLayer(bgPrevEl.value, (x - width) * 0.4, revealScale, x > 0 ? revealOpacity : 0)
+  }
+
+  if (slideNextEl.value) {
+    setLayer(slideNextEl.value, x + width, revealScale, x < 0 ? revealOpacity : 0)
+  }
+  if (bgNextEl.value) {
+    setLayer(bgNextEl.value, (x + width) * 0.4, revealScale, x < 0 ? revealOpacity : 0)
+  }
+}
+
+function setLayer(el, translateX, scale, opacity) {
+  if (!el) return
+  // translate3d форсирует отдельный composite-слой в браузере — анимация
+  // transform/opacity идёт на GPU, без пересчёта layout/paint на каждый кадр.
+  el.style.transform = `translate3d(${translateX}px, 0, 0) scale(${scale})`
+  el.style.opacity = String(opacity)
+}
 
 function getStatusName(id) {
   if (!id) return ''
@@ -269,6 +565,20 @@ function openViewer(work) {
   activeWork.value = work
   activeImageIndex.value = 0
   viewerOpen.value = true
+
+  // Сбрасываем свайп в состояние покоя и ждём, пока смонтируются refs
+  // нового экземпляра модалки (destroyOnClose пересоздаёт DOM при каждом открытии)
+  cancelAnimationFrame(swipe.raf)
+  swipe.dragging = false
+  swipe.x = 0
+  swipe.v = 0
+  swipe.target = 0
+  swipe.pendingDirection = 0
+
+  nextTick(() => {
+    swipe.width = viewerEl.value?.clientWidth || 1
+    applyTransforms()
+  })
 }
 
 onMounted(async () => {
@@ -299,6 +609,32 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+
+  await nextTick()
+  setupRevealAnimations()
+})
+
+// 👉 плавное появление обложки и карточек работ при прокрутке
+let revealObserver = null
+
+function setupRevealAnimations() {
+  revealObserver?.disconnect()
+
+  revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in-view')
+        revealObserver.unobserve(entry.target)
+      }
+    })
+  }, { threshold: 0.15, rootMargin: '0px 0px -60px 0px' })
+
+  document.querySelectorAll('.reveal-on-scroll').forEach(el => revealObserver.observe(el))
+}
+
+onBeforeUnmount(() => {
+  revealObserver?.disconnect()
+  cancelAnimationFrame(swipe.raf)
 })
 </script>
 
@@ -434,13 +770,15 @@ onMounted(async () => {
   color: var(--text-faint);
 }
 
-/* ==== Hero ==== */
+/* ==== Hero ====
+   Фон зафиксирован во весь экран (position: fixed), поэтому не прокручивается
+   вместе со страницей — контент ниже (.page-content) непрозрачный и при
+   прокрутке визуально "накрывает" его. */
 .hero {
   position: relative;
   min-height: 52vh;
   display: flex;
   align-items: flex-end;
-  overflow: hidden;
   background: var(--bg-soft);
 }
 
@@ -449,25 +787,38 @@ onMounted(async () => {
 }
 
 .hero-bg {
-  position: absolute;
+  position: fixed;
   inset: 0;
+  z-index: 0;
   background-size: cover;
   background-position: center;
-  filter: blur(18px) brightness(0.55) saturate(1.1);
-  transform: scale(1.15);
+  filter: blur(1px) brightness(0.58) saturate(1.1);
 }
 
 .landing.light .hero-bg {
-  filter: blur(18px) brightness(0.9) saturate(1.05);
+  /* Затемняем так же сильно, как в тёмной теме — белый текст должен
+     одинаково хорошо читаться независимо от переключателя темы */
+  filter: blur(1px) brightness(0.72) saturate(1.05);
 }
 
 .hero-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  background: linear-gradient(180deg, var(--hero-overlay-from) 0%, var(--hero-overlay-mid) 55%, var(--hero-overlay-to) 100%);
+  z-index: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.55) 55%, var(--hero-overlay-to) 100%);
 }
 
 .hero-content {
+  /* Отдельная, более контрастная палитра текста именно для hero — он
+     лежит поверх фотографии, а не поверх плоского фона страницы, поэтому
+     обычные --text-title/--text-muted (рассчитанные на ровный фон) тут
+     недостаточно контрастны. Оттенки остаются в той же тёплой золотисто-
+     кремовой гамме, просто ярче/светлее для этого конкретного места. */
+  --hero-eyebrow-color: #f0dfae;
+  --hero-title-color: #ffffff;
+  --hero-body-color: rgba(255, 255, 255, 0.88);
+  --hero-meta-color: rgba(255, 255, 255, 0.72);
+
   position: relative;
   z-index: 1;
   max-width: 900px;
@@ -478,36 +829,108 @@ onMounted(async () => {
   text-align: center;
 }
 
+/* Фон hero теперь одинаково затемнён в обеих темах, поэтому белый текст
+   читается одинаково хорошо и в светлой теме — отдельный тёмный вариант
+   цвета больше не нужен */
+
+/* Контент под hero — непрозрачный, стоит выше зафиксированного фона */
+.page-content {
+  position: relative;
+  z-index: 2;
+  background: var(--bg);
+}
+
+/* Плавное появление работ при прокрутке — лёгкий масштаб
+   вместе со сдвигом даёт "премиальное", музейное ощущение движения,
+   а не плоский fade. Длинная пологая кривая (ease-out-expo) вместо
+   резкого easing — для "extremely smooth" интерполяции. */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(36px) scale(0.97);
+  transition:
+    opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.reveal-on-scroll.in-view {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* Само изображение внутри карточки масштабируется чуть сильнее —
+   двухслойное движение (контейнер + картинка) делает переход более
+   объёмным, а не однородным. Анимируем только transform: opacity
+   изображения по-прежнему управляется его собственным hover-правилом
+   (.art-card:hover .art-image), которое не должно замедляться. */
+.reveal-on-scroll .art-image {
+  transition: transform 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: scale(1.05);
+}
+
+.reveal-on-scroll.in-view .art-image {
+  transform: scale(1);
+}
+
+/* Заголовок hero — плавное появление при загрузке страницы */
+@keyframes heroFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-eyebrow,
+.hero-title,
+.hero-description,
+.hero-meta {
+  opacity: 0;
+  animation: heroFadeUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  /* Фон hero теперь одинаково затемнён в обеих темах, поэтому одна и та
+     же тёмная тень одинаково хорошо держит контраст под белым текстом
+     и в тёмной, и в светлой теме. */
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5), 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
 .hero-eyebrow {
-  font-size: 12px;
-  letter-spacing: 0.25em;
-  color: var(--accent);
-  margin-bottom: 18px;
-  font-weight: 500;
+  font-size: 17px;
+  letter-spacing: 0.3em;
+  color: var(--hero-eyebrow-color);
+  margin-bottom: 20px;
+  font-weight: 600;
+  animation-delay: 0.05s;
 }
 
 .hero-title {
   font-family: 'Cormorant Garamond', serif;
   font-weight: 600;
-  font-size: clamp(36px, 6vw, 64px);
-  line-height: 1.1;
-  margin: 0 0 16px;
-  color: var(--text-title);
+  font-size: clamp(60px, 11vw, 96px);
+  line-height: 1.08;
+  margin: 0 0 20px;
+  color: var(--hero-title-color);
+  animation-delay: 0.15s;
 }
 
 .hero-description {
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.7;
-  color: var(--text-muted);
+  color: var(--hero-body-color);
   max-width: 620px;
-  margin: 0 auto 20px;
+  margin: 0 auto 22px;
+  animation-delay: 0.3s;
 }
 
 .hero-meta {
-  font-size: 13px;
-  letter-spacing: 0.05em;
-  color: var(--text-faint);
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  color: var(--hero-meta-color);
   text-transform: uppercase;
+  font-weight: 500;
+  animation-delay: 0.45s;
 }
 
 .hero-dot {
@@ -528,54 +951,58 @@ onMounted(async () => {
   justify-content: center;
 }
 
+/* Editorial single-column layout: одна работа за раз, во всю ширину,
+   без обрезки — как в каталоге частного показа */
 .gallery-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .art-card {
+  width: 100%;
+  max-width: 680px;
   cursor: pointer;
-  transition: transform 0.25s ease;
+  padding: 64px 0;
+  border-bottom: 1px solid var(--border-soft);
 }
 
-.art-card:hover {
-  transform: translateY(-6px);
+.art-card:first-child {
+  padding-top: 0;
+}
+
+.art-card:last-child {
+  border-bottom: none;
 }
 
 .art-image-wrap {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 5;
-  border-radius: 10px;
-  overflow: hidden;
   background: var(--card-bg);
-  box-shadow: var(--shadow);
-}
-
-.art-card:hover .art-image-wrap {
-  box-shadow: var(--shadow-hover);
 }
 
 .art-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
   display: block;
-  transition: transform 0.4s ease;
+  width: 100%;
+  height: auto;
+  max-height: 78vh;
+  object-fit: contain;
+  margin: 0 auto;
+  background: var(--card-bg);
+  transition: opacity 0.25s ease;
 }
 
 .art-card:hover .art-image {
-  transform: scale(1.04);
+  opacity: 0.92;
 }
 
 .art-placeholder {
   width: 100%;
-  height: 100%;
+  height: 320px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
+  font-size: 42px;
   color: var(--text-dim);
   background: var(--card-bg);
 }
@@ -617,21 +1044,22 @@ onMounted(async () => {
 }
 
 .art-info {
-  padding: 14px 2px 0;
+  padding: 24px 0 0;
+  text-align: center;
 }
 
 .art-name {
   font-family: 'Cormorant Garamond', serif;
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   color: var(--text-title);
 }
 
 .art-technique {
   font-size: 13px;
   color: var(--text-faint);
-  margin: 0 0 6px;
+  margin: 0 0 8px;
 }
 
 .art-price {
@@ -682,13 +1110,72 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  overflow: hidden;
 }
 
-.work-modal-image img {
+/* ==== Свайп-вьювер между работами ==== */
+.swipe-viewer {
+  position: relative;
+  width: 100%;
+  height: 480px;
+  touch-action: pan-y; /* горизонтальный жест забираем себе, вертикальный скролл страницы не блокируем */
+  user-select: none;
+  cursor: grab;
+}
+
+.swipe-viewer:active {
+  cursor: grabbing;
+}
+
+/* Параллакс-фон — размытые, увеличенные копии тех же изображений,
+   двигаются медленнее переднего плана (коэффициент 0.4 в JS) */
+.swipe-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.swipe-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(24px) brightness(0.7) saturate(1.05);
+  transform: scale(1.2); /* запас на размытие, чтобы не было видно краёв */
+}
+
+/* Передний план — три слоя друг поверх друга, позиционируются через
+   transform: translate3d в JS (см. applyTransforms) */
+.swipe-slide {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform, opacity;
+  -webkit-user-drag: none;
+}
+
+.swipe-image {
   max-width: 100%;
-  max-height: 480px;
-  object-fit: contain;
+  max-height: 100%;
+  object-fit: contain; /* сохраняем пропорции изображения — без обрезки */
   border-radius: 6px;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+/* Кроссфейд текстовых деталей при смене работы */
+.details-fade-enter-active,
+.details-fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.details-fade-enter-from,
+.details-fade-leave-to {
+  opacity: 0;
 }
 
 .thumb-row {
@@ -798,9 +1285,8 @@ onMounted(async () => {
     padding: 40px 18px 24px;
   }
 
-  .gallery-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 18px;
+  .art-card {
+    padding: 40px 0;
   }
 
   .work-modal-content {

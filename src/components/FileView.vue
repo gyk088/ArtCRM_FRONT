@@ -31,12 +31,11 @@
 
     </div>
 
-    <!-- 🔥 FULLSCREEN MODAL -->
-    <a-modal
+    <!-- 🔥 SIDE DRAWER -->
+    <a-drawer
       v-model:open="previewVisible"
-      :footer="null"
-      width="90%"
-      style="top: 20px"
+      placement="right"
+      width="480"
     >
 
       <!-- 🖼 КАРТИНКА -->
@@ -73,7 +72,7 @@
         </div>
       </div>
 
-    </a-modal>
+    </a-drawer>
 
   </div>
 </template>
@@ -142,17 +141,23 @@ const iconComponent = computed(() => {
 
 .file-view {
   width: 100%;
+  height: 100%;
 }
 
 .clickable {
+  width: 100%;
+  height: 100%;
   cursor: pointer;
 }
 
-/* маленький превью */
+/* маленький превью — фиксированный размер контейнера и картинки,
+   изображение вписывается целиком, без обрезки и растягивания */
 .image,
 .media {
-  width: 100%;
-   
+  height: 90px;
+  width: 90px;
+  object-fit: cover;
+  display: block;
 }
 
 /* PDF preview */
@@ -161,7 +166,8 @@ const iconComponent = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 80px;
+  height: 90px;
+  width: 90px;
   justify-content: center;
   border: 1px dashed #ccc;
   border-radius: 8px;
@@ -187,11 +193,12 @@ const iconComponent = computed(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 80px;
+  height: 90px;
+  width: 90px;
   border: 1px dashed #ccc;
   border-radius: 8px;
   font-size: 24px;
-  margin: 20px;
+  box-sizing: border-box;
 }
 
 .file-icon.big {

@@ -1,23 +1,63 @@
 <template>
   <div class="collection-page">
     <div class="collection-header">
-      <h3 class="page-title">Мои Ссылки</h3>
+      <div class="header-heading">
+        <h3 class="page-title">Мои Ссылки</h3>
+        <p class="page-subtitle">
+          {{ collectionList.length ? `Коллекций: ${collectionList.length}` : 'Здесь появятся ваши коллекции' }}
+        </p>
+      </div>
       <div class="header-actions">
-        <div class="import-wrapper">
-          <a-input v-model:value="importLink" placeholder="Ссылка для импорта" class="import-link-input"
-            @pressEnter="importCollection" />
-          <a-button type="primary" @click="importCollection" class="import-link-btn">
+        <a-button class="import-toggle-btn" @click="isImportOpen = !isImportOpen">
+          <template #icon>
             <ImportOutlined />
-          </a-button>
-        </div>
-        <a-button type="primary" @click="openEditPage">Создать ссылку</a-button>
+          </template>
+          Импорт по ссылке
+        </a-button>
+        <a-button type="primary" class="create-btn" @click="openEditPage">
+          <template #icon>
+            <PlusOutlined />
+          </template>
+          Создать ссылку
+        </a-button>
       </div>
     </div>
 
-    <div class="collection-grid">
-      <a-card v-for="collection in collectionList" :key="collection.id" class="collection-card" :title="collection.name"
+    <div v-if="isImportOpen" class="import-wrapper">
+      <a-input
+        v-model:value="importLink"
+        placeholder="Вставьте ссылку на коллекцию"
+        class="import-link-input"
+        autofocus
+        @pressEnter="importCollection"
+      />
+      <a-button type="primary" class="import-link-btn" @click="importCollection">Добавить</a-button>
+      <a-button class="import-cancel-btn" @click="isImportOpen = false">Отмена</a-button>
+    </div>
+
+    <div v-if="collectionList.length" class="collection-grid">
+      <a-card v-for="collection in collectionList" :key="collection.id" class="collection-card"
         hoverable @click="openEditPage(collection)">
-        <p class="collection-text">{{ collection.description }}</p>
+        <template #cover>
+          <div class="card-cover">
+            <img v-if="collection.avatar?.url" :src="collection.avatar.url" :alt="collection.name" class="cover-img" />
+            <div v-else class="cover-placeholder">
+              <PictureOutlined />
+            </div>
+          </div>
+        </template>
+
+        <h4 class="card-title">{{ collection.name || 'Без названия' }}</h4>
+
+        <p class="collection-text" :class="{ 'collection-text--empty': !collection.description }">
+          {{ collection.description || 'Без описания' }}
+        </p>
+
+        <div class="card-meta">
+          <PictureOutlined />
+          {{ (collection.works || []).length }} {{ pluralizeWorks((collection.works || []).length) }}
+        </div>
+
         <div class="collection-actions">
           <a-button type="default" @click.stop="copyCollectionLink(collection)" class="copy-link-btn">
             <template #icon>
@@ -27,15 +67,28 @@
           </a-button>
           <a-popconfirm title="Удалить коллекцию?" ok-text="Да" cancel-text="Нет"
             @confirm.stop="deleteСollection(collection.id)">
-            <a-button type="link" danger @click.stop>
-              <template #icon>
-                <DeleteOutlined />
-              </template>
-              Удалить
-            </a-button>
+            <a-tooltip title="Удалить">
+              <a-button type="text" danger class="delete-btn" @click.stop>
+                <template #icon>
+                  <DeleteOutlined />
+                </template>
+              </a-button>
+            </a-tooltip>
           </a-popconfirm>
         </div>
       </a-card>
+    </div>
+
+    <div v-else class="empty-state">
+      <FolderOpenOutlined class="empty-icon" />
+      <p class="empty-title">Пока нет ни одной коллекции</p>
+      <p class="empty-hint">Создайте первую коллекцию или импортируйте её по ссылке</p>
+      <a-button type="primary" class="create-btn" @click="openEditPage">
+        <template #icon>
+          <PlusOutlined />
+        </template>
+        Создать коллекцию
+      </a-button>
     </div>
   </div>
 </template>
@@ -44,12 +97,13 @@
 import { ref, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { ImportOutlined, CopyOutlined, DeleteOutlined  } from '@ant-design/icons-vue'
+import { ImportOutlined, CopyOutlined, DeleteOutlined, PlusOutlined, FolderOpenOutlined, PictureOutlined } from '@ant-design/icons-vue'
 
 // === 1. Загружаем из localStorage при старте ===
 const collectionList = ref([]);
 const router = useRouter()
 const importLink = ref('')
+const isImportOpen = ref(false)
 
 onMounted(() => {
   const saved = localStorage.getItem('collectionList');
@@ -91,6 +145,7 @@ const importCollection = () => {
   } else {
     collectionList.value.push(found)
     message.success('Коллекция добавлена в список')
+    isImportOpen.value = false
   }
 
   importLink.value = ''
@@ -133,6 +188,14 @@ const openEditPage = (collection) => {
 function deleteСollection(id) {
   collectionList.value = collectionList.value.filter(b => b.id !== id);
 }
+
+function pluralizeWorks(count) {
+  const mod10 = count % 10
+  const mod100 = count % 100
+  if (mod10 === 1 && mod100 !== 11) return 'работа'
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return 'работы'
+  return 'работ'
+}
 </script>
 
 <style scoped>
@@ -162,8 +225,14 @@ function deleteСollection(id) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
   font-size: 18px;
+}
+
+.header-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .page-title {
@@ -174,6 +243,12 @@ function deleteСollection(id) {
   margin: 0;
 }
 
+.page-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
 .collection-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -182,6 +257,7 @@ function deleteСollection(id) {
 
 .collection-card {
   width: 100%;
+  overflow: hidden;
   transition: all 0.3s ease;
   cursor: pointer;
   background: var(--bg-elevated) !important;
@@ -189,21 +265,8 @@ function deleteСollection(id) {
   border-radius: 10px;
 }
 
-.collection-card :deep(.ant-card-head) {
-  border-bottom: none !important;
-   padding-top: 12px !important;
-   min-height: auto !important;
-   color: var(--text-title);
-}
-
-.collection-card :deep(.ant-card-head-title) {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 19px;
-  font-weight: 600;
-}
-
-.collection-card :deep(.ant-card-head-wrapper) {
-  padding-bottom: 0 !important;
+.collection-card :deep(.ant-card-body) {
+  padding: 14px 16px 16px;
 }
 
 .collection-card:hover {
@@ -212,24 +275,80 @@ function deleteСollection(id) {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
 }
 
+.collection-card:hover .cover-img {
+  transform: scale(1.05);
+}
+
+/* === Обложка коллекции === */
+.card-cover {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--text-faint);
+}
+
+.card-title {
+  margin: 0 0 4px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text-title);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .collection-text {
   display: -webkit-box;
-  -webkit-line-clamp: 3; /* stylelint-disable-line */
+  -webkit-line-clamp: 2; /* stylelint-disable-line */
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
   word-break: break-word;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   line-height: 1.5;
   font-size: 13px !important;
-  min-height: 63px; /* 3 строки * 1.5 * 14px = 63px */
+  min-height: 42px; /* 2 строки * 1.5 * 14px = 42px */
   color: var(--text-muted);
+}
+
+.collection-text--empty {
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: var(--text-faint);
 }
 
 .collection-actions {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   border-top: 1px solid var(--border-soft);
-  padding-top: 24px;
+  padding-top: 12px;
 }
 
 .copy-link-btn {
@@ -248,30 +367,62 @@ function deleteСollection(id) {
   border-color: var(--accent-strong) !important;
 }
 
-.collection-actions .ant-btn-link {
-  padding: 0 10px;
-  height: auto;
-  color: #b43c3c;
+.delete-btn {
+  color: #b43c3c !important;
 }
 
-.collection-actions .ant-btn-link:hover {
-  color: #8f2c2c;
+.delete-btn:hover {
+  color: #fff !important;
+  background-color: #b43c3c !important;
 }
 
 .header-actions {
   display: flex;
-  gap: 16px;
+  gap: 10px;
   align-items: center;
 }
 
+/* Вторичное действие — визуально легче, чем основной CTA */
+.import-toggle-btn {
+  border-radius: 20px;
+  border-color: var(--border) !important;
+  color: var(--text-muted) !important;
+  background: transparent !important;
+}
+
+.import-toggle-btn:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+
+/* Основной CTA — самый заметный элемент в хедере */
+.create-btn {
+  background-color: var(--accent) !important;
+  border-color: var(--accent) !important;
+  border-radius: 20px !important;
+  font-weight: 500;
+}
+
+.create-btn:hover {
+  background-color: var(--accent-strong) !important;
+  border-color: var(--accent-strong) !important;
+}
+
+/* Панель импорта — раскрывается по клику, не конкурирует с основным CTA по умолчанию */
 .import-wrapper {
   display: flex;
   gap: 8px;
   align-items: center;
+  margin-bottom: 20px;
+  padding: 10px 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
 }
 
 .import-link-input {
-  width: 250px;
+  width: 320px;
+  max-width: 100%;
 }
 
 .import-link-input :deep(.ant-input) {
@@ -297,14 +448,69 @@ function deleteСollection(id) {
   border-color: var(--accent-strong) !important;
 }
 
-.header-actions :deep(.ant-btn-primary:not(.import-link-btn)) {
-  background-color: var(--accent);
-  border-color: var(--accent);
+.import-cancel-btn {
   border-radius: 20px;
+  border-color: var(--border);
+  color: var(--text-muted);
+  background: transparent;
 }
 
-.header-actions :deep(.ant-btn-primary:not(.import-link-btn):hover) {
-  background-color: var(--accent-strong) !important;
-  border-color: var(--accent-strong) !important;
+.import-cancel-btn:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+
+/* Пустое состояние — направляет пользователя к первому действию */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 64px 24px;
+  background: var(--bg-elevated);
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 36px;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+.empty-title {
+  margin: 0;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+
+.empty-hint {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+@media (max-width: 640px) {
+  .collection-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .ant-btn {
+    flex: 1;
+  }
+
+  .import-link-input {
+    width: 100%;
+  }
 }
 </style>

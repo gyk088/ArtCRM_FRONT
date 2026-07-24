@@ -172,11 +172,6 @@ const loadDirectories = async () => {
     mediaStore.listMedia.forEach(m => { mediaMap.value[m.id] = m.name })
     statusesStore.listStatuses.forEach(s => { statusMap.value[s.id] = s.name })
     locationsStore.listLocations.forEach(l => { locationMap.value[l.id] = l.name })
-
-    console.log('Загружены серии:', seriaMap.value)
-    console.log('Загружены медиа:', mediaMap.value)
-    console.log('Загружены статусы:', statusMap.value)
-    console.log('Загружены локации:', locationMap.value)
   } catch (error) {
     console.error('Error loading directories:', error)
     message.error('Ошибка загрузки справочников')
@@ -271,6 +266,7 @@ const columns = computed(() => [
   { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: 90 },
   { title: 'Название', dataIndex: 'name', key: 'name' },
   { title: 'Техника', dataIndex: 'technique', key: 'technique', width: 140 },
+  // { title: 'Размер', dataIndex: 'size', key: 'size', width: 140 },
   { title: 'Год', dataIndex: 'year', key: 'year', width: 90, sorter: (a, b) => a.year - b.year },
   { title: 'Описание', dataIndex: 'description', key: 'description', className: 'desc-col' },
   { title: 'Локация', dataIndex: 'location', key: 'location', width: 150 },

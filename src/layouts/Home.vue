@@ -63,14 +63,14 @@
       </a-layout-content>
     </a-layout>
 
-    <a-modal
+    <a-drawer
       v-model:open="isFilesModalOpen"
       title="Файлы"
-      :footer="null"
+      placement="right"
       width="600px"
     >
       <FileUploader :remove="true" :select="true" @select="test"/>
-    </a-modal>
+    </a-drawer>
   </a-layout>
 </template>
 

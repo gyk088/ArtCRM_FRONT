@@ -1,11 +1,32 @@
 // stores/art.js
 import { defineStore } from 'pinia'
 import apiClient from '@/services/api.js'
-import { notifyServerError, notifyServerSuccess } from '@/services/notify.js' 
+import { notifyServerError, notifyServerSuccess } from '@/services/notify.js'
+
+// 📁 Папки — чисто клиентская сущность (бэкенд файлов папки не поддерживает),
+// поэтому список папок и привязка файл→папка хранятся в localStorage.
+const FOLDERS_STORAGE_KEY = 'artcrm_file_folders'
+const FOLDER_MAP_STORAGE_KEY = 'artcrm_file_folder_map'
+
+function loadFolders() {
+  try {
+    return JSON.parse(localStorage.getItem(FOLDERS_STORAGE_KEY)) || []
+  } catch {
+    return []
+  }
+}
+
+function loadFolderMap() {
+  try {
+    return JSON.parse(localStorage.getItem(FOLDER_MAP_STORAGE_KEY)) || {}
+  } catch {
+    return {}
+  }
+}
 
 export const useFile = defineStore('file', {
   state: () => {
-    return {      
+    return {
       files: [],
       currentFile: null,
       fileStats: null,
@@ -20,7 +41,12 @@ export const useFile = defineStore('file', {
         search: '',
         mimetype: '',
         ext: ''
-      },      error: null
+      },      error: null,
+
+      // 📁 Папки
+      folders: loadFolders(),
+      fileFolderMap: loadFolderMap(),
+      currentFolderId: null
     }
   },
 
@@ -28,19 +54,22 @@ export const useFile = defineStore('file', {
     async uploadFile(file, data) {
       let success = true
       try {
-        const formData = new FormData();   
+        const formData = new FormData();
         formData.append("name", data.name);
         formData.append("comment", data.comment);
         formData.append("file", file);
-        
+
         const resp = await apiClient.post('/api/v1/file/upload', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
-        })  
+        })
         this.files.unshift(resp.data) // Добавляем новый файл в начало списка
+        if (this.currentFolderId) {
+          this.assignFileToFolder(resp.data.id, this.currentFolderId)
+        }
         notifyServerSuccess('Файл успешно загружен')
-        console.log('Upload Response', resp.data)   
+        console.log('Upload Response', resp.data)
       } catch (e) {
         console.error('Error fetching data:', e)
         notifyServerError(e?.response?.data?.message || 'Failed to load user data')
@@ -52,9 +81,10 @@ export const useFile = defineStore('file', {
 
     async deleteFile(fileId) {
       let success = true
-      try {        
+      try {
         await apiClient.delete(`/api/v1/file/${fileId}`)
         this.files = this.files.filter(f => f.id !== fileId) // Удаляем файл из списка
+        this.assignFileToFolder(fileId, null) // убираем привязку к папке
         notifyServerSuccess('Файл успешно удален')
       } catch (e) {
         console.error('Error deleting file:', e)
@@ -63,6 +93,56 @@ export const useFile = defineStore('file', {
         success = false
       }
       return success
+    },
+
+    // ==================== ПАПКИ (клиентские) ====================
+
+    saveFolders() {
+      localStorage.setItem(FOLDERS_STORAGE_KEY, JSON.stringify(this.folders))
+    },
+
+    saveFolderMap() {
+      localStorage.setItem(FOLDER_MAP_STORAGE_KEY, JSON.stringify(this.fileFolderMap))
+    },
+
+    createFolder(name) {
+      const folder = {
+        id: `folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name
+      }
+      this.folders.push(folder)
+      this.saveFolders()
+      return folder
+    },
+
+    deleteFolder(folderId) {
+      this.folders = this.folders.filter(f => f.id !== folderId)
+
+      Object.keys(this.fileFolderMap).forEach(fileId => {
+        if (this.fileFolderMap[fileId] === folderId) {
+          delete this.fileFolderMap[fileId]
+        }
+      })
+
+      if (this.currentFolderId === folderId) {
+        this.currentFolderId = null
+      }
+
+      this.saveFolders()
+      this.saveFolderMap()
+    },
+
+    setCurrentFolder(folderId) {
+      this.currentFolderId = folderId
+    },
+
+    assignFileToFolder(fileId, folderId) {
+      if (folderId) {
+        this.fileFolderMap[fileId] = folderId
+      } else {
+        delete this.fileFolderMap[fileId]
+      }
+      this.saveFolderMap()
     },
 
 

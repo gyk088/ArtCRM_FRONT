@@ -1,215 +1,252 @@
 <template>
   <div class="edit-page">
-    <h2 class="page-title">Редактировать работу</h2>
-    <div class="edit-container">
-
-      <!-- Левая колонка — ФОРМА -->
-      <div class="left-column">
-        <a-form layout="vertical">
-          <a-form-item>
-            <a-input v-model:value="form.name" placeholder="Имя" class="fixed-input" />
-          </a-form-item>
-
-          <a-form-item>
-            <a-input v-model:value="form.technique" placeholder="Техника" class="fixed-input" />
-          </a-form-item>
-
-          <a-form-item>
-            <a-date-picker v-model:value="form.year" picker="year" valueFormat="YYYY" format="YYYY" placeholder="Год"
-              @change="onYearSelect" ref="yearPicker" class="fixed-input calendar-input" :allowClear="false" />
-          </a-form-item>
-
-          <a-form-item>
-            <a-textarea v-model:value="form.description" placeholder="Описание" class="fixed-input description-input" />
-          </a-form-item>
-
-          <a-form-item>
-            <a-select v-model:value="form.address" placeholder="Выберите или введите город" class="series-select"
-              :options="items.map(item => ({ value: item }))" allowClear>
-              <template #dropdownRender="{ menuNode: menu }">
-                <VNodes :vnodes="menu" />
-                <a-divider style="margin: 4px 0" />
-                <div class="chip-list">
-                  <span v-for="(item, idx) in items" :key="item" class="chip">
-                    {{ item }}
-                    <button @click.prevent="removeItem(idx)" class="chip-remove">×</button>
-                  </span>
-                </div>
-                <a-space class="add-row">
-                  <a-input ref="inputRef" v-model:value="name" placeholder="Введите город" @keyup.enter="addItem" />
-                  <a-button type="text" @click="addItem">
-                    <template #icon>
-                      <PlusOutlined />
-                    </template>
-                    Добавить
-                  </a-button>
-                </a-space>
-              </template>
-            </a-select>
-          </a-form-item>
-
-          <a-form-item>
-            <a-select v-model:value="form.seria" :options="seriesOptions" placeholder="Введите или выберите серию"
-              class="series-select" allowClear>
-              <template #dropdownRender="{ menuNode: menu }">
-                <VNodes :vnodes="menu" />
-
-                <a-divider style="margin: 4px 0" />
-
-                <!-- Блок списка серий с кнопками удаления -->
-                <div class="chip-list">
-                  <span v-for="(item, idx) in seriesOptions" :key="item.value" class="chip">
-                    {{ item.label }}
-                    <button @click.prevent="removeSeries(idx)" class="chip-remove">×</button>
-                  </span>
-                </div>
-
-                <!-- Добавляем инпут для добавления новой серии (как у городов) -->
-                <a-space class="add-row">
-                  <a-input ref="seriesInputRef" v-model:value="newSeries" placeholder="Введите серию"
-                    @keyup.enter="addSeries" />
-                  <a-button type="text" @click="addSeries">
-                    <template #icon>
-                      <PlusOutlined />
-                    </template>
-                    Добавить
-                  </a-button>
-                </a-space>
-              </template>
-            </a-select>
-          </a-form-item>
-
-          <!-- Поле Медиа (после серии) -->
-          <a-form-item>
-            <a-select v-model:value="form.media" :options="mediaOptions" placeholder="Введите или выберите медиа"
-              class="series-select" allowClear>
-              <template #dropdownRender="{ menuNode: menu }">
-                <VNodes :vnodes="menu" />
-
-                <a-divider style="margin: 4px 0" />
-
-                <div class="chip-list">
-                  <span v-for="(item, idx) in mediaOptions" :key="item.value" class="chip">
-                    {{ item.label }}
-                    <button @click.prevent="removeMedia(idx)" class="chip-remove">×</button>
-                  </span>
-                </div>
-
-                <a-space class="add-row">
-                  <a-input ref="mediaInputRef" v-model:value="newMedia" placeholder="Введите медиа"
-                    @keyup.enter="addMedia" />
-                  <a-button type="text" @click="addMedia">
-                    <template #icon>
-                      <PlusOutlined />
-                    </template>
-                    Добавить
-                  </a-button>
-                </a-space>
-              </template>
-            </a-select>
-          </a-form-item>
-
-          <a-form-item>
-            <a-select v-model:value="form.status" placeholder="Статус" class="status-select" allowClear>
-              <template #dropdownRender="{ menuNode: menu }">
-                <VNodes :vnodes="menu" />
-
-                <a-divider style="margin: 4px 0" />
-
-                <!-- Блок списка статусов с кнопками удаления -->
-                <div class="chip-list">
-                  <span v-for="(item, idx) in statusOptions" :key="item.value" class="chip">
-                    {{ item.label }}
-                    <button @click.prevent="removeStatus(idx)" class="chip-remove">×</button>
-                  </span>
-                </div>
-
-                <!-- Добавляем инпут для добавления нового статуса -->
-                <a-space class="add-row">
-                  <a-input ref="statusInputRef" v-model:value="newStatus" placeholder="Введите статус"
-                    @keyup.enter="addStatus" />
-                  <a-button type="text" @click="addStatus">
-                    <template #icon>
-                      <PlusOutlined />
-                    </template>
-                    Добавить
-                  </a-button>
-                </a-space>
-              </template>
-
-              <a-select-option v-for="status in statusOptions" :key="status.value" :value="status.value">
-                {{ status.label }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-
-          <a-form-item>
-            <a-input v-model:value="form.price" placeholder="Стоимость" class="fixed-input" />
-          </a-form-item>
-
-          <a-form-item>
-            <a-select v-model:value="form.collections" mode="multiple" placeholder="Выберите коллекцию"
-              class="series-select" allow-clear>
-              <a-select-option v-for="col in collectionList" :key="col.id" :value="col.id">
-                {{ col.name }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-
-          <div class="buttons-wrapper">
-            <a-button type="primary" @click="saveChanges" class="save-btn">
-              Сохранить
-            </a-button>
-
-            <a-button @click="goBack" class="back-btn">
-              Отмена
-            </a-button>
-          </div>
-        </a-form>
-      </div>
-
-      <!-- Правая колонка — ИЗОБРАЖЕНИЯ -->
-      <div class="right-column">
-        <a-form-item label="Главное изображение" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }"
-          class="images-item">
-          <div v-if="!form.avatar" class="upload-trigger" @click="openFilesModal('avatar')">
-            <div class="upload-placeholder">
-              <PlusOutlined />
-              <div>Загрузить</div>
-            </div>
-          </div>
-
-          <div v-else class="avatar-preview">
-            <img :src="form.avatar.url" class="avatar-image" />
-            <button class="delete-btn" @click="removeAvatar">×</button>
-          </div>
-        </a-form-item>
-
-        <a-form-item label="Изображения" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
-          <div class="images-block">
-            <div class="my-upload-block">
-              <div class="upload-trigger" @click="openFilesModal('images')">
-                <div class="upload-placeholder">
-                  <PlusOutlined />
-                  <div>Загрузить</div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Галерея превью -->
-            <div class="preview-gallery">
-              <div v-for="(img, index) in form.images" :key="img.uid" class="image-wrapper">
-                <div class="image-container">
-                  <img :src="img.url" class="preview-image" @click="openViewer(index)" />
-                  <button class="delete-btn" @click.stop="removeImage(index)">×</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </a-form-item>
-
-      </div>
+    <div class="page-header">
+      <h2 class="page-title">{{ isNewWork ? "Новая работа" : "Редактировать работу" }}</h2>
+      <p class="page-subtitle">{{ form.name || "Без названия" }}</p>
     </div>
+
+    <a-spin :spinning="loading" wrapperClassName="edit-spin-wrapper">
+      <div class="edit-container">
+
+        <!-- Левая колонка — ФОРМА -->
+        <div class="left-column">
+          <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
+
+            <section class="form-section">
+              <div class="section-heading">Основная информация</div>
+
+              <a-form-item label="Название" name="name" class="field-full">
+                <a-input v-model:value="form.name" placeholder="Например, «Утро в горах»" class="fixed-input" />
+              </a-form-item>
+
+              <div class="field-row">
+                <a-form-item label="Техника" class="field-half">
+                  <a-input v-model:value="form.technique" placeholder="Например, холст, масло" class="fixed-input" />
+                </a-form-item>
+
+                <a-form-item label="Год" class="field-half">
+                  <a-date-picker v-model:value="form.year" picker="year" valueFormat="YYYY" format="YYYY" placeholder="Год создания"
+                    @change="onYearSelect" ref="yearPicker" class="fixed-input" :allowClear="false" />
+                </a-form-item>
+              </div>
+
+              <a-form-item label="Описание" class="field-full">
+                <a-textarea v-model:value="form.description" placeholder="Коротко расскажите о работе" class="fixed-input description-input" />
+              </a-form-item>
+            </section>
+
+            <section class="form-section">
+              <div class="section-heading">Классификация</div>
+
+              <div class="field-row">
+                <a-form-item label="Город" class="field-half">
+                  <a-select v-model:value="form.address" placeholder="Выберите или введите город" class="series-select"
+                    :options="items.map(item => ({ value: item }))" allowClear>
+                    <template #dropdownRender="{ menuNode: menu }">
+                      <VNodes :vnodes="menu" />
+                      <a-divider style="margin: 4px 0" />
+                      <div class="chip-list">
+                        <span v-for="(item, idx) in items" :key="item" class="chip">
+                          {{ item }}
+                          <button @click.prevent="removeItem(idx)" class="chip-remove">×</button>
+                        </span>
+                      </div>
+                      <a-space class="add-row">
+                        <a-input ref="inputRef" v-model:value="name" placeholder="Введите город" @keyup.enter="addItem" />
+                        <a-button type="text" @click="addItem">
+                          <template #icon>
+                            <PlusOutlined />
+                          </template>
+                          Добавить
+                        </a-button>
+                      </a-space>
+                    </template>
+                  </a-select>
+                </a-form-item>
+
+                <a-form-item label="Серия" class="field-half">
+                  <a-select v-model:value="form.seria" :options="seriesOptions" placeholder="Введите или выберите серию"
+                    class="series-select" allowClear>
+                    <template #dropdownRender="{ menuNode: menu }">
+                      <VNodes :vnodes="menu" />
+
+                      <a-divider style="margin: 4px 0" />
+
+                      <!-- Блок списка серий с кнопками удаления -->
+                      <div class="chip-list">
+                        <span v-for="(item, idx) in seriesOptions" :key="item.value" class="chip">
+                          {{ item.label }}
+                          <button @click.prevent="removeSeries(idx)" class="chip-remove">×</button>
+                        </span>
+                      </div>
+
+                      <!-- Добавляем инпут для добавления новой серии (как у городов) -->
+                      <a-space class="add-row">
+                        <a-input ref="seriesInputRef" v-model:value="newSeries" placeholder="Введите серию"
+                          @keyup.enter="addSeries" />
+                        <a-button type="text" @click="addSeries">
+                          <template #icon>
+                            <PlusOutlined />
+                          </template>
+                          Добавить
+                        </a-button>
+                      </a-space>
+                    </template>
+                  </a-select>
+                </a-form-item>
+              </div>
+
+              <div class="field-row">
+                <!-- Поле Медиа (после серии) -->
+                <a-form-item label="Медиа" class="field-half">
+                  <a-select v-model:value="form.media" :options="mediaOptions" placeholder="Введите или выберите медиа"
+                    class="series-select" allowClear>
+                    <template #dropdownRender="{ menuNode: menu }">
+                      <VNodes :vnodes="menu" />
+
+                      <a-divider style="margin: 4px 0" />
+
+                      <div class="chip-list">
+                        <span v-for="(item, idx) in mediaOptions" :key="item.value" class="chip">
+                          {{ item.label }}
+                          <button @click.prevent="removeMedia(idx)" class="chip-remove">×</button>
+                        </span>
+                      </div>
+
+                      <a-space class="add-row">
+                        <a-input ref="mediaInputRef" v-model:value="newMedia" placeholder="Введите медиа"
+                          @keyup.enter="addMedia" />
+                        <a-button type="text" @click="addMedia">
+                          <template #icon>
+                            <PlusOutlined />
+                          </template>
+                          Добавить
+                        </a-button>
+                      </a-space>
+                    </template>
+                  </a-select>
+                </a-form-item>
+
+                <a-form-item label="Статус" class="field-half">
+                  <a-select v-model:value="form.status" placeholder="Выберите статус" class="status-select" allowClear>
+                    <template #dropdownRender="{ menuNode: menu }">
+                      <VNodes :vnodes="menu" />
+
+                      <a-divider style="margin: 4px 0" />
+
+                      <!-- Блок списка статусов с кнопками удаления -->
+                      <div class="chip-list">
+                        <span v-for="(item, idx) in statusOptions" :key="item.value" class="chip">
+                          {{ item.label }}
+                          <button @click.prevent="removeStatus(idx)" class="chip-remove">×</button>
+                        </span>
+                      </div>
+
+                      <!-- Добавляем инпут для добавления нового статуса -->
+                      <a-space class="add-row">
+                        <a-input ref="statusInputRef" v-model:value="newStatus" placeholder="Введите статус"
+                          @keyup.enter="addStatus" />
+                        <a-button type="text" @click="addStatus">
+                          <template #icon>
+                            <PlusOutlined />
+                          </template>
+                          Добавить
+                        </a-button>
+                      </a-space>
+                    </template>
+
+                    <a-select-option v-for="status in statusOptions" :key="status.value" :value="status.value">
+                      {{ status.label }}
+                    </a-select-option>
+                  </a-select>
+                </a-form-item>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="section-heading">Стоимость и коллекции</div>
+
+              <div class="field-row">
+                <a-form-item label="Стоимость" class="field-half">
+                  <a-input-number
+                    v-model:value="form.price"
+                    placeholder="0"
+                    class="price-input"
+                    :min="0"
+                    addon-after="₽"
+                    :formatter="value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')"
+                    :parser="value => value.replace(/\s/g, '')"
+                  />
+                </a-form-item>
+
+                <a-form-item label="Коллекции" class="field-half">
+                  <a-select v-model:value="form.collections" mode="multiple" placeholder="Выберите коллекцию"
+                    class="series-select" allow-clear>
+                    <a-select-option v-for="col in collectionList" :key="col.id" :value="col.id">
+                      {{ col.name }}
+                    </a-select-option>
+                  </a-select>
+                </a-form-item>
+              </div>
+            </section>
+
+            <div class="buttons-wrapper">
+              <a-button type="primary" :loading="loading" @click="saveChanges" class="save-btn">
+                Сохранить
+              </a-button>
+
+              <a-button :disabled="loading" @click="goBack" class="back-btn">
+                Отмена
+              </a-button>
+            </div>
+          </a-form>
+        </div>
+
+        <!-- Правая колонка — ИЗОБРАЖЕНИЯ -->
+        <div class="right-column">
+          <a-form-item label="Главное изображение" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }"
+            class="images-item">
+            <div v-if="!form.avatar" class="upload-trigger" @click="openFilesModal('avatar')">
+              <div class="upload-placeholder">
+                <PlusOutlined />
+                <div>Загрузить</div>
+              </div>
+            </div>
+
+            <div v-else class="avatar-preview">
+              <img :src="form.avatar.url" class="avatar-image" />
+              <button class="delete-btn" @click="removeAvatar">×</button>
+            </div>
+          </a-form-item>
+
+          <a-form-item label="Изображения" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
+            <div class="images-block">
+              <div class="my-upload-block">
+                <div class="upload-trigger" @click="openFilesModal('images')">
+                  <div class="upload-placeholder">
+                    <PlusOutlined />
+                    <div>Загрузить</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Галерея превью -->
+              <div v-if="form.images.length" class="preview-gallery">
+                <div v-for="(img, index) in form.images" :key="img.uid" class="image-wrapper">
+                  <div class="image-container">
+                    <img :src="img.url" class="preview-image" @click="openViewer(index)" />
+                    <button class="delete-btn" @click.stop="removeImage(index)">×</button>
+                  </div>
+                </div>
+              </div>
+
+              <p v-else class="empty-hint">Дополнительные изображения ещё не добавлены</p>
+            </div>
+          </a-form-item>
+
+        </div>
+      </div>
+    </a-spin>
 
     <!-- Lightbox -->
     <div v-if="isViewerVisible" class="lightbox" @click.self="closeViewer">
@@ -219,9 +256,9 @@
       <button class="close-btn" @click="closeViewer">×</button>
     </div>
 
-    <a-modal v-model:open="isFilesModalOpen" title="Файлы" :footer="null" width="700px" destroyOnClose>
+    <a-drawer v-model:open="isFilesModalOpen" title="Файлы" placement="right" width="700px" destroyOnClose>
       <FileUploader :remove="true" :select="true" @select="handleFileSelect" />
-    </a-modal>
+    </a-drawer>
 
   </div>
 </template>
@@ -261,6 +298,12 @@ const mediaInputRef = ref(null)
 const loading = ref(false)
 const isFilesModalOpen = ref(false)
 const uploadTarget = ref('avatar')
+const formRef = ref(null)
+const isNewWork = computed(() => route.params.id === 'new')
+
+const rules = {
+  name: [{ required: true, message: 'Введите название работы', trigger: 'blur' }]
+}
 
 const VNodes = defineComponent({
   props: { vnodes: { type: Object, required: true } },
@@ -275,6 +318,7 @@ const form = reactive({
   avatar: null,
   name: '',
   technique: '',
+  size: '',
   year: '',
   description: '',
   address: null,
@@ -784,6 +828,13 @@ const getLocationIdByName = (locationName) => {
 }
 
 const saveChanges = async () => {
+  try {
+    await formRef.value.validate()
+  } catch {
+    message.warning('Проверьте обязательные поля')
+    return
+  }
+
   loading.value = true
   try {
     const locationId = getLocationIdByName(form.address)
@@ -852,7 +903,6 @@ function goBack() {
   --border: rgba(0, 0, 0, 0.1);
   --border-soft: rgba(0, 0, 0, 0.07);
 
-  padding: 20px 24px 10px;
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -862,8 +912,12 @@ function goBack() {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-.page-title {
+.page-header {
   flex-shrink: 0;
+  padding: 20px 24px 10px;
+}
+
+.page-title {
   font-family: 'Cormorant Garamond', serif;
   font-size: 26px;
   font-weight: 600;
@@ -871,20 +925,76 @@ function goBack() {
   margin: 0 0 4px;
 }
 
+.page-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.edit-spin-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.edit-spin-wrapper :deep(.ant-spin-nested-loading),
+.edit-spin-wrapper :deep(.ant-spin-container) {
+  height: 100%;
+  width: 100%;
+}
+
 .edit-container {
   display: flex;
   gap: 20px;
-  flex: 1;
-  min-height: 0;
-  padding-top: 10px;
+  height: 100%;
+  padding: 0 24px 10px;
   overflow: hidden;
 }
 
 .left-column {
-  width: 40%;
+  width: 44%;
   overflow-y: auto;
   height: 100%;
   padding-right: 8px;
+}
+
+/* === Секции формы === */
+.form-section {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 14px 16px 2px;
+  margin-bottom: 12px;
+}
+
+/* Два поля в один ряд — компактнее, чем сплошной вертикальный стек */
+.field-row {
+  display: flex;
+  gap: 16px;
+}
+
+.field-row .field-half {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-full {
+  width: 100%;
+}
+
+.section-heading {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
+.empty-hint {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-faint);
 }
 
 /* Кастомный скролл для левой колонки */
@@ -911,7 +1021,7 @@ function goBack() {
 }
 
 .right-column {
-  width: 70%;
+  width: 56%;
   padding-left: 20px;
   border-left: 1px solid var(--border);
   overflow-y: auto;
@@ -920,12 +1030,17 @@ function goBack() {
 
 /* === Инпуты === */
 :deep(.ant-form-item) {
-  margin-bottom: 16px !important;
+  margin-bottom: 12px !important;
   /* Было 24px по умолчанию */
+}
+
+:deep(.ant-form-item-label) {
+  padding-bottom: 2px !important;
 }
 
 :deep(.ant-form-item-label > label) {
   color: var(--text-muted);
+  height: auto !important;
 }
 
 .fixed-input {
@@ -940,11 +1055,7 @@ function goBack() {
 }
 
 .description-input {
-  height: 100px;
-}
-
-.calendar-input {
-  width: 150px;
+  height: 70px;
 }
 
 .series-select {
@@ -986,6 +1097,27 @@ function goBack() {
 }
 
 .status-select :deep(.ant-select-selector:hover) {
+  border-color: var(--accent) !important;
+}
+
+.price-input {
+  width: 100%;
+  max-width: 450px;
+}
+
+.price-input :deep(.ant-input-number),
+.price-input :deep(.ant-input-number-group-wrapper) {
+  width: 100%;
+}
+
+.price-input :deep(.ant-input-number),
+.price-input :deep(.ant-input-number-group-addon) {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+}
+
+.price-input :deep(.ant-input-number:hover),
+.price-input :deep(.ant-input-number-focused) {
   border-color: var(--accent) !important;
 }
 
@@ -1036,9 +1168,9 @@ function goBack() {
 }
 
 .save-btn:hover {
-  border-color: var(--accent-strong);
-  background-color: var(--accent-strong);
-  color: #fff;
+  border-color: var(--accent-strong) !important;
+  background-color: var(--accent-strong) !important;
+  color: #fff !important;
 }
 
 .back-btn {
@@ -1048,16 +1180,16 @@ function goBack() {
 }
 
 .back-btn:hover {
-  background-color: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+  background-color: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #fff !important;
 }
 
 /* Контейнер для кнопок */
 .buttons-wrapper {
   display: flex;
   gap: 8px;
-  margin-top: 40px;
+  margin-top: 16px;
 }
 
 .images-item {
@@ -1137,7 +1269,8 @@ function goBack() {
 .preview-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: var(--card-bg);
   border-radius: 6px;
   cursor: pointer;
   transition: transform 0.2s;
@@ -1193,8 +1326,9 @@ function goBack() {
 .avatar-image {
   width: 110px;
   height: 110px;
+  object-fit: contain;
+  background: var(--card-bg);
   border-radius: 8px;
-  object-fit: cover;
   border: 1px solid var(--border);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
 }
@@ -1286,8 +1420,16 @@ function goBack() {
 
   .fixed-input,
   .series-select,
-  .status-select {
+  .status-select,
+  .price-input {
     max-width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .field-row {
+    flex-direction: column;
+    gap: 0;
   }
 }
 </style>
