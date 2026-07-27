@@ -6,6 +6,8 @@
 
     <div class="filters-panel">
       <div class="filters-left">
+        <a-select v-model:value="filterArtist" placeholder="Художник" allowClear style="width: 200px"
+          :options="artistOptions" />
         <a-select v-model:value="filterLocation" placeholder="Локация" allowClear style="width: 200px"
           :options="locationOptions" />
         <a-select v-model:value="filterSeria" placeholder="Серия" allowClear style="width: 200px"
@@ -26,13 +28,16 @@
 
     <!-- Таблица -->
     <a-table class="custom-table" :columns="columns" :data-source="filteredData" row-key="id"
-      :row-selection="rowSelection" :loading="loading">
+      :row-selection="rowSelection" :loading="loading" table-layout="fixed">
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'avatar'">
           <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="preview-img" />
           <div v-else class="img-placeholder">
             <PictureOutlined />
           </div>
+        </template>
+        <template v-else-if="column.dataIndex === 'artist'">
+          {{ getArtistName(record.artist) }}
         </template>
         <template v-else-if="column.dataIndex === 'seria'">
           {{ getSeriaName(record.seria) }}
@@ -49,12 +54,12 @@
           {{ getLocationName(record.location) }}
         </template>
         <template v-else-if="column.dataIndex === 'actions'">
-          <a-button type="text" class="edit-btn" @click="openEditPage(record)">
-            Редактировать
-          </a-button>
-          <a-button type="text" danger @click="deleteRow(record.id)">
-            Удалить
-          </a-button>
+          <button class="icon-btn icon-btn-edit" title="Редактировать" @click="openEditPage(record)">
+            <EditOutlined />
+          </button>
+          <button class="icon-btn icon-btn-danger" title="Удалить" @click="deleteRow(record.id)">
+            <DeleteOutlined />
+          </button>
         </template>
         <template v-else>
           {{ record[column.dataIndex] }}
@@ -66,7 +71,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { PictureOutlined } from '@ant-design/icons-vue'
+import { PictureOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useArtWork } from '@/stores/artWork.js'
@@ -74,6 +79,7 @@ import { useMedia } from '@/stores/media.js'
 import { useSerias } from '@/stores/seria.js'
 import { useStatuses } from '@/stores/statuses.js'
 import { useLocations } from '@/stores/locations.js'
+import { useArtist } from '@/stores/artist.js'
 import { useFile } from "@/stores/file.js"
 
 const fileStore = useFile()
@@ -86,22 +92,37 @@ const mediaStore = useMedia()
 const seriasStore = useSerias()
 const statusesStore = useStatuses()
 const locationsStore = useLocations()
+const artistStore = useArtist()
 
 const router = useRouter()
 const loading = ref(false)
 const selectedRowKeys = ref([])
+const filterArtist = ref(null)
 const filterLocation = ref(null)
 const filterSeria = ref(null)
 const filterMedia = ref(null)
 const filterStatus = ref(null)
 
 // Хранилища для маппинга ID -> название
+const artistMap = ref({})
 const seriaMap = ref({})
 const mediaMap = ref({})
 const statusMap = ref({})
 const locationMap = ref({})
 
 // Функции для получения названий по ID (с кешированием)
+const getArtistName = (artistId) => {
+  if (!artistId) return ''
+  if (artistMap.value[artistId]) return artistMap.value[artistId]
+
+  const artist = artistStore.listArtists.find(a => a.id === artistId)
+  if (artist) {
+    artistMap.value[artistId] = artist.name
+    return artist.name
+  }
+  return artistId
+}
+
 const getSeriaName = (seriaId) => {
   if (!seriaId) return ''
   if (seriaMap.value[seriaId]) return seriaMap.value[seriaId]
@@ -164,10 +185,12 @@ const loadDirectories = async () => {
       mediaStore.getListMedia(),
       seriasStore.getListSerias(),
       statusesStore.getListStatuses(),
-      locationsStore.getListLocations()
+      locationsStore.getListLocations(),
+      artistStore.getListArtists()
     ])
 
     // Заполняем карты для быстрого доступа
+    artistStore.listArtists.forEach(a => { artistMap.value[a.id] = a.name })
     seriasStore.listSerias.forEach(s => { seriaMap.value[s.id] = s.name })
     mediaStore.listMedia.forEach(m => { mediaMap.value[m.id] = m.name })
     statusesStore.listStatuses.forEach(s => { statusMap.value[s.id] = s.name })
@@ -210,6 +233,13 @@ const loadArtWorks = async () => {
 }
 
 // Опции для фильтров
+const artistOptions = computed(() => {
+  return artistStore.listArtists.map(artist => ({
+    label: artist.name,
+    value: artist.id
+  }))
+})
+
 const locationOptions = computed(() => {
   return locationsStore.listLocations.map(loc => ({
     label: loc.name,
@@ -242,6 +272,10 @@ const statusOptions = computed(() => {
 const filteredData = computed(() => {
   let result = [...artWorkStore.listArtWorks]
 
+  if (filterArtist.value) {
+    result = result.filter(item => item.artist === filterArtist.value)
+  }
+
   if (filterLocation.value) {
     result = result.filter(item => item.location === filterLocation.value)
   }
@@ -261,20 +295,23 @@ const filteredData = computed(() => {
   return result
 })
 
-// Колонки таблицы
+// Колонки таблицы — порядок полей соответствует форме EditWork
+// (Название → Художник → Техника/Год → Описание → Город/Серия → Медиа/Статус → Стоимость)
+// Ширины в процентах в сумме дают 100%, чтобы таблица всегда помещалась
+// по ширине контейнера без горизонтальной прокрутки (table-layout: fixed).
 const columns = computed(() => [
-  { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: 90 },
-  { title: 'Название', dataIndex: 'name', key: 'name' },
-  { title: 'Техника', dataIndex: 'technique', key: 'technique', width: 140 },
-  // { title: 'Размер', dataIndex: 'size', key: 'size', width: 140 },
-  { title: 'Год', dataIndex: 'year', key: 'year', width: 90, sorter: (a, b) => a.year - b.year },
-  { title: 'Описание', dataIndex: 'description', key: 'description', className: 'desc-col' },
-  { title: 'Локация', dataIndex: 'location', key: 'location', width: 150 },
-  { title: 'Серия', dataIndex: 'seria', key: 'seria', width: 120 },
-  { title: 'Медиа', dataIndex: 'media', key: 'media', width: 120 },
-  { title: 'Статус', dataIndex: 'status', key: 'status', width: 140 },
-  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 100, sorter: (a, b) => a.price - b.price },
-  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 100 },
+  { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: '6%' },
+  { title: 'Название', dataIndex: 'name', key: 'name', width: '14%', ellipsis: true },
+  { title: 'Художник', dataIndex: 'artist', key: 'artist', width: '10%', ellipsis: true },
+  { title: 'Техника', dataIndex: 'technique', key: 'technique', width: '9%', ellipsis: true },
+  { title: 'Размер', dataIndex: 'size', key: 'size', width: '6%', ellipsis: true },
+  { title: 'Год', dataIndex: 'year', key: 'year', width: '5%', sorter: (a, b) => a.year - b.year },
+  { title: 'Медиа', dataIndex: 'media', key: 'media', width: '8%', ellipsis: true },
+  { title: 'Серия', dataIndex: 'seria', key: 'seria', width: '8%', ellipsis: true },
+  { title: 'Локация', dataIndex: 'location', key: 'location', width: '9%', ellipsis: true },
+  { title: 'Статус', dataIndex: 'status', key: 'status', width: '10%', ellipsis: true },
+  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: '8%', sorter: (a, b) => a.price - b.price },
+  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: '8%' },
 ])
 
 // Открытие страницы редактирования
@@ -504,10 +541,6 @@ onMounted(async () => {
 }
 
 .desc-col {
-  max-width: 200px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--text-muted);
 }
 
@@ -564,19 +597,44 @@ onMounted(async () => {
 }
 
 /* === Действия === */
-.edit-btn {
-  color: var(--accent) !important;
+.icon-btn {
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  transition: all 0.15s ease;
 }
 
-.edit-btn:hover {
-  color: var(--accent-strong) !important;
+.icon-btn + .icon-btn {
+  margin-left: 4px;
 }
 
-.custom-table :deep(.ant-btn-text.ant-btn-dangerous) {
-  color: #f09090;
+.icon-btn:hover {
+  background: var(--card-bg);
 }
 
-.custom-table :deep(.ant-btn-text.ant-btn-dangerous:hover) {
-  color: #f5b3b3;
+.icon-btn-edit {
+  color: var(--accent);
+}
+
+.icon-btn-edit:hover {
+  background: var(--status-default-bg);
+  color: var(--accent-strong);
+}
+
+.icon-btn-danger {
+  color: var(--status-sold-fg);
+}
+
+.icon-btn-danger:hover {
+  background: var(--status-sold-bg);
+  color: #8f2c2c;
 }
 </style>

@@ -19,16 +19,34 @@
                 <a-input v-model:value="form.name" placeholder="Например, «Утро в горах»" class="fixed-input" />
               </a-form-item>
 
-              <div class="field-row">
-                <a-form-item label="Техника" class="field-half">
-                  <a-input v-model:value="form.technique" placeholder="Например, холст, масло" class="fixed-input" />
-                </a-form-item>
+              <a-form-item label="Художник" class="field-full">
+                <a-select v-model:value="form.artist" :options="artistOptions" placeholder="Выберите или введите Художника"
+                  class="series-select" allowClear>
+                  <template #dropdownRender="{ menuNode: menu }">
+                    <VNodes :vnodes="menu" />
 
-                <a-form-item label="Год" class="field-half">
-                  <a-date-picker v-model:value="form.year" picker="year" valueFormat="YYYY" format="YYYY" placeholder="Год создания"
-                    @change="onYearSelect" ref="yearPicker" class="fixed-input" :allowClear="false" />
-                </a-form-item>
-              </div>
+                    <a-divider style="margin: 4px 0" />
+
+                    <div class="chip-list">
+                      <span v-for="(item, idx) in artistOptions" :key="item.value" class="chip">
+                        {{ item.label }}
+                        <button @click.prevent="removeArtist(idx)" class="chip-remove">×</button>
+                      </span>
+                    </div>
+
+                    <a-space class="add-row">
+                      <a-input ref="artistInputRef" v-model:value="newArtist" placeholder="Введите имя Художника"
+                        @keyup.enter="addArtist" />
+                      <a-button type="text" @click="addArtist">
+                        <template #icon>
+                          <PlusOutlined />
+                        </template>
+                        Добавить
+                      </a-button>
+                    </a-space>
+                  </template>
+                </a-select>
+              </a-form-item>
 
               <a-form-item label="Описание" class="field-full">
                 <a-textarea v-model:value="form.description" placeholder="Коротко расскажите о работе" class="fixed-input description-input" />
@@ -37,6 +55,21 @@
 
             <section class="form-section">
               <div class="section-heading">Классификация</div>
+
+              <div class="field-row">
+                <a-form-item label="Техника" class="field-half">
+                  <a-input v-model:value="form.technique" placeholder="Например, холст, масло" class="fixed-input" />
+                </a-form-item>
+
+                <a-form-item label="Размер" class="field-half">
+                  <a-input v-model:value="form.size" placeholder="Например, 60×80 см" class="fixed-input" />
+                </a-form-item>
+
+                <a-form-item label="Год" class="field-half">
+                  <a-date-picker v-model:value="form.year" picker="year" valueFormat="YYYY" format="YYYY" placeholder="Год создания"
+                    @change="onYearSelect" ref="yearPicker" class="fixed-input" :allowClear="false" />
+                </a-form-item>
+              </div>
 
               <div class="field-row">
                 <a-form-item label="Город" class="field-half">
@@ -178,15 +211,6 @@
                     :parser="value => value.replace(/\s/g, '')"
                   />
                 </a-form-item>
-
-                <a-form-item label="Коллекции" class="field-half">
-                  <a-select v-model:value="form.collections" mode="multiple" placeholder="Выберите коллекцию"
-                    class="series-select" allow-clear>
-                    <a-select-option v-for="col in collectionList" :key="col.id" :value="col.id">
-                      {{ col.name }}
-                    </a-select-option>
-                  </a-select>
-                </a-form-item>
               </div>
             </section>
 
@@ -273,6 +297,7 @@ import { useSerias } from '@/stores/seria.js'
 import { useLocations } from '@/stores/locations.js'
 import { useStatuses } from '@/stores/statuses.js'
 import { useMedia } from '@/stores/media.js'
+import { useArtist } from '@/stores/artist.js'
 import { useArtWork } from '@/stores/artWork.js'
 import FileUploader from "@/components/FileUploader.vue"
 
@@ -280,6 +305,7 @@ const seriasStore = useSerias();
 const locationsStore = useLocations()
 const statusesStore = useStatuses()
 const mediaStore = useMedia()
+const artistStore = useArtist()
 const artWorkStore = useArtWork()
 
 const route = useRoute()
@@ -295,6 +321,9 @@ const statusInputRef = ref(null)
 const mediaOptions = ref([])
 const newMedia = ref('')
 const mediaInputRef = ref(null)
+const artistOptions = ref([])
+const newArtist = ref('')
+const artistInputRef = ref(null)
 const loading = ref(false)
 const isFilesModalOpen = ref(false)
 const uploadTarget = ref('avatar')
@@ -325,6 +354,7 @@ const form = reactive({
   seria: null,
   media: null,
   status: null,
+  artist: null,
   price: '',
   collections: [],
   images: []
@@ -348,12 +378,14 @@ const loadArtWork = async () => {
         id: work.id,
         name: work.name || '',
         technique: work.technique || '',
+        size: work.size || '',
         year: work.year ? String(work.year) : '',
         description: work.description || '',
         address: getNameById(work.location, locationsStore, 'listLocations'),
         seria: work.seria || null,
         media: work.media || null,
         status: work.status || null,
+        artist: work.artist || null,
         price: work.price || '',
         collections: work.collections || [],
         images: work.images || [],
@@ -438,11 +470,29 @@ const loadMediaFromAPI = async () => {
   }
 }
 
+// Загрузка Художников из API
+const loadArtistsFromAPI = async () => {
+  try {
+    await artistStore.getListArtists()
+    const apiArtists = artistStore.listArtists.map(artist => ({
+      label: artist.name,
+      value: artist.id
+    }))
+
+    artistOptions.value = apiArtists
+    console.log('Artists loaded:', artistOptions.value)
+  } catch (error) {
+    console.error('Error loading artists:', error)
+    artistOptions.value = []
+  }
+}
+
 onMounted(async () => {
   await loadSeriesFromAPI()
   await loadLocationsFromAPI()
   await loadStatusesFromAPI()
   await loadMediaFromAPI()
+  await loadArtistsFromAPI()
   await loadArtWork()
 })
 
@@ -821,6 +871,66 @@ const removeMedia = async (idx) => {
   mediaOptions.value.splice(idx, 1)
 }
 
+// Добавление нового Художника
+const addArtist = async (e) => {
+  e?.preventDefault()
+  if (!newArtist.value.trim()) return
+
+  const artistName = newArtist.value.trim()
+  const existingOption = artistOptions.value.find(opt => opt.label === artistName)
+
+  if (existingOption) {
+    form.artist = existingOption.value
+    newArtist.value = ''
+    return
+  }
+
+  let newOption = null
+
+  try {
+    const userId = localStorage.getItem('userId') || "e56094b2-3faf-4a7b-b494-4640dabcf08a"
+    const newArtistData = await artistStore.createArtist({
+      user_id: userId,
+      name: artistName
+    })
+
+    if (newArtistData) {
+      newOption = {
+        label: newArtistData.name,
+        value: newArtistData.id
+      }
+      message.success('Художник создан на сервере')
+    }
+  } catch (error) {
+    console.error('Ошибка при создании художника через API:', error)
+    message.warning('API недоступен, художник сохранён локально')
+  }
+
+  artistOptions.value.push(newOption)
+  form.artist = newOption.value
+
+  newArtist.value = ''
+  setTimeout(() => artistInputRef.value?.focus(), 0)
+}
+
+// Удаление Художника из списка
+const removeArtist = async (idx) => {
+  const removed = artistOptions.value[idx]
+  if (!removed) return
+
+  try {
+    await artistStore.deleteArtist(removed.value)
+    message.success(`Художник "${removed.label}" удалён на сервере`)
+  } catch (error) {
+    console.error('Error deleting artist via API:', error)
+  }
+
+  if (form.artist === removed.value) {
+    form.artist = null
+  }
+  artistOptions.value.splice(idx, 1)
+}
+
 const getLocationIdByName = (locationName) => {
   if (!locationName) return null
   const location = locationsStore.listLocations.find(loc => loc.name === locationName)
@@ -843,12 +953,14 @@ const saveChanges = async () => {
       user_id: localStorage.getItem('userId') || "e56094b2-3faf-4a7b-b494-4640dabcf08a",
       name: form.name,
       technique: form.technique,
+      size: form.size,
       year: form.year ? parseInt(form.year) : null,
       description: form.description,
       location: locationId,
       seria: form.seria,
       media: form.media,
       status: form.status,
+      artist: form.artist,
       price: form.price ? parseFloat(form.price) : null,
       avatar_id: form.avatar?.id || null,
       images: form.images,

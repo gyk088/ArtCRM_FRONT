@@ -1,6 +1,9 @@
 <template>
   <div class="landing" :class="theme">
 
+    <!-- Имя артиста — зафиксировано наверху, остаётся на месте при прокрутке -->
+    <div v-if="artistName" class="artist-bar" :class="{ scrolled }">{{ artistName }}</div>
+
     <!-- Переключатель темы -->
     <button class="theme-toggle" type="button" :aria-label="theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'" @click="toggleTheme">
       <svg v-if="theme === 'dark'" class="theme-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -162,7 +165,7 @@
 
         <transition name="details-fade" mode="out-in">
           <div class="work-modal-details" :key="activeWork.id">
-            <span v-if="getStatusName(activeWork.status)" class="status-badge" :class="statusClass(activeWork.status)">
+            <span v-if="getStatusName(activeWork.status)" class="status-badge status-badge-top" :class="statusClass(activeWork.status)">
               {{ getStatusName(activeWork.status) }}
             </span>
             <h2 class="work-modal-title">{{ activeWork.name || 'Без названия' }}</h2>
@@ -228,6 +231,14 @@ const works = ref([])
 const viewerOpen = ref(false)
 const activeWork = ref(null)
 const activeImageIndex = ref(0)
+
+// Прозрачный фон плашки артиста поверх hero, обычный фон после прокрутки
+const scrolled = ref(false)
+const SCROLL_BAR_THRESHOLD = 24
+
+function handleScroll() {
+  scrolled.value = window.scrollY > SCROLL_BAR_THRESHOLD
+}
 
 const THEME_STORAGE_KEY = 'collectionLandingTheme'
 const prefersLight = typeof window !== 'undefined' && window.matchMedia
@@ -582,6 +593,9 @@ function openViewer(work) {
 }
 
 onMounted(async () => {
+  handleScroll()
+  window.addEventListener('scroll', handleScroll, { passive: true })
+
   loading.value = true
   try {
     const storedCollections = JSON.parse(localStorage.getItem('collectionList') || '[]')
@@ -635,6 +649,7 @@ function setupRevealAnimations() {
 onBeforeUnmount(() => {
   revealObserver?.disconnect()
   cancelAnimationFrame(swipe.raf)
+  window.removeEventListener('scroll', handleScroll)
 })
 </script>
 
@@ -714,9 +729,9 @@ onBeforeUnmount(() => {
 /* ==== Переключатель темы ==== */
 .theme-toggle {
   position: fixed;
-  top: 20px;
+  top: 11px;
   right: 20px;
-  z-index: 60;
+  z-index: 61;
   width: 42px;
   height: 42px;
   border-radius: 50%;
@@ -740,6 +755,41 @@ onBeforeUnmount(() => {
 .theme-icon {
   width: 20px;
   height: 20px;
+}
+
+/* Имя артиста — фиксированная плашка вверху слева, всегда поверх контента */
+.artist-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 76px 0 64px;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: #ffffff;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5), 0 1px 4px rgba(0, 0, 0, 0.4);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: none;
+  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, text-shadow 0.3s ease;
+}
+
+/* После прокрутки — обычный фон лендинга вместо прозрачного поверх hero */
+.artist-bar.scrolled {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-title);
+  text-shadow: none;
+  box-shadow: var(--shadow);
 }
 
 .state-screen {
@@ -961,7 +1011,7 @@ onBeforeUnmount(() => {
 
 .art-card {
   width: 100%;
-  max-width: 680px;
+  max-width: 580px;
   cursor: pointer;
   padding: 64px 0;
   border-bottom: 1px solid var(--border-soft);
@@ -1015,7 +1065,7 @@ onBeforeUnmount(() => {
 .status-badge {
   position: absolute;
   top: 10px;
-  right: 10px;
+  left: 10px;
   padding: 4px 10px;
   font-size: 11px;
   letter-spacing: 0.04em;
@@ -1159,9 +1209,9 @@ onBeforeUnmount(() => {
 }
 
 .swipe-image {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain; /* сохраняем пропорции изображения — без обрезки */
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* сохраняем пропорции изображения — без обрезки, но заполняем всю область просмотра */
   border-radius: 6px;
   pointer-events: none;
   -webkit-user-drag: none;
@@ -1213,17 +1263,26 @@ onBeforeUnmount(() => {
 }
 
 .work-modal-details {
+  position: relative;
   padding: 40px 36px;
   color: var(--text-body);
   overflow-y: auto;
   max-height: 560px;
 }
 
+/* Тот же уровень по высоте, что и кнопка закрытия модалки (top: 14px) */
+.status-badge-top {
+  position: absolute;
+  top: 0px;
+  left: 30px;
+  right: auto;
+}
+
 .work-modal-title {
   font-family: 'Cormorant Garamond', serif;
   font-size: 30px;
   font-weight: 600;
-  margin: 14px 0 20px;
+  margin: 44px 0 20px;
   color: var(--text-title);
 }
 
@@ -1271,10 +1330,16 @@ onBeforeUnmount(() => {
 /* ==== Адаптив ==== */
 @media (max-width: 760px) {
   .theme-toggle {
-    top: 14px;
+    top: 9px;
     right: 14px;
     width: 38px;
     height: 38px;
+  }
+
+  .artist-bar {
+    height: 56px;
+    padding: 0 60px 0 16px;
+    font-size: 15px;
   }
 
   .hero-content {

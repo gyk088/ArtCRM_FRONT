@@ -42,7 +42,12 @@ const router = createRouter({
         meta: {
             title: '<Биография>',
           },
-      },{
+      }, {
+          path: '/home/bio/:id',
+          name: 'edit-bio',
+          component: () => import('@/pages/EditBio/index.vue'),
+          meta: { title: 'Редактировать биографию' },
+        },{
           path: 'workspace',
           name: 'workspace',
           component: () => import('@/pages/WorkSpace/index.vue'),
@@ -56,7 +61,12 @@ const router = createRouter({
         meta: {
             title: '<Резюме>',
           },
-      },{
+      }, {
+          path: '/home/cv/:id',
+          name: 'edit-cv',
+          component: () => import('@/pages/EditCV/index.vue'),
+          meta: { title: 'Редактировать резюме' },
+        },{
         path: 'collection',
         name: 'collection',
         component: () => import('@/pages/CollectionList/index.vue'),
