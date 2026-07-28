@@ -43,12 +43,12 @@
                 </a-button>
               </div>
             </div>
-             <!-- Мои ссылки (коллекции) -->
+             <!-- Мои ссылки -->
               <div v-else-if="item.type === 'links'" class="links-collections">
                 <div class="collections-header">
-                  <span>Мои коллекции</span>
+                  <span>Мои ссылки</span>
                   <a-button type="primary" size="small" @click="openEditPage">
-                    <PlusOutlined /> Создать коллекцию
+                    <PlusOutlined /> Создать ссылку
                   </a-button>
                 </div>
                 
@@ -63,7 +63,7 @@
                         </template>
                         Копировать ссылку
                       </a-button>
-                      <a-popconfirm title="Удалить коллекцию?" ok-text="Да" cancel-text="Нет"
+                      <a-popconfirm title="Удалить ссылку?" ok-text="Да" cancel-text="Нет"
                         @confirm.stop="deleteCollection(item, collection.id)">
                         <a-button type="link" danger @click.stop>
                           <template #icon>
@@ -77,8 +77,8 @@
                 </div>
                 
                 <div v-else class="empty-collections">
-                  <a-empty description="Нет созданных коллекций">
-                    <a-button type="primary" @click="openEditPage">Создать коллекцию</a-button>
+                  <a-empty description="Нет созданных ссылок">
+                    <a-button type="primary" @click="openEditPage">Создать ссылку</a-button>
                   </a-empty>
                 </div>
               </div>
@@ -352,7 +352,7 @@ const addLinks = () => {
   const newItem = {
     id: nextId++,
     type: 'links',
-    collections: [...globalCollectionList.value] // Копируем все коллекции
+    collections: [...globalCollectionList.value] // Копируем все ссылки
   }
   
   if (activePanel.value === 'left') {

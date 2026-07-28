@@ -20,16 +20,16 @@
       <a-spin size="large" />
     </div>
 
-    <!-- ==== Коллекция не найдена ==== -->
+    <!-- ==== Ссылка не найдена ==== -->
     <div v-else-if="!collection" class="state-screen">
       <div class="not-found">
         <div class="not-found-icon">✦</div>
-        <h1>Коллекция не найдена</h1>
-        <p>Ссылка недействительна или коллекция была удалена.</p>
+        <h1>Ссылка не найдена</h1>
+        <p>Ссылка недействительна или ссылка была удалена.</p>
       </div>
     </div>
 
-    <!-- ==== Лендинг коллекции ==== -->
+    <!-- ==== Лендинг ссылки ==== -->
     <div v-else class="collection-landing">
 
       <!-- Hero — фон зафиксирован во весь экран, пока не появится контент -->
@@ -37,9 +37,9 @@
         <div v-if="coverImage" class="hero-bg" :style="{ backgroundImage: `url(${coverImage})` }"></div>
         <div class="hero-overlay"></div>
         <div class="hero-content">
-          <div class="hero-eyebrow">ART CRM · КОЛЛЕКЦИЯ</div>
+          <div class="hero-eyebrow">ART CRM · ССЫЛКА</div>
           <h1 class="hero-title">{{ collection.name || 'Без названия' }}</h1>
-          <p v-if="collection.description" class="hero-description">{{ collection.description }}</p>
+          <div v-if="collection.description" class="hero-description" v-html="collection.description"></div>
           <div class="hero-meta">
             <span>{{ works.length }} {{ workWord }}</span>
             <span v-if="artistName" class="hero-dot">·</span>
@@ -54,7 +54,7 @@
         <!-- Галерея -->
         <main class="gallery-wrap">
           <div v-if="!works.length" class="empty-state">
-            <a-empty description="В этой коллекции пока нет работ" />
+            <a-empty description="В этой ссылке пока нет работ" />
           </div>
 
           <div v-else class="gallery-grid">
@@ -265,7 +265,7 @@ const heroImage = computed(() => {
   return withAvatar?.avatar?.url || ''
 })
 
-// 👉 обложка коллекции — приоритет у обложки, заданной на экране редактирования
+// 👉 обложка ссылки — приоритет у обложки, заданной на экране редактирования
 const coverImage = computed(() => collection.value?.avatar?.url || heroImage.value)
 
 const workWord = computed(() => {
@@ -356,7 +356,7 @@ const SPRING_STIFFNESS = 210         // жёсткость пружины
 const SPRING_DAMPING = 26            // демпфирование — гасит колебания без "дребезга"
 const FLING_VELOCITY_THRESHOLD = 0.5 // px/мс — выше этого порога считаем жест "фликом"
 const DISTANCE_THRESHOLD_RATIO = 0.32 // доля ширины — порог для медленного перетаскивания
-const RUBBER_BAND_FACTOR = 0.55       // сопротивление при попытке уйти за пределы коллекции
+const RUBBER_BAND_FACTOR = 0.55       // сопротивление при попытке уйти за пределы ссылки
 const SETTLE_EPSILON = 0.5            // px — порог, после которого анимация считается завершённой
 
 function clamp(value, min, max) {
@@ -371,7 +371,7 @@ function interpolate(value, inMin, inMax, outMin, outMax) {
   return outMin + (outMax - outMin) * t
 }
 
-// "Резиновое" сопротивление на краях коллекции (первая/последняя работа) —
+// "Резиновое" сопротивление на краях ссылки (первая/последняя работа) —
 // чем дальше тянут, тем меньше реальное смещение, как в iOS UIScrollView.
 function rubberBand(delta, width) {
   const sign = delta < 0 ? -1 : 1
@@ -663,29 +663,29 @@ onBeforeUnmount(() => {
   --bg-image: #0c0c0e;
   --card-bg: #1b1a1e;
   --text-title: #fbfaf7;
-  --text-body: #f2f0ec;
-  --text-muted: #cbc8c0;
-  --text-faint: #9a978f;
-  --text-dim: #6a675f;
-  --text-label: #8b887f;
+  --text-body: #f5f3ee;
+  --text-muted: #d8d5cd;
+  --text-faint: #aeaba1;
+  --text-dim: #858175;
+  --text-label: #9a9689;
   --accent: #c8b789;
   --accent-strong: #d8c896;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-soft: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.14);
+  --border-soft: rgba(255, 255, 255, 0.12);
   --hero-overlay-from: rgba(15, 15, 17, 0.35);
   --hero-overlay-mid: rgba(15, 15, 17, 0.55);
   --hero-overlay-to: #0f0f11;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-hover: 0 14px 32px rgba(0, 0, 0, 0.5);
-  --status-available-bg: rgba(87, 190, 91, 0.18);
-  --status-available-fg: #7fe08a;
-  --status-available-border: rgba(127, 224, 138, 0.4);
-  --status-sold-bg: rgba(224, 90, 90, 0.18);
-  --status-sold-fg: #f09090;
-  --status-sold-border: rgba(240, 144, 144, 0.4);
-  --status-default-bg: rgba(200, 183, 137, 0.18);
-  --status-default-fg: #d8c896;
-  --status-default-border: rgba(216, 200, 150, 0.4);
+  --status-available-bg: #2f9e46;
+  --status-available-fg: #ffffff;
+  --status-available-border: rgba(0, 0, 0, 0.18);
+  --status-sold-bg: #d64545;
+  --status-sold-fg: #ffffff;
+  --status-sold-border: rgba(0, 0, 0, 0.18);
+  --status-default-bg: #8a6d2f;
+  --status-default-fg: #ffffff;
+  --status-default-border: rgba(0, 0, 0, 0.18);
 
   min-height: 100vh;
   background: var(--bg);
@@ -700,30 +700,30 @@ onBeforeUnmount(() => {
   --bg-elevated: #ffffff;
   --bg-image: #efece4;
   --card-bg: #efece4;
-  --text-title: #211f1a;
-  --text-body: #2c2a25;
-  --text-muted: #5a564c;
-  --text-faint: #7c7669;
-  --text-dim: #a29c8c;
-  --text-label: #8a8474;
+  --text-title: #1a1814;
+  --text-body: #242219;
+  --text-muted: #4a463c;
+  --text-faint: #665f50;
+  --text-dim: #8f8874;
+  --text-label: #766f5e;
   --accent: #8a6d2f;
   --accent-strong: #6f581f;
-  --border: rgba(0, 0, 0, 0.08);
-  --border-soft: rgba(0, 0, 0, 0.07);
+  --border: rgba(0, 0, 0, 0.14);
+  --border-soft: rgba(0, 0, 0, 0.12);
   --hero-overlay-from: rgba(247, 245, 240, 0.25);
   --hero-overlay-mid: rgba(247, 245, 240, 0.55);
   --hero-overlay-to: #f7f5f0;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
   --shadow-hover: 0 14px 32px rgba(0, 0, 0, 0.16);
-  --status-available-bg: rgba(58, 150, 62, 0.12);
-  --status-available-fg: #2f8a35;
-  --status-available-border: rgba(47, 138, 53, 0.35);
-  --status-sold-bg: rgba(196, 62, 62, 0.12);
-  --status-sold-fg: #b43c3c;
-  --status-sold-border: rgba(180, 60, 60, 0.35);
-  --status-default-bg: rgba(138, 109, 47, 0.12);
-  --status-default-fg: #8a6d2f;
-  --status-default-border: rgba(138, 109, 47, 0.35);
+  --status-available-bg: #2f9e46;
+  --status-available-fg: #ffffff;
+  --status-available-border: rgba(0, 0, 0, 0.18);
+  --status-sold-bg: #d64545;
+  --status-sold-fg: #ffffff;
+  --status-sold-border: rgba(0, 0, 0, 0.18);
+  --status-default-bg: #8a6d2f;
+  --status-default-fg: #ffffff;
+  --status-default-border: rgba(0, 0, 0, 0.18);
 }
 
 /* ==== Переключатель темы ==== */
@@ -768,7 +768,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   padding: 0 76px 0 64px;
-  border-bottom: 1px solid transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
   background: transparent;
   color: #ffffff;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5), 0 1px 4px rgba(0, 0, 0, 0.4);
@@ -848,7 +848,7 @@ onBeforeUnmount(() => {
 .landing.light .hero-bg {
   /* Затемняем так же сильно, как в тёмной теме — белый текст должен
      одинаково хорошо читаться независимо от переключателя темы */
-  filter: blur(1px) brightness(0.72) saturate(1.05);
+  filter: blur(1px) brightness(0.82) saturate(1.05);
 }
 
 .hero-overlay {
@@ -974,6 +974,28 @@ onBeforeUnmount(() => {
   animation-delay: 0.3s;
 }
 
+.hero-description :deep(p) {
+  margin: 0 0 12px;
+}
+
+.hero-description :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.hero-description :deep(ul),
+.hero-description :deep(ol) {
+  margin: 0 0 12px;
+  padding-left: 22px;
+  text-align: left;
+}
+
+.hero-description :deep(blockquote) {
+  margin: 0 0 12px;
+  padding-left: 14px;
+  border-left: 3px solid currentColor;
+  opacity: 0.85;
+}
+
 .hero-meta {
   font-size: 15px;
   letter-spacing: 0.12em;
@@ -990,7 +1012,7 @@ onBeforeUnmount(() => {
 
 /* ==== Gallery ==== */
 .gallery-wrap {
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 56px 32px 40px;
 }
@@ -1001,43 +1023,29 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
-/* Editorial single-column layout: одна работа за раз, во всю ширину,
-   без обрезки — как в каталоге частного показа */
+/* Сетка: 3 работы в ряд */
 .gallery-grid {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 48px 20px;
 }
 
 .art-card {
-  width: 100%;
-  max-width: 580px;
+  width: 90%;
   cursor: pointer;
-  padding: 64px 0;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.art-card:first-child {
-  padding-top: 0;
-}
-
-.art-card:last-child {
-  border-bottom: none;
 }
 
 .art-image-wrap {
   position: relative;
-  width: 100%;
+  width: 90%;
   background: var(--card-bg);
 }
 
 .art-image {
   display: block;
   width: 100%;
-  height: auto;
-  max-height: 78vh;
-  object-fit: contain;
-  margin: 0 auto;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
   background: var(--card-bg);
   transition: opacity 0.25s ease;
 }
@@ -1048,7 +1056,7 @@ onBeforeUnmount(() => {
 
 .art-placeholder {
   width: 100%;
-  height: 320px;
+  aspect-ratio: 4 / 5;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1071,8 +1079,8 @@ onBeforeUnmount(() => {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   border-radius: 20px;
-  backdrop-filter: blur(4px);
   font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .status-available {
@@ -1328,6 +1336,19 @@ onBeforeUnmount(() => {
 }
 
 /* ==== Адаптив ==== */
+@media (max-width: 900px) {
+  .gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  .gallery-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 760px) {
   .theme-toggle {
     top: 9px;
@@ -1348,10 +1369,6 @@ onBeforeUnmount(() => {
 
   .gallery-wrap {
     padding: 40px 18px 24px;
-  }
-
-  .art-card {
-    padding: 40px 0;
   }
 
   .work-modal-content {

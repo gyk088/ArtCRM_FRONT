@@ -36,6 +36,13 @@
             <PictureOutlined />
           </div>
         </template>
+        <template v-else-if="column.dataIndex === 'name'">
+          <span>{{ record.name }}</span>
+          <span v-if="isImportedWork(record.id)" class="imported-pill" title="Добавлено из импортированной ссылки">
+            <ImportOutlined />
+            Импорт
+          </span>
+        </template>
         <template v-else-if="column.dataIndex === 'artist'">
           {{ getArtistName(record.artist) }}
         </template>
@@ -71,7 +78,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { PictureOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useArtWork } from '@/stores/artWork.js'
@@ -102,6 +109,16 @@ const filterLocation = ref(null)
 const filterSeria = ref(null)
 const filterMedia = ref(null)
 const filterStatus = ref(null)
+
+// Работы, добавленные автоматически из импортированной ссылки — подсвечиваем их в таблице
+const importedWorkIds = ref([])
+onMounted(() => {
+  importedWorkIds.value = JSON.parse(localStorage.getItem('importedWorkIds') || '[]')
+})
+
+function isImportedWork(id) {
+  return importedWorkIds.value.includes(id)
+}
 
 // Хранилища для маппинга ID -> название
 const artistMap = ref({})
@@ -360,7 +377,7 @@ const createCollection = () => {
   const selectedItems = artWorkStore.listArtWorks.filter(item =>
     selectedRowKeys.value.includes(item.id)
   )
-  console.log('Создаем коллекцию из выбранных работ:', selectedItems)
+  console.log('Создаем ссылку из выбранных работ:', selectedItems)
 }
 
 // Инициализация
@@ -513,6 +530,23 @@ onMounted(async () => {
   background: rgba(200, 183, 137, 0.06) !important;
 }
 
+.imported-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  vertical-align: middle;
+}
+
 .custom-table :deep(.ant-table-placeholder .ant-table-cell) {
   background: transparent;
   color: var(--text-faint);
@@ -520,6 +554,45 @@ onMounted(async () => {
 
 .custom-table :deep(.ant-empty-description) {
   color: var(--text-faint);
+}
+
+.custom-table :deep(.ant-pagination-item) {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+}
+
+.custom-table :deep(.ant-pagination-item a) {
+  color: var(--text-body);
+}
+
+.custom-table :deep(.ant-pagination-item-active) {
+  border-color: var(--accent) !important;
+  background: var(--bg-elevated);
+}
+
+.custom-table :deep(.ant-pagination-item-active a) {
+  color: var(--accent) !important;
+}
+
+.custom-table :deep(.ant-pagination-item:hover) {
+  border-color: var(--accent) !important;
+}
+
+.custom-table :deep(.ant-pagination-item:hover a) {
+  color: var(--accent) !important;
+}
+
+.custom-table :deep(.ant-pagination-prev .ant-pagination-item-link),
+.custom-table :deep(.ant-pagination-next .ant-pagination-item-link) {
+  color: var(--text-muted);
+  border-color: var(--border);
+  background: var(--bg-elevated);
+}
+
+.custom-table :deep(.ant-pagination-prev:hover .ant-pagination-item-link),
+.custom-table :deep(.ant-pagination-next:hover .ant-pagination-item-link) {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .custom-table :deep(.ant-checkbox-inner) {

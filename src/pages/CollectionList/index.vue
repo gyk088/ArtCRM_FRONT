@@ -4,7 +4,7 @@
       <div class="header-heading">
         <h3 class="page-title">Мои Ссылки</h3>
         <p class="page-subtitle">
-          {{ collectionList.length ? `Коллекций: ${collectionList.length}` : 'Здесь появятся ваши коллекции' }}
+          {{ collectionList.length ? `Ссылок: ${collectionList.length}` : 'Здесь появятся ваши ссылки' }}
         </p>
       </div>
       <div class="header-actions">
@@ -26,7 +26,7 @@
     <div v-if="isImportOpen" class="import-wrapper">
       <a-input
         v-model:value="importLink"
-        placeholder="Вставьте ссылку на коллекцию"
+        placeholder="Вставьте ссылку"
         class="import-link-input"
         autofocus
         @pressEnter="importCollection"
@@ -35,8 +35,31 @@
       <a-button class="import-cancel-btn" @click="isImportOpen = false">Отмена</a-button>
     </div>
 
-    <div v-if="collectionList.length" class="collection-grid">
-      <a-card v-for="collection in collectionList" :key="collection.id" class="collection-card"
+    <div class="filters-panel">
+      <a-input
+        v-model:value="searchQuery"
+        placeholder="Поиск по названию"
+        allow-clear
+        style="width: 240px"
+        class="name-search"
+      >
+        <template #prefix>
+          <SearchOutlined />
+        </template>
+      </a-input>
+      <a-select
+        v-model:value="filterArtist"
+        placeholder="Художник"
+        allow-clear
+        style="width: 220px"
+        :options="artistOptions"
+        class="artist-filter"
+      />
+    </div>
+
+    <div v-if="filteredCollectionList.length" class="collection-grid">
+      <a-card v-for="(collection, index) in filteredCollectionList" :key="collection.imported ? `imported-${collection.id}-${index}` : collection.id" class="collection-card"
+        :class="{ 'collection-card--imported': collection.imported }"
         hoverable @click="openEditPage(collection)">
         <template #cover>
           <div class="card-cover">
@@ -44,13 +67,17 @@
             <div v-else class="cover-placeholder">
               <PictureOutlined />
             </div>
+            <span v-if="collection.imported" class="imported-badge">
+              <ImportOutlined />
+              Импортировано
+            </span>
           </div>
         </template>
 
         <h4 class="card-title">{{ collection.name || 'Без названия' }}</h4>
 
         <p class="collection-text" :class="{ 'collection-text--empty': !collection.description }">
-          {{ collection.description || 'Без описания' }}
+          {{ descriptionPreview(collection.description) || 'Без описания' }}
         </p>
 
         <div class="card-meta">
@@ -65,7 +92,7 @@
             </template>
             Копировать ссылку
           </a-button>
-          <a-popconfirm title="Удалить коллекцию?" ok-text="Да" cancel-text="Нет"
+          <a-popconfirm title="Удалить ссылку?" ok-text="Да" cancel-text="Нет"
             @confirm.stop="deleteСollection(collection.id)">
             <a-tooltip title="Удалить">
               <a-button type="text" danger class="delete-btn" @click.stop>
@@ -79,25 +106,36 @@
       </a-card>
     </div>
 
+    <div v-else-if="collectionList.length" class="empty-state">
+      <FolderOpenOutlined class="empty-icon" />
+      <p class="empty-title">Ничего не найдено</p>
+      <p class="empty-hint">Попробуйте изменить поиск или фильтр по художнику</p>
+      <a-button class="import-toggle-btn" @click="filterArtist = null; searchQuery = ''">Сбросить фильтр</a-button>
+    </div>
+
     <div v-else class="empty-state">
       <FolderOpenOutlined class="empty-icon" />
-      <p class="empty-title">Пока нет ни одной коллекции</p>
-      <p class="empty-hint">Создайте первую коллекцию или импортируйте её по ссылке</p>
+      <p class="empty-title">Пока нет ни одной ссылки</p>
+      <p class="empty-hint">Создайте первую ссылку или импортируйте её по ссылке</p>
       <a-button type="primary" class="create-btn" @click="openEditPage">
         <template #icon>
           <PlusOutlined />
         </template>
-        Создать коллекцию
+        Создать ссылку
       </a-button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { ImportOutlined, CopyOutlined, DeleteOutlined, PlusOutlined, FolderOpenOutlined, PictureOutlined } from '@ant-design/icons-vue'
+import { ImportOutlined, CopyOutlined, DeleteOutlined, PlusOutlined, FolderOpenOutlined, PictureOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { htmlToPlainText } from '@/utils/richText.js'
+import { useArtWork } from '@/stores/artWork.js'
+import { useArtist } from '@/stores/artist.js'
+import { getUser } from '@/services/auth.js'
 
 // === 1. Загружаем из localStorage при старте ===
 const collectionList = ref([]);
@@ -105,12 +143,62 @@ const router = useRouter()
 const importLink = ref('')
 const isImportOpen = ref(false)
 
-onMounted(() => {
+const artWorkStore = useArtWork()
+const artistStore = useArtist()
+const filterArtist = ref(null)
+const searchQuery = ref('')
+
+onMounted(async () => {
   const saved = localStorage.getItem('collectionList');
   if (saved) collectionList.value = JSON.parse(saved);
+
+  try {
+    await Promise.all([
+      artWorkStore.getListArtWorks(),
+      artistStore.getListArtists()
+    ])
+  } catch (error) {
+    console.error('Error loading directories:', error)
+  }
 });
 
-// Достаём ID коллекции из вставленной ссылки (или принимаем чистый id)
+// Опции фильтра — художники
+const artistOptions = computed(() => {
+  return artistStore.listArtists.map(artist => ({
+    label: artist.name,
+    value: artist.id
+  }))
+})
+
+// Ссылки, отфильтрованные по названию и художнику: у коллекции нет своего
+// поля «художник» — она группирует работы, поэтому смотрим, есть ли среди
+// её работ хотя бы одна принадлежащая выбранному художнику.
+const filteredCollectionList = computed(() => {
+  let result = collectionList.value
+
+  const query = searchQuery.value.trim().toLowerCase()
+  if (query) {
+    result = result.filter(collection => (collection.name || '').toLowerCase().includes(query))
+  }
+
+  if (filterArtist.value) {
+    result = result.filter(collection => {
+      const workIds = collection.works || []
+      return workIds.some(workId => {
+        const work = artWorkStore.listArtWorks.find(w => w.id === workId)
+        return work && work.artist === filterArtist.value
+      })
+    })
+  }
+
+  return result
+})
+
+function descriptionPreview(description) {
+  return htmlToPlainText(description)
+}
+
+// Достаём ID ссылки из вставленной ссылки (или принимаем чистый id)
 function extractCollectionId(link) {
   const trimmed = link.trim()
   try {
@@ -123,8 +211,45 @@ function extractCollectionId(link) {
   }
 }
 
-// Импорт коллекции по ссылке — добавляем её карточку в "Мои Ссылки"
-const importCollection = () => {
+// Копируем работы из импортированной ссылки в собственный каталог работ
+// (POST на бэкенд), чтобы они реально появились в «Мои работы», и запоминаем
+// их id в localStorage — по этому списку UserPictures подсвечивает импортированные строки.
+async function importWorksFromCollection(workIds) {
+  const importedIds = JSON.parse(localStorage.getItem('importedWorkIds') || '[]')
+  let addedCount = 0
+
+  for (const workId of workIds) {
+    const sourceWork = artWorkStore.listArtWorks.find(w => w.id === workId)
+    if (!sourceWork) continue
+
+    const created = await artWorkStore.createArtWork({
+      user_id: getUser()?.id,
+      name: sourceWork.name,
+      technique: sourceWork.technique,
+      size: sourceWork.size,
+      year: sourceWork.year,
+      description: sourceWork.description,
+      location: sourceWork.location,
+      seria: sourceWork.seria,
+      media: sourceWork.media,
+      status: sourceWork.status,
+      artist: sourceWork.artist,
+      price: sourceWork.price,
+      avatar_id: sourceWork.avatar?.id || null,
+    })
+
+    if (created?.id) {
+      importedIds.push(created.id)
+      addedCount++
+    }
+  }
+
+  localStorage.setItem('importedWorkIds', JSON.stringify(importedIds))
+  return addedCount
+}
+
+// Импорт ссылки по ссылке — добавляем её карточку в "Мои Ссылки"
+const importCollection = async () => {
   if (!importLink.value.trim()) {
     message.warning('Пожалуйста, введите ссылку')
     return
@@ -142,13 +267,18 @@ const importCollection = () => {
   if (!found) {
     message.error('Коллекция по этой ссылке не найдена')
     return
-  } else {
-    collectionList.value.push(found)
-    message.success('Коллекция добавлена в список')
-    isImportOpen.value = false
   }
 
+  collectionList.value.push({ ...found, imported: true })
+  isImportOpen.value = false
   importLink.value = ''
+
+  const addedCount = await importWorksFromCollection(found.works || [])
+  if (addedCount > 0) {
+    message.success(`Коллекция добавлена, работ добавлено в «Мои работы»: ${addedCount}`)
+  } else {
+    message.success('Коллекция добавлена в список')
+  }
 }
 
 // Функция копирования ссылки на коллекцию
@@ -249,6 +379,63 @@ function pluralizeWorks(count) {
   color: var(--text-faint);
 }
 
+.filters-panel {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.name-search :deep(.ant-input) {
+  background: var(--bg-elevated) !important;
+  color: var(--text-body) !important;
+}
+
+.name-search :deep(.ant-input-affix-wrapper) {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  border-radius: 20px !important;
+}
+
+.name-search :deep(.ant-input-affix-wrapper):hover,
+.name-search :deep(.ant-input-affix-wrapper):focus-within {
+  border-color: var(--accent) !important;
+}
+
+.name-search :deep(.ant-input-prefix) {
+  color: var(--text-faint) !important;
+  margin-right: 6px;
+}
+
+.name-search :deep(.ant-input-clear-icon) {
+  color: var(--text-faint) !important;
+}
+
+.artist-filter :deep(.ant-select-selector) {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-body) !important;
+  border-radius: 20px !important;
+}
+
+.artist-filter :deep(.ant-select-selection-placeholder),
+.artist-filter :deep(.ant-select-selection-item) {
+  color: var(--text-muted) !important;
+}
+
+.artist-filter :deep(.ant-select-arrow) {
+  color: var(--text-faint) !important;
+}
+
+.artist-filter :deep(.ant-select-clear) {
+  background: var(--bg-elevated) !important;
+  color: var(--text-faint) !important;
+}
+
+.artist-filter:hover :deep(.ant-select-selector) {
+  border-color: var(--accent) !important;
+}
+
 .collection-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -275,16 +462,39 @@ function pluralizeWorks(count) {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
 }
 
+.collection-card--imported {
+  border: 1px solid var(--accent) !important;
+  box-shadow: 0 0 0 1px rgba(138, 109, 47, 0.25);
+}
+
 .collection-card:hover .cover-img {
   transform: scale(1.05);
 }
 
-/* === Обложка коллекции === */
+/* === Обложка ссылки === */
 .card-cover {
+  position: relative;
   aspect-ratio: 4 / 3;
   overflow: hidden;
   background: var(--card-bg);
   border-bottom: 1px solid var(--border-soft);
+}
+
+.imported-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .cover-img {

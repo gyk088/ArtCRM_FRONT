@@ -13,11 +13,103 @@
             <div class="section-heading">Основная информация</div>
 
             <a-form-item label="Название" name="name">
-              <a-input v-model:value="form.name" placeholder="Например, «Осенняя коллекция»" class="fixed-input" />
+              <a-input v-model:value="form.name" placeholder="Например, «Осенняя ссылка" class="fixed-input" />
             </a-form-item>
 
             <a-form-item label="Описание">
-              <a-textarea v-model:value="form.description" placeholder="Коротко расскажите о коллекции" class="fixed-input description-input" />
+              <div class="rich-editor-wrap">
+                <div v-if="descriptionEditor" class="editor-toolbar">
+                  <button
+                    type="button"
+                    class="toolbar-btn"
+                    :class="{ active: descriptionEditor.isActive('bold') }"
+                    title="Жирный"
+                    @click="descriptionEditor.chain().focus().toggleBold().run()"
+                  >
+                    <BoldOutlined />
+                  </button>
+                  <button
+                    type="button"
+                    class="toolbar-btn"
+                    :class="{ active: descriptionEditor.isActive('italic') }"
+                    title="Курсив"
+                    @click="descriptionEditor.chain().focus().toggleItalic().run()"
+                  >
+                    <ItalicOutlined />
+                  </button>
+                  <button
+                    type="button"
+                    class="toolbar-btn"
+                    :class="{ active: descriptionEditor.isActive('underline') }"
+                    title="Подчёркнутый"
+                    @click="descriptionEditor.chain().focus().toggleUnderline().run()"
+                  >
+                    <UnderlineOutlined />
+                  </button>
+                  <button
+                    type="button"
+                    class="toolbar-btn"
+                    :class="{ active: descriptionEditor.isActive('strike') }"
+                    title="Зачёркнутый"
+                    @click="descriptionEditor.chain().focus().toggleStrike().run()"
+                  >
+                    <StrikethroughOutlined />
+                  </button>
+
+                  <span class="toolbar-divider" />
+
+                  <button
+                    type="button"
+                    class="toolbar-btn"
+                    :class="{ active: descriptionEditor.isActive('bulletList') }"
+                    title="Маркированный список"
+                    @click="descriptionEditor.chain().focus().toggleBulletList().run()"
+                  >
+                    <UnorderedListOutlined />
+                  </button>
+                  <button
+                    type="button"
+                    class="toolbar-btn"
+                    :class="{ active: descriptionEditor.isActive('orderedList') }"
+                    title="Нумерованный список"
+                    @click="descriptionEditor.chain().focus().toggleOrderedList().run()"
+                  >
+                    <OrderedListOutlined />
+                  </button>
+                  <button
+                    type="button"
+                    class="toolbar-btn"
+                    :class="{ active: descriptionEditor.isActive('blockquote') }"
+                    title="Цитата"
+                    @click="descriptionEditor.chain().focus().toggleBlockquote().run()"
+                  >
+                    <BlockOutlined />
+                  </button>
+
+                  <span class="toolbar-divider" />
+
+                  <button
+                    type="button"
+                    class="toolbar-btn"
+                    title="Отменить"
+                    :disabled="!descriptionEditor.can().undo()"
+                    @click="descriptionEditor.chain().focus().undo().run()"
+                  >
+                    <UndoOutlined />
+                  </button>
+                  <button
+                    type="button"
+                    class="toolbar-btn"
+                    title="Повторить"
+                    :disabled="!descriptionEditor.can().redo()"
+                    @click="descriptionEditor.chain().focus().redo().run()"
+                  >
+                    <RedoOutlined />
+                  </button>
+                </div>
+
+                <EditorContent :editor="descriptionEditor" class="rich-editor" />
+              </div>
             </a-form-item>
           </section>
         </a-form>
@@ -25,7 +117,7 @@
 
       <!-- Правая колонка — ОБЛОЖКА -->
       <div class="right-column">
-        <a-form-item label="Обложка коллекции" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
+        <a-form-item label="Обложка ссылки" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
           <div v-if="!form.avatar" class="upload-trigger" @click="openFilesModal">
             <div class="upload-placeholder">
               <PlusOutlined />
@@ -64,6 +156,9 @@
               <PictureOutlined />
             </div>
           </template>
+          <template v-else-if="column.dataIndex === 'artist'">
+            {{ getArtistName(record.artist) }}
+          </template>
           <template v-else-if="column.dataIndex === 'seria'">
             {{ getSeriaName(record.seria) }}
           </template>
@@ -71,9 +166,23 @@
             {{ getStatusName(record.status) }}
           </template>
           <template v-else-if="column.dataIndex === 'actions'">
-            <a-button type="link" danger @click="removeSelectedWork(record.id)">
-              Удалить
-            </a-button>
+            <a-tooltip title="Редактировать">
+              <a-button type="text" class="edit-row-btn" @click.stop="openEditWork(record)">
+                <template #icon>
+                  <EditOutlined />
+                </template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="Удалить">
+              <a-button type="text" danger class="delete-row-btn" @click.stop="removeSelectedWork(record.id)">
+                <template #icon>
+                  <DeleteOutlined />
+                </template>
+              </a-button>
+            </a-tooltip>
+          </template>
+          <template v-else>
+            {{ record[column.dataIndex] }}
           </template>
         </template>
       </a-table>
@@ -134,13 +243,33 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { PictureOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import {
+  PictureOutlined,
+  PlusOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  BoldOutlined,
+  ItalicOutlined,
+  UnderlineOutlined,
+  StrikethroughOutlined,
+  UnorderedListOutlined,
+  OrderedListOutlined,
+  BlockOutlined,
+  UndoOutlined,
+  RedoOutlined,
+} from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
+import { useEditor, EditorContent } from '@tiptap/vue-3'
+import StarterKit from '@tiptap/starter-kit'
+import Underline from '@tiptap/extension-underline'
+import Placeholder from '@tiptap/extension-placeholder'
+import { toEditableHtml } from '@/utils/richText.js'
 import { useArtWork } from '@/stores/artWork.js'
 import { useStatuses } from '@/stores/statuses.js'
 import { useSerias } from '@/stores/seria.js'
+import { useArtist } from '@/stores/artist.js'
 import FileUploader from "@/components/FileUploader.vue"
 
 const route = useRoute()
@@ -149,6 +278,7 @@ const router = useRouter()
 const artWorkStore = useArtWork()
 const statusesStore = useStatuses()
 const seriasStore = useSerias()
+const artistStore = useArtist()
 
 const isWorksModalOpen = ref(false)
 const worksTable = ref([])
@@ -158,7 +288,7 @@ const formRef = ref(null)
 const isNewCollection = computed(() => route.params.id === 'new')
 
 const rules = {
-  name: [{ required: true, message: 'Введите название коллекции', trigger: 'blur' }]
+  name: [{ required: true, message: 'Введите название ссылки', trigger: 'blur' }]
 }
 
 const form = reactive({
@@ -169,25 +299,42 @@ const form = reactive({
   works: []
 })
 
-// === Инициализация формы ===
-onMounted(async () => {
+// === Инициализация формы (синхронно, чтобы редактор получил готовый контент) ===
+if (route.params.id && route.params.id !== 'new') {
   const storedCollections = JSON.parse(localStorage.getItem('collectionList') || '[]')
-
-  if (route.params.id && route.params.id !== 'new') {
-    const collectionId = Number(route.params.id)
-    const collection = storedCollections.find(c => c.id === collectionId)
-    if (collection) {
-      Object.assign(form, collection)
-    }
-  } else {
-    // Для новой коллекции сразу создаём id
-    form.id = Date.now()
+  const collectionId = Number(route.params.id)
+  const collection = storedCollections.find(c => c.id === collectionId)
+  if (collection) {
+    Object.assign(form, collection)
+    form.description = toEditableHtml(form.description)
   }
+} else {
+  // Для новой ссылки сразу создаём id
+  form.id = Date.now()
+}
 
+const descriptionEditor = useEditor({
+  content: form.description,
+  extensions: [
+    StarterKit,
+    Underline,
+    Placeholder.configure({ placeholder: 'Коротко расскажите о ссылке' }),
+  ],
+  onUpdate: ({ editor: instance }) => {
+    form.description = instance.getHTML()
+  },
+})
+
+onBeforeUnmount(() => {
+  descriptionEditor.value?.destroy()
+})
+
+onMounted(async () => {
   await Promise.all([
     loadWorks(),
     statusesStore.getListStatuses(),
-    seriasStore.getListSerias()
+    seriasStore.getListSerias(),
+    artistStore.getListArtists()
   ])
 
   // Загружаем выбранные работы
@@ -214,13 +361,19 @@ function getStatusName(statusId) {
   return status ? status.name : statusId
 }
 
+function getArtistName(artistId) {
+  if (!artistId) return ''
+  const artist = artistStore.listArtists.find(a => a.id === artistId)
+  return artist ? artist.name : artistId
+}
+
 function getSeriaName(seriaId) {
   if (!seriaId) return ''
   const seria = seriasStore.listSerias.find(s => s.id === seriaId)
   return seria ? seria.name : seriaId
 }
 
-// === Обложка коллекции ===
+// === Обложка ссылки ===
 function openFilesModal() {
   isFilesModalOpen.value = true
 }
@@ -259,11 +412,14 @@ const columns = [
 // выбранные работы
 const selectedWorksColumns = [
   { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: 100 },
-  { title: "Название", dataIndex: "name", key: "name", width: 300 },
-  { title: 'Серия', dataIndex: 'seria', key: 'seria', width: 200 },
-  { title: 'Статус', dataIndex: 'status', key: 'status', width: 200 },
-  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 200 },
-  { title: "Действия", dataIndex: "actions", key: "actions" }
+  { title: "Название", dataIndex: "name", key: "name", width: 220 },
+  { title: 'Художник', dataIndex: 'artist', key: 'artist', width: 160 },
+  { title: 'Техника', dataIndex: 'technique', key: 'technique', width: 140 },
+  { title: 'Год', dataIndex: 'year', key: 'year', width: 90 },
+  { title: 'Серия', dataIndex: 'seria', key: 'seria', width: 160 },
+  { title: 'Статус', dataIndex: 'status', key: 'status', width: 160 },
+  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 160 },
+  { title: "Действия", dataIndex: "actions", key: "actions", width: 70 }
 ]
 
 function openWorksModal() {
@@ -291,6 +447,10 @@ function removeSelectedWork(id) {
   saveSelectedWorksToStorage()
 }
 
+function openEditWork(record) {
+  router.push({ name: 'edit-work', params: { id: record.id } })
+}
+
 const addSelectedWorks = () => {
   form.works = [...selectedRowKeys.value]
   saveSelectedWorksToStorage()
@@ -304,7 +464,7 @@ function saveSelectedWorksToStorage() {
   localStorage.setItem('selectedWorks', JSON.stringify(allSelected))
 }
 
-// сохраняем коллекцию
+// сохраняем ссылку
 const saveChanges = async () => {
   try {
     await formRef.value.validate()
@@ -420,12 +580,106 @@ function goBack() {
 .fixed-input:hover {
   border-color: var(--accent);
 }
-.description-input {
-  height: 100px;
-  padding-top: 4px;
+
+/* === Панель форматирования описания === */
+.rich-editor-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  overflow: hidden;
 }
 
-/* === Обложка коллекции === */
+.rich-editor-wrap:focus-within {
+  border-color: var(--accent);
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--card-bg);
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.toolbar-btn {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--accent);
+}
+
+.toolbar-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.rich-editor {
+  padding: 10px 12px;
+  min-height: 100px;
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.rich-editor :deep(.ProseMirror) {
+  outline: none;
+  min-height: 80px;
+}
+
+.rich-editor :deep(p) {
+  margin: 0 0 10px;
+}
+
+.rich-editor :deep(ul),
+.rich-editor :deep(ol) {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.rich-editor :deep(blockquote) {
+  margin: 0 0 10px;
+  padding-left: 12px;
+  border-left: 3px solid var(--accent);
+  color: var(--text-muted);
+}
+
+.rich-editor :deep(p.is-editor-empty:first-child::before) {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+/* === Обложка ссылки === */
 .images-item {
   display: block;
 }
@@ -582,6 +836,63 @@ function goBack() {
 
 .works-section :deep(.ant-empty-description) {
   color: var(--text-faint);
+}
+
+.works-section :deep(.ant-pagination-item) {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+}
+
+.works-section :deep(.ant-pagination-item a) {
+  color: var(--text-body);
+}
+
+.works-section :deep(.ant-pagination-item-active) {
+  border-color: var(--accent) !important;
+  background: var(--bg-elevated);
+}
+
+.works-section :deep(.ant-pagination-item-active a) {
+  color: var(--accent) !important;
+}
+
+.works-section :deep(.ant-pagination-item:hover) {
+  border-color: var(--accent) !important;
+}
+
+.works-section :deep(.ant-pagination-item:hover a) {
+  color: var(--accent) !important;
+}
+
+.works-section :deep(.ant-pagination-prev .ant-pagination-item-link),
+.works-section :deep(.ant-pagination-next .ant-pagination-item-link) {
+  color: var(--text-muted);
+  border-color: var(--border);
+  background: var(--bg-elevated);
+}
+
+.works-section :deep(.ant-pagination-prev:hover .ant-pagination-item-link),
+.works-section :deep(.ant-pagination-next:hover .ant-pagination-item-link) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.edit-row-btn {
+  color: var(--accent) !important;
+}
+
+.edit-row-btn:hover {
+  color: #fff !important;
+  background-color: var(--accent) !important;
+}
+
+.delete-row-btn {
+  color: #b43c3c !important;
+}
+
+.delete-row-btn:hover {
+  color: #fff !important;
+  background-color: #b43c3c !important;
 }
 
 /* Контейнер для кнопок */

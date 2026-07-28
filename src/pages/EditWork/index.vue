@@ -197,7 +197,7 @@
             </section>
 
             <section class="form-section">
-              <div class="section-heading">Стоимость и коллекции</div>
+              <div class="section-heading">Стоимость</div>
 
               <div class="field-row">
                 <a-form-item label="Стоимость" class="field-half">

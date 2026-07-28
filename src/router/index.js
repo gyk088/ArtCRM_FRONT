@@ -71,13 +71,13 @@ const router = createRouter({
         name: 'collection',
         component: () => import('@/pages/CollectionList/index.vue'),
         meta: {
-            title: '<Мои коллекции>',
+            title: '<Мои ссылки>',
           },
       }, {
           path: '/home/collection/:id',
           name: 'edit-collection',
           component: () => import('@/pages/Collection/index.vue'),
-          meta: { title: 'Редактировать коллекцию' },
+          meta: { title: 'Редактировать ссылку' },
         },
     ],
     },
@@ -86,7 +86,7 @@ const router = createRouter({
       name: 'collection-landing',
       component: () => import('@/pages/CollectionLanding/index.vue'),
       meta: {
-        title: 'Коллекция',
+        title: 'Ссылка',
         layout: 'public',
       },
     },
