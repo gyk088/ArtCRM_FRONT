@@ -3,10 +3,11 @@
 
     <!-- 🧭 Панель: путь / новая папка + поиск -->
     <div class="toolbar">
-      <div v-if="currentFolder" class="path">
-        <a-button type="text" size="small" class="back-btn" @click="openFolder(null)">
+      <div class="path">
+        <a-button v-if="currentFolder" type="text" size="small" class="back-btn" @click="goBack">
           <ArrowLeftOutlined />
         </a-button>
+
         <span
           class="path-crumb"
           :class="{ 'drag-over': dragOverTarget === 'root' }"
@@ -15,11 +16,23 @@
           @dragleave="handleDragLeaveFolder('root')"
           @drop="handleDropOnFolder('root')"
         >Все файлы</span>
-        <span class="path-sep">/</span>
-        <span class="path-current">{{ currentFolder.name }}</span>
+
+        <template v-for="(crumb, idx) in folderPath" :key="crumb.id">
+          <span class="path-sep">/</span>
+          <span
+            v-if="idx < folderPath.length - 1"
+            class="path-crumb"
+            :class="{ 'drag-over': dragOverTarget === crumb.id }"
+            @click="openFolder(crumb.id)"
+            @dragover.prevent="handleDragOverFolder(crumb.id)"
+            @dragleave="handleDragLeaveFolder(crumb.id)"
+            @drop="handleDropOnFolder(crumb.id)"
+          >{{ crumb.name }}</span>
+          <span v-else class="path-current">{{ crumb.name }}</span>
+        </template>
       </div>
 
-      <a-button v-else type="dashed" class="new-folder-btn" @click="showNewFolderForm = true">
+      <a-button type="dashed" class="new-folder-btn" @click="showNewFolderForm = true">
         <FolderAddOutlined /> Новая папка
       </a-button>
 
@@ -91,12 +104,12 @@
     </template>
 
     <!-- 📁 Папки -->
-    <template v-if="!currentFolder && folders.length">
+    <template v-if="childFolders.length">
       <div class="section-title">Папки</div>
 
       <div class="folders-grid">
         <div
-          v-for="folder in folders"
+          v-for="folder in childFolders"
           :key="folder.id"
           class="folder-card"
           :class="{ 'drag-over': dragOverTarget === folder.id }"
@@ -234,6 +247,22 @@ const currentFolder = computed(() =>
   folders.value.find(f => f.id === fileStore.currentFolderId) || null
 )
 
+// Дочерние папки текущего уровня (null — корень)
+const childFolders = computed(() =>
+  folders.value.filter(f => (f.parent_id || null) === fileStore.currentFolderId)
+)
+
+// Цепочка папок от корня до текущей — для хлебных крошек
+const folderPath = computed(() => {
+  const path = []
+  let node = currentFolder.value
+  while (node) {
+    path.unshift(node)
+    node = node.parent_id ? folders.value.find(f => f.id === node.parent_id) : null
+  }
+  return path
+})
+
 const filteredFiles = computed(() => {
   const inCurrentFolder = files.value.filter(
     f => (f.folder_id || null) === fileStore.currentFolderId
@@ -254,6 +283,10 @@ const openFolder = (folderId) => {
   fileStore.setCurrentFolder(folderId)
 }
 
+const goBack = () => {
+  openFolder(currentFolder.value?.parent_id || null)
+}
+
 const handleCreateFolder = async () => {
   const name = newFolderName.value.trim()
 
@@ -262,7 +295,7 @@ const handleCreateFolder = async () => {
     return
   }
 
-  const folder = await fileStore.createFolder(name)
+  const folder = await fileStore.createFolder(name, fileStore.currentFolderId)
   if (!folder) return
 
   newFolderName.value = ""
@@ -279,7 +312,7 @@ const handleDeleteFolder = (folder) => {
   Modal.confirm({
     title: "Удалить папку?",
     icon: () => h(ExclamationCircleOutlined),
-    content: `Папка «${folder.name}» будет удалена. Файлы внутри останутся, но окажутся вне папок.`,
+    content: `Папка «${folder.name}» и все вложенные папки будут удалены. Файлы внутри останутся, но окажутся вне папок.`,
     okText: "Удалить",
     okType: "danger",
     cancelText: "Отмена",

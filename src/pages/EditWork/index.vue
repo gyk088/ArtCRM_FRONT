@@ -256,7 +256,7 @@
 
               <!-- Галерея превью -->
               <div v-if="form.images.length" class="preview-gallery">
-                <div v-for="(img, index) in form.images" :key="img.uid" class="image-wrapper">
+                <div v-for="(img, index) in form.images" :key="img.id" class="image-wrapper">
                   <div class="image-container">
                     <img :src="img.url" class="preview-image" @click="openViewer(index)" />
                     <button class="delete-btn" @click.stop="removeImage(index)">×</button>

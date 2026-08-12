@@ -96,9 +96,9 @@ export const useFile = defineStore('file', {
       }
     },
 
-    async createFolder(name) {
+    async createFolder(name, parentId = null) {
       try {
-        const resp = await apiClient.post('/api/v1/file/folder', { name })
+        const resp = await apiClient.post('/api/v1/file/folder', { name, parent_id: parentId })
         this.folders.push(resp.data)
         notifyServerSuccess('Папка создана')
         return resp.data
@@ -115,14 +115,27 @@ export const useFile = defineStore('file', {
       try {
         await apiClient.delete(`/api/v1/file/folder/${folderId}`)
 
-        this.folders = this.folders.filter(f => f.id !== folderId)
+        // Бэкенд удаляет папку каскадно вместе со всеми вложенными — синхронизируем локально
+        const removedIds = new Set([folderId])
+        let addedMore = true
+        while (addedMore) {
+          addedMore = false
+          for (const f of this.folders) {
+            if (removedIds.has(f.parent_id) && !removedIds.has(f.id)) {
+              removedIds.add(f.id)
+              addedMore = true
+            }
+          }
+        }
 
-        // Файлы этой папки отвязаны на бэкенде (folder_id = null)
+        this.folders = this.folders.filter(f => !removedIds.has(f.id))
+
+        // Файлы удалённых папок отвязаны на бэкенде (folder_id = null)
         this.files = this.files.map(f =>
-          f.folder_id === folderId ? { ...f, folder_id: null } : f
+          removedIds.has(f.folder_id) ? { ...f, folder_id: null } : f
         )
 
-        if (this.currentFolderId === folderId) {
+        if (removedIds.has(this.currentFolderId)) {
           this.currentFolderId = null
         }
 

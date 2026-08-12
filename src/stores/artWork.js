@@ -16,9 +16,9 @@ export const useArtWork = defineStore('art-objects', {
 
   getters: {
     /**
-     * Получить работу по ID
+     * Получить работу по ID из уже загруженного списка (без запроса к API)
      */
-    getArtWorkById: (state) => (id) => {
+    getCachedArtWorkById: (state) => (id) => {
       return state.listArtWorks.find(item => item.id === id)
     },
     
