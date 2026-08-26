@@ -209,7 +209,8 @@ export const useArtWork = defineStore('art-objects', {
     },
 
     /**
-     * PATCH /api/v1/art/art-objects/:id - Частичное обновление работы
+     * PUT /api/v1/art/art-objects/:id - Частичное обновление работы
+     * (роут на бэкенде зарегистрирован как PUT, см. ArtController.updateArtObjectPartial)
      * @param {string} id - ID работы
      * @param {Object} patchData - данные для обновления
      */
@@ -219,7 +220,7 @@ export const useArtWork = defineStore('art-objects', {
       let result = null
 
       try {
-        const resp = await apiClient.patch(`/api/v1/art/art-objects/${id}`, patchData)
+        const resp = await apiClient.put(`/api/v1/art/art-objects/${id}`, patchData)
         result = resp.data
 
         if (result) {
@@ -230,13 +231,13 @@ export const useArtWork = defineStore('art-objects', {
           if (this.currentArtWork?.id === id) {
             this.currentArtWork = { ...this.currentArtWork, ...result }
           }
-          notifyServerSuccess('ArtWork updated successfully')
+          notifyServerSuccess('Работа обновлена')
           console.log('ArtWork patched:', result)
         }
       } catch (e) {
         console.error('Error patching artwork:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to patch artwork')
-        this.error = e?.response?.data?.message || 'Failed to patch artwork'
+        notifyServerError(e?.response?.data?.message || 'Не удалось обновить работу')
+        this.error = e?.response?.data?.message || 'Не удалось обновить работу'
         result = null
       } finally {
         this.loading = false

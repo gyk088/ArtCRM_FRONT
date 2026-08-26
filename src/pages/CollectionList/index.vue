@@ -8,7 +8,7 @@
         </p>
       </div>
       <div class="header-actions">
-        <a-button class="import-toggle-btn" @click="isImportOpen = !isImportOpen">
+        <a-button v-if="!isArtistRole" class="import-toggle-btn" @click="isImportOpen = !isImportOpen">
           <template #icon>
             <ImportOutlined />
           </template>
@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    <div v-if="isImportOpen" class="import-wrapper">
+    <div v-if="isImportOpen && !isArtistRole" class="import-wrapper">
       <a-input
         v-model:value="importLink"
         placeholder="Вставьте ссылку"
@@ -31,8 +31,8 @@
         autofocus
         @pressEnter="importCollection"
       />
-      <a-button type="primary" class="import-link-btn" @click="importCollection">Добавить</a-button>
-      <a-button class="import-cancel-btn" @click="isImportOpen = false">Отмена</a-button>
+      <a-button type="primary" class="import-link-btn" :loading="importing" @click="importCollection">Добавить</a-button>
+      <a-button class="import-cancel-btn" :disabled="importing" @click="isImportOpen = false">Отмена</a-button>
     </div>
 
     <div class="filters-panel">
@@ -48,6 +48,7 @@
         </template>
       </a-input>
       <a-select
+        v-if="!isArtistRole"
         v-model:value="filterArtist"
         placeholder="Художник"
         allow-clear
@@ -58,7 +59,7 @@
     </div>
 
     <div v-if="filteredCollectionList.length" class="collection-grid">
-      <a-card v-for="(collection, index) in filteredCollectionList" :key="collection.imported ? `imported-${collection.id}-${index}` : collection.id" class="collection-card"
+      <a-card v-for="collection in filteredCollectionList" :key="collection.id" class="collection-card"
         :class="{ 'collection-card--imported': collection.imported }"
         hoverable @click="openEditPage(collection)">
         <template #cover>
@@ -128,32 +129,38 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, computed } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { ImportOutlined, CopyOutlined, DeleteOutlined, PlusOutlined, FolderOpenOutlined, PictureOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { htmlToPlainText } from '@/utils/richText.js'
 import { useArtWork } from '@/stores/artWork.js'
 import { useArtist } from '@/stores/artist.js'
+import { useCollection } from '@/stores/collection.js'
 import { getUser } from '@/services/auth.js'
+import { ROLES } from '@/services/const'
 
-// === 1. Загружаем из localStorage при старте ===
-const collectionList = ref([]);
 const router = useRouter()
 const importLink = ref('')
 const isImportOpen = ref(false)
+const importing = ref(false)
+
+// Для роли "художник" импорт ссылки и фильтр по художнику убраны — у
+// художника все работы и так только свои.
+const isArtistRole = computed(() => getUser()?.role === ROLES.ARTIST)
 
 const artWorkStore = useArtWork()
 const artistStore = useArtist()
+const collectionStore = useCollection()
 const filterArtist = ref(null)
 const searchQuery = ref('')
 
-onMounted(async () => {
-  const saved = localStorage.getItem('collectionList');
-  if (saved) collectionList.value = JSON.parse(saved);
+const collectionList = computed(() => collectionStore.listCollections)
 
+onMounted(async () => {
   try {
     await Promise.all([
+      collectionStore.getAllCollections(),
       artWorkStore.getListArtWorks(),
       artistStore.getListArtists()
     ])
@@ -211,17 +218,16 @@ function extractCollectionId(link) {
   }
 }
 
-// Копируем работы из импортированной ссылки в собственный каталог работ
-// (POST на бэкенд), чтобы они реально появились в «Мои работы», и запоминаем
-// их id в localStorage — по этому списку UserPictures подсвечивает импортированные строки.
-async function importWorksFromCollection(workIds) {
-  const importedIds = JSON.parse(localStorage.getItem('importedWorkIds') || '[]')
-  let addedCount = 0
+// Копируем работы из импортированной (чужой) публичной ссылки в собственный
+// каталог работ — публичная ссылка отдаёт работы уже полностью резолвленными
+// (включая доп. изображения), поэтому лишних запросов не требуется.
+// Возвращает id только что созданных у нас копий — из них соберётся works
+// новой ссылки. Копии помечаются imported: true на бэкенде — по этому полю
+// UserPictures подсвечивает импортированные строки.
+async function importWorksFromCollection(sourceWorks) {
+  const newWorkIds = []
 
-  for (const workId of workIds) {
-    const sourceWork = artWorkStore.listArtWorks.find(w => w.id === workId)
-    if (!sourceWork) continue
-
+  for (const sourceWork of sourceWorks) {
     const created = await artWorkStore.createArtWork({
       user_id: getUser()?.id,
       name: sourceWork.name,
@@ -236,48 +242,69 @@ async function importWorksFromCollection(workIds) {
       artist: sourceWork.artist,
       price: sourceWork.price,
       avatar_id: sourceWork.avatar?.id || null,
+      images: sourceWork.images || [],
+      imported: true,
     })
 
     if (created?.id) {
-      importedIds.push(created.id)
-      addedCount++
+      newWorkIds.push(created.id)
     }
   }
 
-  localStorage.setItem('importedWorkIds', JSON.stringify(importedIds))
-  return addedCount
+  return newWorkIds
 }
 
-// Импорт ссылки по ссылке — добавляем её карточку в "Мои Ссылки"
+// Импорт ссылки по ссылке — тянем чужую публичную ссылку с бэкенда,
+// копируем её работы себе и создаём свою собственную ссылку с этими копиями.
 const importCollection = async () => {
   if (!importLink.value.trim()) {
     message.warning('Пожалуйста, введите ссылку')
     return
   }
 
-  const collectionId = Number(extractCollectionId(importLink.value))
+  const collectionId = extractCollectionId(importLink.value)
   if (!collectionId) {
     message.error('Не удалось распознать ссылку')
     return
   }
 
-  const stored = JSON.parse(localStorage.getItem('collectionList') || '[]')
-  const found = stored.find(c => c.id === collectionId)
+  importing.value = true
+  try {
+    const found = await collectionStore.getPublicCollection(collectionId)
+    if (!found) {
+      message.error('Ссылка не найдена')
+      return
+    }
 
-  if (!found) {
-    message.error('Коллекция по этой ссылке не найдена')
-    return
-  }
+    if (found.user_id && found.user_id === getUser()?.id) {
+      message.warning('Нельзя импортировать свою же ссылку')
+      return
+    }
 
-  collectionList.value.push({ ...found, imported: true })
-  isImportOpen.value = false
-  importLink.value = ''
+    const newWorkIds = await importWorksFromCollection(found.works || [])
 
-  const addedCount = await importWorksFromCollection(found.works || [])
-  if (addedCount > 0) {
-    message.success(`Коллекция добавлена, работ добавлено в «Мои работы»: ${addedCount}`)
-  } else {
-    message.success('Коллекция добавлена в список')
+    const created = await collectionStore.createCollection({
+      name: found.name,
+      artistOrGallery: found.artistOrGallery,
+      description: found.description,
+      avatar: found.avatar,
+      visibleFields: found.visibleFields,
+      works: newWorkIds,
+      imported: true,
+    })
+
+    if (!created) return
+
+    isImportOpen.value = false
+    importLink.value = ''
+
+    if (newWorkIds.length > 0) {
+      message.success(`Ссылка добавлена, работ добавлено в «Мои работы»: ${newWorkIds.length}`)
+    } else {
+      message.success('Ссылка добавлена в список')
+    }
+  } finally {
+    importing.value = false
   }
 }
 
@@ -302,11 +329,6 @@ const copyCollectionLink = async (collection) => {
   }
 }
 
-// === 2. Следим за изменениями и сохраняем ===
-watch(collectionList, (newList) => {
-  localStorage.setItem('collectionList', JSON.stringify(newList));
-}, { deep: true });
-
 const openEditPage = (collection) => {
   if (collection && collection.id) {
     router.push({ name: 'edit-collection', params: { id: collection.id } })
@@ -315,8 +337,8 @@ const openEditPage = (collection) => {
   }
 }
 
-function deleteСollection(id) {
-  collectionList.value = collectionList.value.filter(b => b.id !== id);
+async function deleteСollection(id) {
+  await collectionStore.deleteCollection(id)
 }
 
 function pluralizeWorks(count) {

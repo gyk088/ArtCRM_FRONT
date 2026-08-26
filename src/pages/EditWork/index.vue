@@ -8,20 +8,64 @@
     <a-spin :spinning="loading" wrapperClassName="edit-spin-wrapper">
       <div class="edit-container">
 
-        <!-- Левая колонка — ФОРМА -->
-        <div class="left-column">
+        <!-- Левая колонка — ИЗОБРАЖЕНИЯ -->
+        <div class="images-column">
+          <section class="form-section images-card">
+            <a-form-item label="Главное изображение" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }"
+              class="images-item">
+              <div v-if="!form.avatar" class="upload-trigger" @click="openFilesModal('avatar')">
+                <div class="upload-placeholder avatar-placeholder">
+                  <PlusOutlined />
+                  <div>Загрузить</div>
+                </div>
+              </div>
+
+              <div v-else class="avatar-preview">
+                <img :src="form.avatar.url" class="avatar-image" @click="openViewer(0)" />
+                <button class="download-btn" title="Скачать" @click.stop="handleDownload(form.avatar)">
+                  <DownloadOutlined />
+                </button>
+                <button class="delete-btn" @click.stop="removeAvatar">×</button>
+              </div>
+            </a-form-item>
+
+            <a-form-item label="Изображения" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
+              <div class="images-row">
+                <div class="upload-trigger" @click="openFilesModal('images')">
+                  <div class="upload-placeholder">
+                    <PlusOutlined />
+                    <div>Загрузить</div>
+                  </div>
+                </div>
+
+                <div v-for="(img, index) in form.images" :key="img.id" class="image-container">
+                  <img :src="img.url" class="preview-image" @click="openViewer(avatarOffset + index)" />
+                  <button class="download-btn" title="Скачать" @click.stop="handleDownload(img)">
+                    <DownloadOutlined />
+                  </button>
+                  <button class="delete-btn" @click.stop="removeImage(index)">×</button>
+                </div>
+              </div>
+
+              <p v-if="!form.images.length" class="empty-hint">Дополнительные изображения ещё не добавлены</p>
+            </a-form-item>
+          </section>
+        </div>
+
+        <!-- Правая колонка — ФОРМА -->
+        <div class="form-column">
           <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
 
             <section class="form-section">
               <div class="section-heading">Основная информация</div>
 
               <a-form-item label="Название" name="name" class="field-full">
-                <a-input v-model:value="form.name" placeholder="Например, «Утро в горах»" class="fixed-input" />
+                <a-input v-model:value="form.name" class="fixed-input" />
               </a-form-item>
 
               <a-form-item label="Художник" class="field-full">
-                <a-select v-model:value="form.artist" :options="artistOptions" placeholder="Выберите или введите Художника"
-                  class="series-select" allowClear>
+                <a-select v-model:value="form.artist" :options="artistOptions" :disabled="isArtistRole"
+                  class="series-select" :allowClear="!isArtistRole">
                   <template #dropdownRender="{ menuNode: menu }">
                     <VNodes :vnodes="menu" />
 
@@ -35,7 +79,7 @@
                     </div>
 
                     <a-space class="add-row">
-                      <a-input ref="artistInputRef" v-model:value="newArtist" placeholder="Введите имя Художника"
+                      <a-input ref="artistInputRef" v-model:value="newArtist"
                         @keyup.enter="addArtist" />
                       <a-button type="text" @click="addArtist">
                         <template #icon>
@@ -49,7 +93,7 @@
               </a-form-item>
 
               <a-form-item label="Описание" class="field-full">
-                <a-textarea v-model:value="form.description" placeholder="Коротко расскажите о работе" class="fixed-input description-input" />
+                <a-textarea v-model:value="form.description" class="fixed-input description-input" />
               </a-form-item>
             </section>
 
@@ -201,15 +245,17 @@
 
               <div class="field-row">
                 <a-form-item label="Стоимость" class="field-half">
-                  <a-input-number
-                    v-model:value="form.price"
-                    placeholder="0"
-                    class="price-input"
-                    :min="0"
-                    addon-after="₽"
-                    :formatter="value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')"
-                    :parser="value => value.replace(/\s/g, '')"
-                  />
+                  <a-input-group compact class="price-group">
+                    <a-input-number
+                      v-model:value="form.price"
+                      placeholder="0"
+                      class="price-input"
+                      :min="0"
+                      :formatter="value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')"
+                      :parser="value => value.replace(/\s/g, '')"
+                    />
+                    <a-select v-model:value="form.currency" class="currency-select" :options="currencyOptions" />
+                  </a-input-group>
                 </a-form-item>
               </div>
             </section>
@@ -225,50 +271,6 @@
             </div>
           </a-form>
         </div>
-
-        <!-- Правая колонка — ИЗОБРАЖЕНИЯ -->
-        <div class="right-column">
-          <a-form-item label="Главное изображение" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }"
-            class="images-item">
-            <div v-if="!form.avatar" class="upload-trigger" @click="openFilesModal('avatar')">
-              <div class="upload-placeholder">
-                <PlusOutlined />
-                <div>Загрузить</div>
-              </div>
-            </div>
-
-            <div v-else class="avatar-preview">
-              <img :src="form.avatar.url" class="avatar-image" />
-              <button class="delete-btn" @click="removeAvatar">×</button>
-            </div>
-          </a-form-item>
-
-          <a-form-item label="Изображения" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
-            <div class="images-block">
-              <div class="my-upload-block">
-                <div class="upload-trigger" @click="openFilesModal('images')">
-                  <div class="upload-placeholder">
-                    <PlusOutlined />
-                    <div>Загрузить</div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Галерея превью -->
-              <div v-if="form.images.length" class="preview-gallery">
-                <div v-for="(img, index) in form.images" :key="img.id" class="image-wrapper">
-                  <div class="image-container">
-                    <img :src="img.url" class="preview-image" @click="openViewer(index)" />
-                    <button class="delete-btn" @click.stop="removeImage(index)">×</button>
-                  </div>
-                </div>
-              </div>
-
-              <p v-else class="empty-hint">Дополнительные изображения ещё не добавлены</p>
-            </div>
-          </a-form-item>
-
-        </div>
       </div>
     </a-spin>
 
@@ -277,6 +279,9 @@
       <button class="nav-btn prev" @click.stop="prevImage">⟨</button>
       <img :src="currentImage" class="lightbox-image" />
       <button class="nav-btn next" @click.stop="nextImage">⟩</button>
+      <button class="lightbox-download-btn" title="Скачать" @click.stop="handleDownload(currentGalleryItem)">
+        <DownloadOutlined />
+      </button>
       <button class="close-btn" @click="closeViewer">×</button>
     </div>
 
@@ -291,7 +296,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, defineComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useSerias } from '@/stores/seria.js'
 import { useLocations } from '@/stores/locations.js'
@@ -300,6 +305,9 @@ import { useMedia } from '@/stores/media.js'
 import { useArtist } from '@/stores/artist.js'
 import { useArtWork } from '@/stores/artWork.js'
 import FileUploader from "@/components/FileUploader.vue"
+import { downloadFile } from '@/utils/downloadFile.js'
+import { getUser } from '@/services/auth.js'
+import { ROLES } from '@/services/const'
 
 const seriasStore = useSerias();
 const locationsStore = useLocations()
@@ -330,6 +338,9 @@ const uploadTarget = ref('avatar')
 const formRef = ref(null)
 const isNewWork = computed(() => route.params.id === 'new')
 
+// Для роли "художник" поле "Художник" всегда — сам пользователь, выбор запрещён
+const isArtistRole = computed(() => getUser()?.role === ROLES.ARTIST)
+
 const rules = {
   name: [{ required: true, message: 'Введите название работы', trigger: 'blur' }]
 }
@@ -356,9 +367,17 @@ const form = reactive({
   status: null,
   artist: null,
   price: '',
+  currency: 'RUB',
   collections: [],
   images: []
 })
+
+const currencyOptions = [
+  { label: '₽ RUB', value: 'RUB' },
+  { label: 'Br BYN', value: 'BYN' },
+  { label: '$ USD', value: 'USD' },
+  { label: '€ EUR', value: 'EUR' },
+]
 
 const getNameById = (id, store, listName) => {
   if (!id) return null
@@ -387,6 +406,7 @@ const loadArtWork = async () => {
         status: work.status || null,
         artist: work.artist || null,
         price: work.price || '',
+        currency: work.currency || 'RUB',
         collections: work.collections || [],
         images: work.images || [],
         avatar: work.avatar || null
@@ -487,6 +507,36 @@ const loadArtistsFromAPI = async () => {
   }
 }
 
+// Гарантирует, что для роли "художник" в поле "Художник" стоит сам
+// пользователь — создаёт запись художника с его именем, если её ещё нет,
+// и принудительно проставляет её в форму (перекрывая то, что могло
+// загрузиться из существующей работы при редактировании).
+const ensureOwnArtistSelected = async () => {
+  if (!isArtistRole.value) return
+
+  const user = getUser()
+  const fullName = [user?.name, user?.surname].filter(Boolean).join(' ').trim()
+  if (!fullName) return
+
+  let ownArtist = artistOptions.value.find(opt => opt.label === fullName)
+
+  if (!ownArtist) {
+    try {
+      const created = await artistStore.createArtist({ user_id: user?.id, name: fullName })
+      if (created?.id) {
+        ownArtist = { label: created.name, value: created.id }
+        artistOptions.value.push(ownArtist)
+      }
+    } catch (error) {
+      console.error('Не удалось создать запись художника для текущего пользователя:', error)
+    }
+  }
+
+  if (ownArtist) {
+    form.artist = ownArtist.value
+  }
+}
+
 onMounted(async () => {
   await loadSeriesFromAPI()
   await loadLocationsFromAPI()
@@ -494,6 +544,7 @@ onMounted(async () => {
   await loadMediaFromAPI()
   await loadArtistsFromAPI()
   await loadArtWork()
+  await ensureOwnArtistSelected()
 })
 
 // === ИЗОБРАЖЕНИЯ ===
@@ -548,9 +599,14 @@ const removeImage = (index) => {
 };
 
 // === lightbox ===
+// Единая галерея для просмотра: главное изображение + дополнительные
+const avatarOffset = computed(() => (form.avatar ? 1 : 0))
+const galleryImages = computed(() => (form.avatar ? [form.avatar, ...form.images] : form.images))
+
 const isViewerVisible = ref(false)
 const currentIndex = ref(0)
-const currentImage = computed(() => form.images[currentIndex.value]?.url)
+const currentGalleryItem = computed(() => galleryImages.value[currentIndex.value])
+const currentImage = computed(() => currentGalleryItem.value?.url)
 
 function openViewer(index) {
   currentIndex.value = index
@@ -562,12 +618,21 @@ function closeViewer() {
 }
 
 function nextImage() {
-  currentIndex.value = (currentIndex.value + 1) % form.images.length
+  currentIndex.value = (currentIndex.value + 1) % galleryImages.value.length
 }
 
 function prevImage() {
   currentIndex.value =
-    (currentIndex.value - 1 + form.images.length) % form.images.length
+    (currentIndex.value - 1 + galleryImages.value.length) % galleryImages.value.length
+}
+
+const handleDownload = async (item) => {
+  try {
+    await downloadFile(item)
+  } catch (error) {
+    console.error('Ошибка скачивания файла:', error)
+    message.error('Не удалось скачать файл')
+  }
 }
 
 const onYearSelect = (value) => {
@@ -674,8 +739,8 @@ const addItem = async (e) => {
   } catch (error) {
     console.error('Error creating location:', error)
     message.warning('Город добавлен локально')
-  } finally {
     items.value.push(cityName)
+  } finally {
     form.address = cityName
     name.value = ''
     inputRef.value?.focus()
@@ -962,6 +1027,7 @@ const saveChanges = async () => {
       status: form.status,
       artist: form.artist,
       price: form.price ? parseFloat(form.price) : null,
+      currency: form.currency,
       avatar_id: form.avatar?.id || null,
       images: form.images,
     }
@@ -1015,10 +1081,9 @@ function goBack() {
   --border: rgba(0, 0, 0, 0.1);
   --border-soft: rgba(0, 0, 0, 0.07);
 
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   background: var(--bg);
   color: var(--text-body);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -1026,7 +1091,7 @@ function goBack() {
 
 .page-header {
   flex-shrink: 0;
-  padding: 20px 24px 10px;
+  padding: 10px 24px 8px;
 }
 
 .page-title {
@@ -1045,29 +1110,34 @@ function goBack() {
 
 .edit-spin-wrapper {
   flex: 1;
-  min-height: 0;
   display: flex;
 }
 
 .edit-spin-wrapper :deep(.ant-spin-nested-loading),
 .edit-spin-wrapper :deep(.ant-spin-container) {
-  height: 100%;
   width: 100%;
 }
 
 .edit-container {
   display: flex;
+  align-items: stretch;
   gap: 20px;
-  height: 100%;
-  padding: 0 24px 10px;
-  overflow: hidden;
+  padding: 0 24px 24px;
 }
 
-.left-column {
-  width: 44%;
-  overflow-y: auto;
-  height: 100%;
+.images-column {
+  width: 42%;
+  min-width: 0;
   padding-right: 8px;
+  display: flex;
+}
+
+.images-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 18px 20px;
 }
 
 /* === Секции формы === */
@@ -1109,40 +1179,23 @@ function goBack() {
   color: var(--text-faint);
 }
 
-/* Кастомный скролл для левой колонки */
-.left-column::-webkit-scrollbar,
-.right-column::-webkit-scrollbar {
-  width: 6px;
-}
-
-.left-column::-webkit-scrollbar-track,
-.right-column::-webkit-scrollbar-track {
-  background: var(--card-bg);
-  border-radius: 4px;
-}
-
-.left-column::-webkit-scrollbar-thumb,
-.right-column::-webkit-scrollbar-thumb {
-  background: rgba(138, 109, 47, 0.35);
-  border-radius: 4px;
-}
-
-.left-column::-webkit-scrollbar-thumb:hover,
-.right-column::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
-}
-
-.right-column {
-  width: 56%;
+.form-column {
+  width: 58%;
   padding-left: 20px;
   border-left: 1px solid var(--border);
-  overflow-y: auto;
-  height: 100%;
+  display: flex;
+}
+
+.form-column :deep(.ant-form) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 
 /* === Инпуты === */
 :deep(.ant-form-item) {
-  margin-bottom: 12px !important;
+  margin-bottom: 8px !important;
   /* Было 24px по умолчанию */
 }
 
@@ -1212,24 +1265,37 @@ function goBack() {
   border-color: var(--accent) !important;
 }
 
-.price-input {
+.price-group {
+  display: flex;
   width: 100%;
   max-width: 450px;
 }
 
-.price-input :deep(.ant-input-number),
-.price-input :deep(.ant-input-number-group-wrapper) {
-  width: 100%;
+.price-input {
+  width: 65%;
 }
 
-.price-input :deep(.ant-input-number),
-.price-input :deep(.ant-input-number-group-addon) {
+.price-input :deep(.ant-input-number) {
   border-color: var(--border);
   background: var(--bg-elevated);
+  width: 100%;
 }
 
 .price-input :deep(.ant-input-number:hover),
 .price-input :deep(.ant-input-number-focused) {
+  border-color: var(--accent) !important;
+}
+
+.currency-select {
+  width: 35%;
+}
+
+.currency-select :deep(.ant-select-selector) {
+  border-color: var(--border) !important;
+  background: var(--bg-elevated) !important;
+}
+
+.currency-select:hover :deep(.ant-select-selector) {
   border-color: var(--accent) !important;
 }
 
@@ -1301,18 +1367,18 @@ function goBack() {
 .buttons-wrapper {
   display: flex;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: auto;
+  padding-top: 16px;
 }
 
 .images-item {
   display: block;
 }
 
-.images-block {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: flex-start;
+/* Строка с доп. изображениями прижата к самому низу карточки */
+.images-item + .images-item {
+  margin-top: auto;
+  padding-top: 8px;
 }
 
 .images-item :deep(.ant-form-item-label > label) {
@@ -1322,14 +1388,104 @@ function goBack() {
   color: var(--text-title);
 }
 
-/* Галерея превью */
+/* Главное изображение — крупное, по центру карточки */
 .upload-trigger {
   cursor: pointer;
 }
 
+.avatar-preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.avatar-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  background: var(--card-bg);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+}
+
+.avatar-image:hover {
+  border-color: var(--accent);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.16);
+  transition: all 0.2s ease;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+}
+
+.avatar-placeholder .anticon {
+  font-size: 30px;
+}
+
+.avatar-placeholder div {
+  font-size: 14px;
+}
+
+.avatar-preview .delete-btn {
+  top: 10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  font-size: 16px;
+}
+
+.avatar-preview .download-btn {
+  top: 10px;
+  left: 10px;
+  width: 26px;
+  height: 26px;
+  font-size: 14px;
+}
+
+/* Доп. изображения — одна строка с горизонтальной прокруткой */
+.images-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.images-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.images-row::-webkit-scrollbar-track {
+  background: var(--card-bg);
+  border-radius: 4px;
+}
+
+.images-row::-webkit-scrollbar-thumb {
+  background: rgba(138, 109, 47, 0.35);
+  border-radius: 4px;
+}
+
+.images-row::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+.images-row .upload-trigger,
+.images-row .image-container {
+  flex-shrink: 0;
+}
+
 .upload-placeholder {
-  width: 104px;
-  height: 104px;
+  width: 120px;
+  height: 120px;
   border: 1px dashed var(--border);
   border-radius: 8px;
   background-color: var(--card-bg);
@@ -1356,26 +1512,10 @@ function goBack() {
   color: var(--text-faint);
 }
 
-.preview-gallery {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.image-wrapper {
-  display: flex;
-  flex-direction: row;
-  gap: 24px;
-  align-items: flex-start;
-  margin-right: 24px;
-  margin-top: 24px;
-}
-
 .image-container {
   position: relative;
   width: 120px;
   height: 120px;
-  flex-shrink: 0;
 }
 
 .preview-image {
@@ -1393,21 +1533,6 @@ function goBack() {
 .preview-image:hover {
   transform: scale(1.08);
   border-color: var(--accent);
-}
-
-.my-upload-block :deep(.ant-upload-select-picture-card) {
-  width: 90px !important;
-  height: 90px !important;
-  font-size: 12px;
-}
-
-.my-upload-block :deep(.ant-upload-select-picture-card svg) {
-  width: 14px;
-  height: 14px;
-}
-
-.my-upload-block :deep(.ant-upload-select-picture-card:hover) {
-  border-color: var(--accent) !important;
 }
 
 /* кнопка удаления */
@@ -1430,25 +1555,27 @@ function goBack() {
   color: #fff;
 }
 
-.avatar-preview {
-  position: relative;
-  display: inline-block;
-}
-
-.avatar-image {
-  width: 110px;
-  height: 110px;
-  object-fit: contain;
-  background: var(--card-bg);
+.download-btn {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  border: none;
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 4px;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  z-index: 1;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.avatar-image:hover {
-  border-color: var(--accent);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
-  transition: all 0.2s ease;
+.download-btn:hover {
+  background-color: var(--accent);
+  color: #fff;
 }
 
 /* === Lightbox === */
@@ -1508,6 +1635,21 @@ function goBack() {
   color: var(--accent-strong);
 }
 
+.lightbox-download-btn {
+  position: absolute;
+  top: 20px;
+  left: 30px;
+  font-size: 1.5rem;
+  background: none;
+  color: #f2f0ec;
+  border: none;
+  cursor: pointer;
+}
+
+.lightbox-download-btn:hover {
+  color: var(--accent-strong);
+}
+
 /* === Адаптация для маленьких экранов === */
 @media (max-width: 1200px) {
   .edit-container {
@@ -1515,25 +1657,23 @@ function goBack() {
     gap: 20px;
   }
 
-  .left-column {
+  .images-column {
     width: 100%;
-    overflow-y: visible;
-    max-height: none;
+    padding-right: 0;
   }
 
-  .right-column {
+  .form-column {
     width: 100%;
     padding-left: 0;
     border-left: none;
     border-top: 1px solid var(--border);
     padding-top: 20px;
-    max-height: 500px;
   }
 
   .fixed-input,
   .series-select,
   .status-select,
-  .price-input {
+  .price-group {
     max-width: 100%;
   }
 }

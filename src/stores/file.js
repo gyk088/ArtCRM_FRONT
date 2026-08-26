@@ -153,6 +153,36 @@ export const useFile = defineStore('file', {
       this.currentFolderId = folderId
     },
 
+    async renameFile(fileId, { name, comment } = {}) {
+      try {
+        const resp = await apiClient.put(`/api/v1/file/${fileId}`, { name, comment })
+
+        this.files = this.files.map(f => f.id === fileId ? resp.data : f)
+
+        return resp.data
+      } catch (e) {
+        console.error('Error renaming file:', e)
+        notifyServerError(e?.response?.data?.error || 'Failed to rename file')
+        this.error = e?.response?.data?.error || 'Failed to rename file'
+        throw e
+      }
+    },
+
+    async renameFolder(folderId, name) {
+      try {
+        const resp = await apiClient.put(`/api/v1/file/folder/${folderId}`, { name })
+
+        this.folders = this.folders.map(f => f.id === folderId ? resp.data : f)
+
+        return resp.data
+      } catch (e) {
+        console.error('Error renaming folder:', e)
+        notifyServerError(e?.response?.data?.error || 'Failed to rename folder')
+        this.error = e?.response?.data?.error || 'Failed to rename folder'
+        throw e
+      }
+    },
+
     async moveFileToFolder(fileId, folderId) {
       try {
         const resp = await apiClient.patch(`/api/v1/file/${fileId}/folder`, { folderId })

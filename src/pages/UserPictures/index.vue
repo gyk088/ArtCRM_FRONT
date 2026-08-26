@@ -28,59 +28,151 @@
 
     <!-- Таблица -->
     <a-table class="custom-table" :columns="columns" :data-source="filteredData" row-key="id"
-      :row-selection="rowSelection" :loading="loading" table-layout="fixed">
+      :row-selection="rowSelection" :loading="loading" table-layout="fixed" :custom-row="customRow">
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'avatar'">
-          <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="preview-img" />
-          <div v-else class="img-placeholder">
+          <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="preview-img clickable-cell" @click.stop="openPreview(record)" />
+          <div v-else class="img-placeholder clickable-cell" @click.stop="openPreview(record)">
             <PictureOutlined />
           </div>
         </template>
         <template v-else-if="column.dataIndex === 'name'">
-          <span>{{ record.name }}</span>
-          <span v-if="isImportedWork(record.id)" class="imported-pill" title="Добавлено из импортированной ссылки">
+          <span class="name-cell clickable-cell cell-clamp" @click.stop="openPreview(record)">{{ record.name }}</span>
+          <span v-if="record.imported" class="imported-pill" title="Добавлено из импортированной ссылки">
             <ImportOutlined />
             Импорт
           </span>
         </template>
         <template v-else-if="column.dataIndex === 'artist'">
-          {{ getArtistName(record.artist) }}
+          <span class="cell-clamp">{{ getArtistName(record.artist) }}</span>
         </template>
         <template v-else-if="column.dataIndex === 'seria'">
-          {{ getSeriaName(record.seria) }}
+          <span class="cell-clamp">{{ getSeriaName(record.seria) }}</span>
         </template>
         <template v-else-if="column.dataIndex === 'media'">
-          {{ getMediaName(record.media) }}
+          <span class="cell-clamp">{{ getMediaName(record.media) }}</span>
         </template>
         <template v-else-if="column.dataIndex === 'status'">
-          <span v-if="getStatusName(record.status)" class="status-pill" :class="statusPillClass(record.status)">
-            {{ getStatusName(record.status) }}
-          </span>
+          <a-dropdown :trigger="['click']" @click.stop>
+            <span
+              class="status-pill status-pill-editable"
+              :class="[statusPillClass(record.status), { 'status-pill-updating': updatingStatusId === record.id }]"
+              @click.stop
+            >
+              {{ getStatusName(record.status) || 'Не указан' }}
+            </span>
+            <template #overlay>
+              <a-menu @click="({ key }) => handleStatusChange(record, key)">
+                <a-menu-item v-for="status in statusOptions" :key="status.value">
+                  {{ status.label }}
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </template>
         <template v-else-if="column.dataIndex === 'location'">
-          {{ getLocationName(record.location) }}
+          <span class="cell-clamp">{{ getLocationName(record.location) }}</span>
+        </template>
+        <template v-else-if="column.dataIndex === 'price'">
+          <span v-if="record.price" class="cell-clamp">{{ record.price }} {{ getCurrencySymbol(record.currency) }}</span>
         </template>
         <template v-else-if="column.dataIndex === 'actions'">
-          <button class="icon-btn icon-btn-edit" title="Редактировать" @click="openEditPage(record)">
+          <button class="icon-btn icon-btn-edit" title="Редактировать" @click.stop="openEditPage(record)">
             <EditOutlined />
           </button>
-          <button class="icon-btn icon-btn-danger" title="Удалить" @click="deleteRow(record.id)">
+          <button
+            class="icon-btn icon-btn-certificate"
+            title="Сгенерировать сертификат"
+            @click.stop="openCertificatePreview(record)"
+          >
+            <SafetyCertificateOutlined />
+          </button>
+          <button class="icon-btn icon-btn-danger" title="Удалить" @click.stop="deleteRow(record.id)">
             <DeleteOutlined />
           </button>
         </template>
         <template v-else>
-          {{ record[column.dataIndex] }}
+          <span class="cell-clamp">{{ record[column.dataIndex] }}</span>
         </template>
       </template>
     </a-table>
+
+    <!-- Быстрый просмотр работы (без редактирования) -->
+    <a-drawer v-model:open="isPreviewOpen" title="Просмотр работы" placement="right" width="700px" destroyOnClose>
+      <div v-if="previewWork" class="work-preview">
+        <div class="preview-cover">
+          <img v-if="previewWork.avatar && previewWork.avatar.url" :src="previewWork.avatar.url" />
+          <div v-else class="preview-cover-placeholder">
+            <PictureOutlined />
+          </div>
+        </div>
+
+        <div class="preview-heading">
+          <h3 class="preview-name">{{ previewWork.name || 'Без названия' }}</h3>
+          <span v-if="getStatusName(previewWork.status)" class="status-pill" :class="statusPillClass(previewWork.status)">
+            {{ getStatusName(previewWork.status) }}
+          </span>
+        </div>
+
+        <p v-if="previewWork.description" class="preview-description">{{ previewWork.description }}</p>
+
+        <div class="preview-fields">
+          <div v-if="getArtistName(previewWork.artist)" class="preview-field">
+            <span class="preview-field-label">Художник</span>
+            <span class="preview-field-value">{{ getArtistName(previewWork.artist) }}</span>
+          </div>
+          <div v-if="previewWork.technique" class="preview-field">
+            <span class="preview-field-label">Техника</span>
+            <span class="preview-field-value">{{ previewWork.technique }}</span>
+          </div>
+          <div v-if="previewWork.size" class="preview-field">
+            <span class="preview-field-label">Размер</span>
+            <span class="preview-field-value">{{ previewWork.size }}</span>
+          </div>
+          <div v-if="previewWork.year" class="preview-field">
+            <span class="preview-field-label">Год</span>
+            <span class="preview-field-value">{{ previewWork.year }}</span>
+          </div>
+          <div v-if="getMediaName(previewWork.media)" class="preview-field">
+            <span class="preview-field-label">Медиа</span>
+            <span class="preview-field-value">{{ getMediaName(previewWork.media) }}</span>
+          </div>
+          <div v-if="getSeriaName(previewWork.seria)" class="preview-field">
+            <span class="preview-field-label">Серия</span>
+            <span class="preview-field-value">{{ getSeriaName(previewWork.seria) }}</span>
+          </div>
+          <div v-if="getLocationName(previewWork.location)" class="preview-field">
+            <span class="preview-field-label">Локация</span>
+            <span class="preview-field-value">{{ getLocationName(previewWork.location) }}</span>
+          </div>
+          <div v-if="previewWork.price" class="preview-field">
+            <span class="preview-field-label">Стоимость</span>
+            <span class="preview-field-value">{{ previewWork.price }} {{ getCurrencySymbol(previewWork.currency) }}</span>
+          </div>
+        </div>
+
+        <a-button type="primary" block class="preview-edit-btn" @click="openEditPage(previewWork)">
+          <template #icon><EditOutlined /></template>
+          Редактировать
+        </a-button>
+      </div>
+    </a-drawer>
+
+    <CertificatePreviewModal
+      v-model:open="isCertPreviewOpen"
+      :work="certPreviewWork"
+      :artist-name="certPreviewWork ? getArtistName(certPreviewWork.artist) : ''"
+      :seria-name="certPreviewWork ? getSeriaName(certPreviewWork.seria) : ''"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined } from '@ant-design/icons-vue'
+import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
+import CertificatePreviewModal from '@/components/CertificatePreviewModal.vue'
 import { useArtWork } from '@/stores/artWork.js'
 import { useMedia } from '@/stores/media.js'
 import { useSerias } from '@/stores/seria.js'
@@ -88,6 +180,8 @@ import { useStatuses } from '@/stores/statuses.js'
 import { useLocations } from '@/stores/locations.js'
 import { useArtist } from '@/stores/artist.js'
 import { useFile } from "@/stores/file.js"
+import { getUser } from '@/services/auth.js'
+import { ROLES } from '@/services/const'
 
 const fileStore = useFile()
 if (!fileStore.files.length) {
@@ -104,21 +198,21 @@ const artistStore = useArtist()
 const router = useRouter()
 const loading = ref(false)
 const selectedRowKeys = ref([])
+
+// Быстрый просмотр работы (drawer справа, без редактирования)
+const isPreviewOpen = ref(false)
+const previewWork = ref(null)
+
+const openPreview = (record) => {
+  previewWork.value = record
+  isPreviewOpen.value = true
+}
 const filterArtist = ref(null)
 const filterLocation = ref(null)
 const filterSeria = ref(null)
 const filterMedia = ref(null)
 const filterStatus = ref(null)
 
-// Работы, добавленные автоматически из импортированной ссылки — подсвечиваем их в таблице
-const importedWorkIds = ref([])
-onMounted(() => {
-  importedWorkIds.value = JSON.parse(localStorage.getItem('importedWorkIds') || '[]')
-})
-
-function isImportedWork(id) {
-  return importedWorkIds.value.includes(id)
-}
 
 // Хранилища для маппинга ID -> название
 const artistMap = ref({})
@@ -194,6 +288,9 @@ const getLocationName = (locationId) => {
   }
   return locationId
 }
+
+const CURRENCY_SYMBOLS = { RUB: '₽', BYN: 'Br', USD: '$', EUR: '€' }
+const getCurrencySymbol = (currency) => CURRENCY_SYMBOLS[currency] || CURRENCY_SYMBOLS.RUB
 
 // Загрузка всех справочников
 const loadDirectories = async () => {
@@ -312,23 +409,29 @@ const filteredData = computed(() => {
   return result
 })
 
+// Для роли "художник" колонка "Художник" избыточна — там всегда сам
+// пользователь (см. EditWork/index.vue), поэтому в таблице её скрываем.
+const isArtistRole = computed(() => getUser()?.role === ROLES.ARTIST)
+
 // Колонки таблицы — порядок полей соответствует форме EditWork
 // (Название → Художник → Техника/Год → Описание → Город/Серия → Медиа/Статус → Стоимость)
 // Ширины в процентах в сумме дают 100%, чтобы таблица всегда помещалась
 // по ширине контейнера без горизонтальной прокрутки (table-layout: fixed).
 const columns = computed(() => [
-  { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: '6%' },
-  { title: 'Название', dataIndex: 'name', key: 'name', width: '14%', ellipsis: true },
-  { title: 'Художник', dataIndex: 'artist', key: 'artist', width: '10%', ellipsis: true },
-  { title: 'Техника', dataIndex: 'technique', key: 'technique', width: '9%', ellipsis: true },
-  { title: 'Размер', dataIndex: 'size', key: 'size', width: '6%', ellipsis: true },
+  { title: ' ', dataIndex: 'avatar', key: 'avatar', width: '6%' },
+  { title: 'Название', dataIndex: 'name', key: 'name', width: isArtistRole.value ? '21%' : '12%', sorter: (a, b) => (a.name || '').localeCompare(b.name || '', 'ru') },
+  ...(isArtistRole.value ? [] : [
+    { title: 'Художник', dataIndex: 'artist', key: 'artist', width: '9%', sorter: (a, b) => getArtistName(a.artist).localeCompare(getArtistName(b.artist), 'ru') },
+  ]),
+  { title: 'Техника', dataIndex: 'technique', key: 'technique', width: '8%', sorter: (a, b) => (a.technique || '').localeCompare(b.technique || '', 'ru') },
+  { title: 'Размер', dataIndex: 'size', key: 'size', width: '8%', sorter: (a, b) => (a.size || '').localeCompare(b.size || '', 'ru') },
   { title: 'Год', dataIndex: 'year', key: 'year', width: '5%', sorter: (a, b) => a.year - b.year },
-  { title: 'Медиа', dataIndex: 'media', key: 'media', width: '8%', ellipsis: true },
-  { title: 'Серия', dataIndex: 'seria', key: 'seria', width: '8%', ellipsis: true },
-  { title: 'Локация', dataIndex: 'location', key: 'location', width: '9%', ellipsis: true },
-  { title: 'Статус', dataIndex: 'status', key: 'status', width: '10%', ellipsis: true },
-  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: '8%', sorter: (a, b) => a.price - b.price },
-  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: '8%' },
+  { title: 'Медиа', dataIndex: 'media', key: 'media', width: '8%', sorter: (a, b) => getMediaName(a.media).localeCompare(getMediaName(b.media), 'ru') },
+  { title: 'Серия', dataIndex: 'seria', key: 'seria', width: '7%', sorter: (a, b) => getSeriaName(a.seria).localeCompare(getSeriaName(b.seria), 'ru') },
+  { title: 'Локация', dataIndex: 'location', key: 'location', width: '8%', sorter: (a, b) => getLocationName(a.location).localeCompare(getLocationName(b.location), 'ru') },
+  { title: 'Статус', dataIndex: 'status', key: 'status', width: '10%', sorter: (a, b) => getStatusName(a.status).localeCompare(getStatusName(b.status), 'ru') },
+  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: '9%', sorter: (a, b) => a.price - b.price },
+  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: '11%' },
 ])
 
 // Открытие страницы редактирования
@@ -337,6 +440,18 @@ const openEditPage = (record) => {
     router.push({ name: 'edit-work', params: { id: record.id } })
   } else {
     router.push({ name: 'edit-work', params: { id: 'new' } })
+  }
+}
+
+// Клик по строке таблицы целиком — открывает боковую панель просмотра,
+// кроме кликов по чекбоксу выбора и кнопкам действий
+const customRow = (record) => {
+  return {
+    class: 'clickable-row',
+    onClick: (event) => {
+      if (event.target.closest('.ant-checkbox-wrapper') || event.target.closest('button') || event.target.closest('.ant-dropdown-trigger')) return
+      openPreview(record)
+    }
   }
 }
 
@@ -365,6 +480,29 @@ const deleteRow = (id) => {
   })
 }
 
+// Предпросмотр и генерация сертификата подлинности работы (PDF)
+const isCertPreviewOpen = ref(false)
+const certPreviewWork = ref(null)
+
+const openCertificatePreview = (record) => {
+  certPreviewWork.value = record
+  isCertPreviewOpen.value = true
+}
+
+// Смена статуса работы прямо из таблицы
+const updatingStatusId = ref(null)
+
+const handleStatusChange = async (record, statusId) => {
+  if (statusId === record.status || updatingStatusId.value) return
+
+  updatingStatusId.value = record.id
+  try {
+    await artWorkStore.patchArtWork(record.id, { status: statusId })
+  } finally {
+    updatingStatusId.value = null
+  }
+}
+
 // Выбранные строки
 const rowSelection = {
   onChange: (selectedKeys) => {
@@ -374,10 +512,11 @@ const rowSelection = {
 }
 
 const createCollection = () => {
-  const selectedItems = artWorkStore.listArtWorks.filter(item =>
-    selectedRowKeys.value.includes(item.id)
-  )
-  console.log('Создаем ссылку из выбранных работ:', selectedItems)
+  router.push({
+    name: 'edit-collection',
+    params: { id: 'new' },
+    query: { works: selectedRowKeys.value.join(',') }
+  })
 }
 
 // Инициализация
@@ -416,7 +555,9 @@ onMounted(async () => {
   background: var(--bg);
   color: var(--text-body);
   border-radius: 14px;
-  padding: 24px 24px 8px;
+  padding: 24px 12px 8px;
+  margin-left: -16px;
+  margin-right: -16px;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -437,9 +578,8 @@ onMounted(async () => {
 .filters-panel {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 20px;
-  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -447,11 +587,14 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .filters-right {
   display: flex;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 /* === Селекты фильтров === */
@@ -521,13 +664,27 @@ onMounted(async () => {
   background: transparent;
   color: var(--text-body);
   border-bottom: 1px solid var(--border-soft) !important;
-  height: 68px !important;
+  min-height: 68px !important;
   padding: 4px 8px !important;
   vertical-align: middle !important;
 }
 
+/* Текст переносится максимум на 2 строки, дальше — многоточие */
+.cell-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  line-height: 1.3;
+}
+
 .custom-table :deep(.ant-table-tbody > tr:hover > td) {
   background: rgba(200, 183, 137, 0.06) !important;
+}
+
+.custom-table :deep(.clickable-row) {
+  cursor: pointer;
 }
 
 .imported-pill {
@@ -605,6 +762,33 @@ onMounted(async () => {
   border-color: var(--accent);
 }
 
+.custom-table :deep(.ant-checkbox-wrapper:hover .ant-checkbox-inner),
+.custom-table :deep(.ant-checkbox:hover .ant-checkbox-inner),
+.custom-table :deep(.ant-checkbox-input:focus + .ant-checkbox-inner) {
+  border-color: var(--accent);
+}
+
+.custom-table :deep(.ant-checkbox-checked::after) {
+  border-color: var(--accent);
+}
+
+.custom-table :deep(.ant-checkbox-indeterminate .ant-checkbox-inner) {
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+}
+
+.custom-table :deep(.ant-checkbox-indeterminate .ant-checkbox-inner::after) {
+  background-color: var(--accent);
+}
+
+.custom-table :deep(.ant-table-tbody > tr.ant-table-row-selected > td) {
+  background: rgba(138, 109, 47, 0.1);
+}
+
+.custom-table :deep(.ant-table-tbody > tr.ant-table-row-selected:hover > td) {
+  background: rgba(138, 109, 47, 0.16);
+}
+
 .custom-table :deep(.ant-table-column-sorter) {
   color: var(--text-faint);
 }
@@ -649,6 +833,26 @@ onMounted(async () => {
   text-transform: uppercase;
   border-radius: 20px;
   font-weight: 600;
+}
+
+.status-pill-editable {
+  cursor: pointer;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+}
+
+.status-pill-editable:hover {
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
+}
+
+.status-pill-updating {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Меню статуса рендерится в body (teleport), поэтому :global(), а не :deep() */
+:global(.ant-dropdown-menu-item:hover) {
+  background: rgba(138, 109, 47, 0.1) !important;
+  color: #6f581f !important;
 }
 
 .status-available {
@@ -709,5 +913,122 @@ onMounted(async () => {
 .icon-btn-danger:hover {
   background: var(--status-sold-bg);
   color: #8f2c2c;
+}
+
+.icon-btn-certificate {
+  color: var(--text-muted);
+}
+
+.icon-btn-certificate:hover {
+  background: var(--status-available-bg);
+  color: var(--status-available-fg);
+}
+
+.icon-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* === Клик по названию/картинке — открывает превью === */
+.clickable-cell {
+  cursor: pointer;
+}
+
+.name-cell:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* === Быстрый просмотр работы === */
+.work-preview {
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-cover {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto 20px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+}
+
+.preview-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.preview-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  color: var(--text-dim);
+}
+
+.preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.preview-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-title);
+  margin: 0;
+}
+
+.preview-description {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0 0 20px;
+}
+
+.preview-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.preview-field {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+}
+
+.preview-field-label {
+  color: var(--text-faint);
+}
+
+.preview-field-value {
+  color: var(--text-body);
+  font-weight: 500;
+  text-align: right;
+}
+
+.preview-edit-btn {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.preview-edit-btn:hover {
+  background: var(--accent-strong) !important;
+  border-color: var(--accent-strong) !important;
 }
 </style>

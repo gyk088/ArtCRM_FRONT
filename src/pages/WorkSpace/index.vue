@@ -1,236 +1,58 @@
 <template>
   <div class="workSpace-page">
-    <div class="workSpace-header">
-      <h3>Мое Рабочее пространство</h3>
-      <a-button @click="toggleSplitMode" class="split-btn">
-        <template #icon>
-          <ColumnWidthOutlined v-if="!isSplitMode" />
-          <ColumnHeightOutlined v-else />
-        </template>
-      </a-button>
-    </div>
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">Рабочее пространство</h2>
+        <p class="page-subtitle">Заметки, таблицы и ссылки под рукой — держите нужное на виду</p>
+      </div>
 
-    <!-- Обычный режим (левая панель на весь экран) -->
-    <div v-if="!isSplitMode" class="single-panel">
-      <div class="panel-header">
-        <span>Левая панель</span>
-        <a-button type="text" class="add-btn" @click="showAddMenu('left')">
-          <PlusOutlined />
+      <a-tooltip :title="isSplitMode ? 'Вернуться к одной панели' : 'Разделить экран на две панели'">
+        <a-button class="split-btn" @click="toggleSplitMode">
+          <template #icon>
+            <ColumnWidthOutlined v-if="!isSplitMode" />
+            <ColumnHeightOutlined v-else />
+          </template>
+          {{ isSplitMode ? 'Одна панель' : 'Разделить экран' }}
         </a-button>
-      </div>
-      <div class="panel-content">
-        <div v-for="item in leftPanelItems" :key="item.id" class="added-item">
-          <div class="item-header">
-            <!-- Рендерим компонент в зависимости от типа -->
-            <div v-if="item.type === 'text'">
-              <a-textarea 
-                v-model:value="item.value"
-                :placeholder="item.placeholder || 'Введите текст...'"
-                :auto-size="{ minRows: 3, maxRows: 10 }"
-                style="width: 100%"
-              />
-            </div>
-            <div v-else-if="item.type === 'table'">
-              <div class="table-component">
-                <a-table 
-                  :columns="tableColumns" 
-                  :data-source="item.data" 
-                  :pagination="false"
-                  size="small"
-                />
-                <a-button type="dashed" block @click="addTableRow(item)" class="add-row-btn">
-                  <PlusOutlined /> Добавить строку
-                </a-button>
-              </div>
-            </div>
-             <!-- Мои ссылки -->
-              <div v-else-if="item.type === 'links'" class="links-collections">
-                <div class="collections-header">
-                  <span>Мои ссылки</span>
-                  <a-button type="primary" size="small" @click="openEditPage">
-                    <PlusOutlined /> Создать ссылку
-                  </a-button>
-                </div>
-                
-                <div class="collection-grid" v-if="item.collections && item.collections.length > 0">
-                  <a-card v-for="collection in item.collections" :key="collection.id" class="collection-card" :title="collection.name"
-                    hoverable @click="openEditPage(collection)">
-                    <p class="collection-text">{{ collection.description }}</p>
-                    <div class="collection-actions">
-                      <a-button type="default" @click.stop="copyCollectionLink(collection)" class="copy-link-btn">
-                        <template #icon>
-                          <CopyOutlined />
-                        </template>
-                        Копировать ссылку
-                      </a-button>
-                      <a-popconfirm title="Удалить ссылку?" ok-text="Да" cancel-text="Нет"
-                        @confirm.stop="deleteCollection(item, collection.id)">
-                        <a-button type="link" danger @click.stop>
-                          <template #icon>
-                            <DeleteOutlined />
-                          </template>
-                          Удалить
-                        </a-button>
-                      </a-popconfirm>
-                    </div>
-                  </a-card>
-                </div>
-                
-                <div v-else class="empty-collections">
-                  <a-empty description="Нет созданных ссылок">
-                    <a-button type="primary" @click="openEditPage">Создать ссылку</a-button>
-                  </a-empty>
-                </div>
-              </div>
-              
-              <a-button type="text" danger size="small" @click="removeItem('left', item.id)" class="remove-item-btn">
-                <DeleteOutlined />
-              </a-button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    <!-- Режим разделенного экрана -->
-    <div v-else class="split-container">
-      <!-- Левая панель -->
-      <div class="split-panel left-panel">
-        <div class="panel-header">
-          <span>Левая панель</span>
-          <a-button type="text" class="add-btn" @click="showAddMenu('left')">
-            <PlusOutlined />
-          </a-button>
-        </div>
-        <div class="panel-content">
-          <div v-for="item in leftPanelItems" :key="item.id" class="added-item">
-            <div class="item-header">
-              <div v-if="item.type === 'text'">
-                <a-textarea 
-                  v-model:value="item.value"
-                  :placeholder="item.placeholder || 'Введите текст...'"
-                  :auto-size="{ minRows: 3, maxRows: 10 }"
-                  style="width: 100%"
-                />
-              </div>
-              <div v-else-if="item.type === 'table'">
-                <div class="table-component">
-                  <a-table 
-                    :columns="tableColumns" 
-                    :data-source="item.data" 
-                    :pagination="false"
-                    size="small"
-                  />
-                  <a-button type="dashed" block @click="addTableRow(item)" class="add-row-btn">
-                    <PlusOutlined /> Добавить строку
-                  </a-button>
-                </div>
-              </div>
-              <div v-else-if="item.type === 'links'">
-                <div class="links-component">
-                  <div v-for="(link, idx) in item.links" :key="idx" class="link-item">
-                    <a-input-group compact>
-                      <a-input 
-                        v-model:value="link.title" 
-                        placeholder="Название" 
-                        style="width: 30%"
-                      />
-                      <a-input 
-                        v-model:value="link.url" 
-                        placeholder="Ссылка" 
-                        style="width: 60%"
-                      />
-                      <a-button danger @click="removeLink(item, idx)" style="width: 10%">
-                        <DeleteOutlined />
-                      </a-button>
-                    </a-input-group>
-                  </div>
-                  <a-button type="dashed" block @click="addLink(item)" class="add-link-btn">
-                    <PlusOutlined /> Добавить ссылку
-                  </a-button>
-                </div>
-              </div>
-              
-              <a-button type="text" danger size="small" @click="removeItem('left', item.id)" class="remove-item-btn">
-                <DeleteOutlined />
-              </a-button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Правая панель -->
-      <div class="split-panel right-panel">
-        <div class="panel-header">
-          <span>Правая панель</span>
-          <a-button type="text" class="add-btn" @click="showAddMenu('right')">
-            <PlusOutlined />
-          </a-button>
-        </div>
-        <div class="panel-content">
-          <div v-for="item in rightPanelItems" :key="item.id" class="added-item">
-            <div class="item-header">
-              <div v-if="item.type === 'text'">
-                <a-textarea 
-                  v-model:value="item.value"
-                  :placeholder="item.placeholder || 'Введите текст...'"
-                  :auto-size="{ minRows: 3, maxRows: 10 }"
-                  style="width: 100%"
-                />
-              </div>
-              <div v-else-if="item.type === 'table'">
-                <div class="table-component">
-                  <a-table 
-                    :columns="tableColumns" 
-                    :data-source="item.data" 
-                    :pagination="false"
-                    size="small"
-                  />
-                  <a-button type="dashed" block @click="addTableRow(item)" class="add-row-btn">
-                    <PlusOutlined /> Добавить строку
-                  </a-button>
-                </div>
-              </div>
-              <div v-else-if="item.type === 'links'">
-                <div class="links-component">
-                  <div v-for="(link, idx) in item.links" :key="idx" class="link-item">
-                    <a-input-group compact>
-                      <a-input 
-                        v-model:value="link.title" 
-                        placeholder="Название" 
-                        style="width: 30%"
-                      />
-                      <a-input 
-                        v-model:value="link.url" 
-                        placeholder="Ссылка" 
-                        style="width: 60%"
-                      />
-                      <a-button danger @click="removeLink(item, idx)" style="width: 10%">
-                        <DeleteOutlined />
-                      </a-button>
-                    </a-input-group>
-                  </div>
-                  <a-button type="dashed" block @click="addLink(item)" class="add-link-btn">
-                    <PlusOutlined /> Добавить ссылку
-                  </a-button>
-                </div>
-              </div>
-              
-              <a-button type="text" danger size="small" @click="removeItem('right', item.id)" class="remove-item-btn">
-                <DeleteOutlined />
-              </a-button>
-            </div>
-          </div>
-        </div>
-      </div>
+      </a-tooltip>
     </div>
 
-    <!-- Меню выбора -->
-    <a-modal 
-      v-model:visible="menuVisible" 
-      title="Что добавить?" 
+    <div class="workspace-body" :class="{ split: isSplitMode }">
+      <WorkspacePanel
+        title="Левая панель"
+        :items="leftPanelItems"
+        :table-columns="tableColumns"
+        @add="showAddMenu('left')"
+        @remove="id => removeItem('left', id)"
+        @add-table-row="addTableRow"
+        @create-link="openEditPage()"
+        @open-collection="openEditPage"
+        @copy-link="copyCollectionLink"
+        @delete-link="deleteCollection"
+      />
+
+      <WorkspacePanel
+        v-if="isSplitMode"
+        title="Правая панель"
+        :items="rightPanelItems"
+        :table-columns="tableColumns"
+        @add="showAddMenu('right')"
+        @remove="id => removeItem('right', id)"
+        @add-table-row="addTableRow"
+        @create-link="openEditPage()"
+        @open-collection="openEditPage"
+        @copy-link="copyCollectionLink"
+        @delete-link="deleteCollection"
+      />
+    </div>
+
+    <!-- Меню выбора блока -->
+    <a-modal
+      v-model:open="menuVisible"
+      title="Что добавить?"
       :footer="null"
       :closable="true"
-      width="400px"
+      width="380px"
       class="add-menu-modal"
     >
       <div class="menu-options">
@@ -252,23 +74,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue' // Добавлен onMounted
-import { useRouter } from 'vue-router' // Добавлен useRouter
-import { useMedia } from '@/stores/media.js' 
-import { message } from 'ant-design-vue' 
-import { 
-  ColumnWidthOutlined, 
-  ColumnHeightOutlined, 
-  PlusOutlined,
-  DeleteOutlined,
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
+import {
+  ColumnWidthOutlined,
+  ColumnHeightOutlined,
   FileTextOutlined,
   TableOutlined,
-  LinkOutlined,
-  CopyOutlined
+  LinkOutlined
 } from '@ant-design/icons-vue'
+import WorkspacePanel from './WorkspacePanel.vue'
 
-const mediaStore = useMedia();
-const router = useRouter() 
+const router = useRouter()
 const isSplitMode = ref(false)
 const menuVisible = ref(false)
 const activePanel = ref(null)
@@ -280,7 +98,6 @@ const globalCollectionList = ref([])
 
 let nextId = 1
 
-// Загрузка данных при монтировании
 onMounted(() => {
   loadCollections()
 })
@@ -306,14 +123,12 @@ const saveCollections = () => {
 
 // Обновление всех блоков "Мои ссылки" актуальными коллекциями
 const updateAllLinksBlocks = () => {
-  // Обновляем в левой панели
   leftPanelItems.value.forEach(item => {
     if (item.type === 'links') {
       item.collections = [...globalCollectionList.value]
     }
   })
-  
-  // Обновляем в правой панели
+
   rightPanelItems.value.forEach(item => {
     if (item.type === 'links') {
       item.collections = [...globalCollectionList.value]
@@ -340,10 +155,10 @@ const removeItem = (panel, id) => {
 
 // Функции для таблицы
 const addTableRow = (item) => {
-  item.data.push({ 
-    key: Date.now(), 
-    name: '', 
-    value: '' 
+  item.data.push({
+    key: Date.now(),
+    name: '',
+    value: ''
   })
 }
 
@@ -352,22 +167,22 @@ const addLinks = () => {
   const newItem = {
     id: nextId++,
     type: 'links',
-    collections: [...globalCollectionList.value] // Копируем все ссылки
+    collections: [...globalCollectionList.value]
   }
-  
+
   if (activePanel.value === 'left') {
     leftPanelItems.value.push(newItem)
   } else {
     rightPanelItems.value.push(newItem)
   }
-  
+
   menuVisible.value = false
 }
 
 // Копирование ссылки на коллекцию
 const copyCollectionLink = async (collection) => {
   const link = `${window.location.origin}/collection/${collection.id}`
-  
+
   try {
     await navigator.clipboard.writeText(link)
     message.success('Ссылка на коллекцию скопирована!')
@@ -385,19 +200,15 @@ const copyCollectionLink = async (collection) => {
 
 // Удаление коллекции из блока и из глобального списка
 const deleteCollection = (item, collectionId) => {
-  // Удаляем из глобального списка
   globalCollectionList.value = globalCollectionList.value.filter(c => c.id !== collectionId)
   saveCollections()
-  
-  // Обновляем все блоки
   updateAllLinksBlocks()
-  
   message.success('Коллекция удалена')
 }
 
 // Открытие страницы редактирования коллекции
 const openEditPage = (collection = null) => {
-  if (collection) {
+  if (collection && collection.id) {
     router.push(`/collections/edit/${collection.id}`)
   } else {
     router.push('/collections/new')
@@ -412,13 +223,13 @@ const addTextField = () => {
     placeholder: 'Введите текст...',
     value: ''
   }
-  
+
   if (activePanel.value === 'left') {
     leftPanelItems.value.push(newItem)
   } else {
     rightPanelItems.value.push(newItem)
   }
-  
+
   menuVisible.value = false
 }
 
@@ -428,127 +239,113 @@ const addTable = () => {
     type: 'table',
     data: []
   }
-  
+
   if (activePanel.value === 'left') {
     leftPanelItems.value.push(newItem)
   } else {
     rightPanelItems.value.push(newItem)
   }
-  
+
   menuVisible.value = false
 }
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
 .workSpace-page {
-  padding: 16px;
-  background: #fff;
-  border-radius: 12px;
-  height: 100%;
+  --bg: #f7f5f0;
+  --bg-elevated: #ffffff;
+  --card-bg: #efece4;
+  --text-title: #211f1a;
+  --text-body: #2c2a25;
+  --text-muted: #5a564c;
+  --text-faint: #7c7669;
+  --text-dim: #a29c8c;
+  --accent: #8a6d2f;
+  --accent-strong: #6f581f;
+  --accent-tint: rgba(138, 109, 47, 0.1);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-soft: rgba(0, 0, 0, 0.07);
+  --danger: #b43c3c;
+  --danger-tint: rgba(180, 60, 60, 0.1);
+
+  height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text-body);
+  border-radius: 14px;
+  padding: 20px 24px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  box-sizing: border-box;
 }
 
-.workSpace-header {
+.page-header {
+  flex-shrink: 0;
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
+  gap: 16px;
   margin-bottom: 16px;
 }
 
+.page-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-title);
+  margin: 0 0 4px;
+}
+
+.page-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
 .split-btn {
-  border: 1px solid #1164B4;
-  color: #1164B4;
+  flex-shrink: 0;
+  border-color: var(--accent);
+  color: var(--accent);
   background: transparent;
 }
 
 .split-btn:hover {
-  background-color: #1164B4;
-  color: white;
+  background-color: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #fff !important;
 }
 
-/* Одиночная панель */
-.single-panel {
-  display: flex;
-  flex-direction: column;
-  background: #fafafa;
-  border-radius: 8px;
-  border: 1px solid #e8e8e8;
-  height: calc(100vh - 120px);
-  overflow: hidden;
-}
-
-/* Режим разделенного экрана */
-.split-container {
+.workspace-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   gap: 16px;
-  height: calc(100vh - 120px);
 }
 
-.split-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: #fafafa;
-  border-radius: 8px;
-  border: 1px solid #e8e8e8;
-  overflow: hidden;
+.workspace-body:not(.split) > :deep(.ws-panel) {
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
 }
 
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #e8e8e8;
-  font-weight: 500;
+/* Переопределение акцентных цветов Ant Design под тёплую палитру проекта */
+.workSpace-page :deep(.ant-btn-primary) {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
-.add-btn {
-  color: #1164B4;
-  font-size: 16px;
+.workSpace-page :deep(.ant-btn-primary:not(:disabled):hover) {
+  background: var(--accent-strong) !important;
+  border-color: var(--accent-strong) !important;
 }
 
-.add-btn:hover {
-  color: #1E90FF;
-  background-color: #f0f7ff;
-}
-
-.panel-content {
-  flex: 1;
-  padding: 16px;
-  overflow-y: auto;
-}
-
-.added-item {
-  margin-bottom: 16px;
-  padding: 12px;
-  background: #fff;
-  border-radius: 6px;
-  border: 1px solid #e8e8e8;
-  position: relative;
-}
-
-.item-header {
-  position: relative;
-}
-
-.remove-item-btn {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.added-item:hover .remove-item-btn {
-  opacity: 1;
-}
-
-/* Меню */
+/* Меню выбора блока */
 .menu-options {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .menu-option {
@@ -556,146 +353,30 @@ const addTable = () => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: #f5f5f5;
+  background: var(--card-bg);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
+  color: var(--text-body);
 }
 
 .menu-option:hover {
-  background: #e6f7ff;
+  background: var(--accent-tint);
   transform: translateX(4px);
 }
 
 .menu-option .anticon {
-  font-size: 20px;
-  color: #1164B4;
+  font-size: 18px;
+  color: var(--accent);
 }
 
 .menu-option span {
   font-size: 14px;
   font-weight: 500;
+  font-family: 'Cormorant Garamond', serif;
 }
 
-/* Стили для текстового поля */
-.text-field-wrapper :deep(textarea) {
-  border-color: #BDD6F4;
-  transition: all 0.3s ease;
-}
-
-.text-field-wrapper :deep(textarea):hover {
-  border-color: #1E90FF;
-}
-
-.text-field-wrapper :deep(textarea):focus {
-  border-color: #1E90FF;
-  box-shadow: 0 0 0 2px rgba(17, 100, 180, 0.1);
-}
-
-/* Стили для таблицы */
-.table-component :deep(.ant-table) {
-  font-size: 12px;
-}
-
-.add-row-btn,
-.add-link-btn {
-  margin-top: 8px;
-}
-
-/* Стили для ссылок */
-.link-item {
-  margin-bottom: 8px;
-}
-
-.collections-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e8e8e8;
-}
-
-.collection-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-  max-height: 500px;
-  overflow-y: auto;
-  padding: 4px;
-}
-
-.collection-card {
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.collection-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.collection-text {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  word-break: break-word;
-  margin-bottom: 12px;
-  line-height: 1.5;
-  font-size: 13px;
-  min-height: 58px;
-  color: #666;
-}
-
-.collection-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-top: 8px;
-  border-top: 1px solid #f0f0f0;
-  padding-top: 8px;
-}
-
-.copy-link-btn {
-  border: 1px solid #bdd8f1 !important;
-  color: #1164B4 !important;
-  border-radius: 12px !important;
-  padding: 2px 10px !important;
-  height: 24px !important;
-  font-size: 11px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 4px !important;
-}
-
-.empty-collections {
-  padding: 40px 20px;
-  text-align: center;
-}
-
-.links-collections {
-  width: 100%;
-}
-
-/* Стили для скролла коллекций */
-.collection-grid::-webkit-scrollbar {
-  width: 6px;
-}
-
-.collection-grid::-webkit-scrollbar-track {
-  background: #f0f0f0;
-  border-radius: 4px;
-}
-
-.collection-grid::-webkit-scrollbar-thumb {
-  background: #BDD6F4;
-  border-radius: 4px;
-}
-
-.collection-grid::-webkit-scrollbar-thumb:hover {
-  background: #1E90FF;
+.add-menu-modal :deep(.ant-modal-content) {
+  border-radius: 12px;
 }
 </style>

@@ -16,7 +16,11 @@
               <a-input v-model:value="form.name" placeholder="Например, «Осенняя ссылка" class="fixed-input" />
             </a-form-item>
 
-            <a-form-item label="Описание">
+            <a-form-item label="Художник/Галерея" name="artistOrGallery">
+              <a-input v-model:value="form.artistOrGallery" class="fixed-input" />
+            </a-form-item>
+
+            <a-form-item label="Описание" class="description-item">
               <div class="rich-editor-wrap">
                 <div v-if="descriptionEditor" class="editor-toolbar">
                   <button
@@ -130,6 +134,16 @@
             <button class="delete-btn" @click="removeAvatar">×</button>
           </div>
         </a-form-item>
+
+        <section class="form-section settings-card">
+          <div class="section-heading">Отображение полей</div>
+          <p class="settings-hint">Выключенные поля не будут показаны в карточке работы на странице коллекции</p>
+
+          <div v-for="field in fieldToggles" :key="field.key" class="field-toggle-row">
+            <span class="field-toggle-label">{{ field.label }}</span>
+            <a-switch v-model:checked="form.visibleFields[field.key]" />
+          </div>
+        </section>
       </div>
     </div>
 
@@ -173,6 +187,17 @@
                 </template>
               </a-button>
             </a-tooltip>
+            <a-tooltip title="Сгенерировать сертификат">
+              <a-button
+                type="text"
+                class="certificate-row-btn"
+                @click.stop="openCertificatePreview(record)"
+              >
+                <template #icon>
+                  <SafetyCertificateOutlined />
+                </template>
+              </a-button>
+            </a-tooltip>
             <a-tooltip title="Удалить">
               <a-button type="text" danger class="delete-row-btn" @click.stop="removeSelectedWork(record.id)">
                 <template #icon>
@@ -200,7 +225,7 @@
     <a-modal
       v-model:open="isWorksModalOpen"
       title="Выберите работы"
-      width="800px"
+      width="1300px"
       centered
       ok-text="Добавить"
       cancel-text="Отмена"
@@ -208,12 +233,21 @@
       :get-container="false"
       @ok="addSelectedWorks"
     >
+      <div class="modal-filters-panel">
+        <a-select v-model:value="filterArtist" placeholder="Художник" allowClear style="width: 180px" :options="artistOptions" />
+        <a-select v-model:value="filterLocation" placeholder="Локация" allowClear style="width: 180px" :options="locationOptions" />
+        <a-select v-model:value="filterSeria" placeholder="Серия" allowClear style="width: 180px" :options="seriaOptions" />
+        <a-select v-model:value="filterMedia" placeholder="Медиа" allowClear style="width: 180px" :options="mediaFilterOptions" />
+        <a-select v-model:value="filterStatus" placeholder="Статус" allowClear style="width: 180px" :options="statusFilterOptions" />
+      </div>
+
       <a-table
-        :data-source="worksTable"
+        :data-source="filteredWorksTable"
         :columns="columns"
         row-key="id"
         :loading="worksLoading"
-        :row-selection="rowSelection">
+        :row-selection="rowSelection"
+        :scroll="{ x: 1100 }">
 
          <template #bodyCell="{ column, record }">
         <!-- Колонка аватара -->
@@ -222,6 +256,18 @@
           <div v-else class="img-placeholder">
             <PictureOutlined />
           </div>
+        </template>
+        <template v-else-if="column.dataIndex === 'artist'">
+          {{ getArtistName(record.artist) }}
+        </template>
+        <template v-else-if="column.dataIndex === 'media'">
+          {{ getMediaName(record.media) }}
+        </template>
+        <template v-else-if="column.dataIndex === 'seria'">
+          {{ getSeriaName(record.seria) }}
+        </template>
+        <template v-else-if="column.dataIndex === 'location'">
+          {{ getLocationName(record.location) }}
         </template>
         <template v-else-if="column.dataIndex === 'status'">
           {{ getStatusName(record.status) }}
@@ -239,6 +285,13 @@
     <a-drawer v-model:open="isFilesModalOpen" title="Файлы" placement="right" width="700px" destroyOnClose>
       <FileUploader :remove="true" :select="true" @select="handleFileSelect" />
     </a-drawer>
+
+    <CertificatePreviewModal
+      v-model:open="isCertPreviewOpen"
+      :work="certPreviewWork"
+      :artist-name="certPreviewWork ? getArtistName(certPreviewWork.artist) : ''"
+      :seria-name="certPreviewWork ? getSeriaName(certPreviewWork.seria) : ''"
+    />
   </div>
 </template>
 
@@ -259,8 +312,10 @@ import {
   BlockOutlined,
   UndoOutlined,
   RedoOutlined,
+  SafetyCertificateOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
+import CertificatePreviewModal from '@/components/CertificatePreviewModal.vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -270,6 +325,9 @@ import { useArtWork } from '@/stores/artWork.js'
 import { useStatuses } from '@/stores/statuses.js'
 import { useSerias } from '@/stores/seria.js'
 import { useArtist } from '@/stores/artist.js'
+import { useMedia } from '@/stores/media.js'
+import { useLocations } from '@/stores/locations.js'
+import { useCollection } from '@/stores/collection.js'
 import FileUploader from "@/components/FileUploader.vue"
 
 const route = useRoute()
@@ -279,6 +337,9 @@ const artWorkStore = useArtWork()
 const statusesStore = useStatuses()
 const seriasStore = useSerias()
 const artistStore = useArtist()
+const mediaStore = useMedia()
+const locationsStore = useLocations()
+const collectionStore = useCollection()
 
 const isWorksModalOpen = ref(false)
 const worksTable = ref([])
@@ -287,34 +348,62 @@ const isFilesModalOpen = ref(false)
 const formRef = ref(null)
 const isNewCollection = computed(() => route.params.id === 'new')
 
+// Фильтры в модалке выбора работ — как на UserPictures
+const filterArtist = ref(null)
+const filterLocation = ref(null)
+const filterSeria = ref(null)
+const filterMedia = ref(null)
+const filterStatus = ref(null)
+
+const artistOptions = computed(() => artistStore.listArtists.map(a => ({ label: a.name, value: a.id })))
+const locationOptions = computed(() => locationsStore.listLocations.map(l => ({ label: l.name, value: l.id })))
+const seriaOptions = computed(() => seriasStore.listSerias.map(s => ({ label: s.name, value: s.id })))
+const mediaFilterOptions = computed(() => mediaStore.listMedia.map(m => ({ label: m.name, value: m.id })))
+const statusFilterOptions = computed(() => statusesStore.listStatuses.map(s => ({ label: s.name, value: s.id })))
+
+const filteredWorksTable = computed(() => {
+  let result = worksTable.value
+
+  if (filterArtist.value) result = result.filter(w => w.artist === filterArtist.value)
+  if (filterLocation.value) result = result.filter(w => w.location === filterLocation.value)
+  if (filterSeria.value) result = result.filter(w => w.seria === filterSeria.value)
+  if (filterMedia.value) result = result.filter(w => w.media === filterMedia.value)
+  if (filterStatus.value) result = result.filter(w => w.status === filterStatus.value)
+
+  return result
+})
+
 const rules = {
   name: [{ required: true, message: 'Введите название ссылки', trigger: 'blur' }]
 }
 
+const fieldToggles = [
+  { key: 'technique', label: 'Техника' },
+  { key: 'year', label: 'Год' },
+  { key: 'seria', label: 'Серия' },
+  { key: 'media', label: 'Медиа' },
+  { key: 'location', label: 'Локация' },
+  { key: 'price', label: 'Цена' },
+]
+
 const form = reactive({
-  id: route.params.id !== 'new' ? Number(route.params.id) : Date.now(),
   name: '',
+  artistOrGallery: '',
   description: '',
   avatar: null,
-  works: []
+  works: [],
+  visibleFields: {
+    technique: true,
+    year: true,
+    seria: true,
+    media: true,
+    location: true,
+    price: true
+  }
 })
 
-// === Инициализация формы (синхронно, чтобы редактор получил готовый контент) ===
-if (route.params.id && route.params.id !== 'new') {
-  const storedCollections = JSON.parse(localStorage.getItem('collectionList') || '[]')
-  const collectionId = Number(route.params.id)
-  const collection = storedCollections.find(c => c.id === collectionId)
-  if (collection) {
-    Object.assign(form, collection)
-    form.description = toEditableHtml(form.description)
-  }
-} else {
-  // Для новой ссылки сразу создаём id
-  form.id = Date.now()
-}
-
 const descriptionEditor = useEditor({
-  content: form.description,
+  content: '',
   extensions: [
     StarterKit,
     Underline,
@@ -334,15 +423,25 @@ onMounted(async () => {
     loadWorks(),
     statusesStore.getListStatuses(),
     seriasStore.getListSerias(),
-    artistStore.getListArtists()
+    artistStore.getListArtists(),
+    mediaStore.getListMedia(),
+    locationsStore.getListLocations()
   ])
 
-  // Загружаем выбранные работы
-  const savedSelectedWorks = JSON.parse(localStorage.getItem('selectedWorks') || '{}')
-  if (savedSelectedWorks[form.id]) {
-    form.works = [...savedSelectedWorks[form.id]]
-    selectedRowKeys.value = [...form.works]
+  if (!isNewCollection.value) {
+    // === Редактирование существующей ссылки — подгружаем её с бэкенда ===
+    const existing = await collectionStore.getCollectionById(route.params.id)
+    if (existing) {
+      Object.assign(form, existing)
+      form.description = toEditableHtml(form.description)
+      descriptionEditor.value?.commands.setContent(form.description)
+    }
+  } else if (route.query.works) {
+    // Работы переданы через query — например, кнопкой «Создать ссылку» на UserPictures
+    form.works = String(route.query.works).split(',').filter(Boolean)
   }
+
+  selectedRowKeys.value = [...form.works]
 })
 
 async function loadWorks() {
@@ -373,6 +472,18 @@ function getSeriaName(seriaId) {
   return seria ? seria.name : seriaId
 }
 
+function getMediaName(mediaId) {
+  if (!mediaId) return ''
+  const media = mediaStore.listMedia.find(m => m.id === mediaId)
+  return media ? media.name : mediaId
+}
+
+function getLocationName(locationId) {
+  if (!locationId) return ''
+  const location = locationsStore.listLocations.find(l => l.id === locationId)
+  return location ? location.name : locationId
+}
+
 // === Обложка ссылки ===
 function openFilesModal() {
   isFilesModalOpen.value = true
@@ -401,12 +512,19 @@ function removeAvatar() {
   form.avatar = null
 }
 
-// колонки для модалки
+// колонки для модалки — те же, что и в таблице на UserPictures (без "Действия")
 const columns = [
-  { title: 'Картина', dataIndex: 'avatar', key: 'avatar' },
-  { title: 'Название', dataIndex: 'name', key: 'name' },
-  { title: 'Статус', dataIndex: 'status', key: 'status', width: 120 },
-  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 100 },
+  { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: 70 },
+  { title: 'Название', dataIndex: 'name', key: 'name', sorter: (a, b) => (a.name || '').localeCompare(b.name || '', 'ru') },
+  { title: 'Художник', dataIndex: 'artist', key: 'artist', sorter: (a, b) => getArtistName(a.artist).localeCompare(getArtistName(b.artist), 'ru') },
+  { title: 'Техника', dataIndex: 'technique', key: 'technique', sorter: (a, b) => (a.technique || '').localeCompare(b.technique || '', 'ru') },
+  { title: 'Размер', dataIndex: 'size', key: 'size', sorter: (a, b) => (a.size || '').localeCompare(b.size || '', 'ru') },
+  { title: 'Год', dataIndex: 'year', key: 'year', width: 80, sorter: (a, b) => a.year - b.year },
+  { title: 'Медиа', dataIndex: 'media', key: 'media', sorter: (a, b) => getMediaName(a.media).localeCompare(getMediaName(b.media), 'ru') },
+  { title: 'Серия', dataIndex: 'seria', key: 'seria', sorter: (a, b) => getSeriaName(a.seria).localeCompare(getSeriaName(b.seria), 'ru') },
+  { title: 'Локация', dataIndex: 'location', key: 'location', sorter: (a, b) => getLocationName(a.location).localeCompare(getLocationName(b.location), 'ru') },
+  { title: 'Статус', dataIndex: 'status', key: 'status', width: 120, sorter: (a, b) => getStatusName(a.status).localeCompare(getStatusName(b.status), 'ru') },
+  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 100, sorter: (a, b) => a.price - b.price },
 ]
 
 // выбранные работы
@@ -419,7 +537,7 @@ const selectedWorksColumns = [
   { title: 'Серия', dataIndex: 'seria', key: 'seria', width: 160 },
   { title: 'Статус', dataIndex: 'status', key: 'status', width: 160 },
   { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 160 },
-  { title: "Действия", dataIndex: "actions", key: "actions", width: 70 }
+  { title: "Действия", dataIndex: "actions", key: "actions", width: 110 }
 ]
 
 function openWorksModal() {
@@ -444,24 +562,24 @@ const selectedWorksData = computed(() => {
 
 function removeSelectedWork(id) {
   form.works = form.works.filter(w => w !== id)
-  saveSelectedWorksToStorage()
 }
 
 function openEditWork(record) {
   router.push({ name: 'edit-work', params: { id: record.id } })
 }
 
-const addSelectedWorks = () => {
-  form.works = [...selectedRowKeys.value]
-  saveSelectedWorksToStorage()
-  isWorksModalOpen.value = false
+// Предпросмотр и генерация сертификата подлинности работы (PDF)
+const isCertPreviewOpen = ref(false)
+const certPreviewWork = ref(null)
+
+function openCertificatePreview(record) {
+  certPreviewWork.value = record
+  isCertPreviewOpen.value = true
 }
 
-// сохраняем выбранные работы
-function saveSelectedWorksToStorage() {
-  const allSelected = JSON.parse(localStorage.getItem('selectedWorks') || '{}')
-  allSelected[form.id] = [...form.works]
-  localStorage.setItem('selectedWorks', JSON.stringify(allSelected))
+const addSelectedWorks = () => {
+  form.works = [...selectedRowKeys.value]
+  isWorksModalOpen.value = false
 }
 
 // сохраняем ссылку
@@ -473,17 +591,21 @@ const saveChanges = async () => {
     return
   }
 
-  const storedCollections = JSON.parse(localStorage.getItem('collectionList') || '[]')
-
-  const index = storedCollections.findIndex(c => c.id === form.id)
-  if (index !== -1) {
-    storedCollections[index] = { ...form }
-  } else {
-    storedCollections.push({ ...form })
+  const payload = {
+    name: form.name,
+    artistOrGallery: form.artistOrGallery,
+    description: form.description,
+    avatar: form.avatar,
+    works: form.works,
+    visibleFields: form.visibleFields,
   }
 
-  localStorage.setItem('collectionList', JSON.stringify(storedCollections))
-  saveSelectedWorksToStorage()
+  const result = isNewCollection.value
+    ? await collectionStore.createCollection(payload)
+    : await collectionStore.updateCollection(route.params.id, payload)
+
+  if (!result) return
+
   router.push('/home/collection')
 }
 
@@ -541,11 +663,18 @@ function goBack() {
 }
 
 .left-column {
-  width: 44%;
+  width: 60%;
+  display: flex;
+}
+
+.left-column :deep(.ant-form) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .right-column {
-  width: 56%;
+  width: 40%;
   padding-left: 20px;
   border-left: 1px solid var(--border);
 }
@@ -555,7 +684,68 @@ function goBack() {
   background: var(--bg-elevated);
   border: 1px solid var(--border-soft);
   border-radius: 12px;
-  padding: 14px 16px 2px;
+  padding: 14px 12px 2px;
+  display: flex;
+  flex-direction: column;
+}
+
+.left-column .form-section {
+  flex: 1;
+  height: 100%;
+}
+
+/* Поле "Описание" растягивается на всё оставшееся место в карточке */
+.left-column .description-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 12px;
+}
+
+.left-column .description-item :deep(.ant-form-item-row) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.left-column .description-item :deep(.ant-form-item-control) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100% !important;
+  max-width: 100% !important;
+  flex: 1;
+  min-height: 0;
+}
+
+.left-column .description-item :deep(.ant-form-item-control-input) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.left-column .description-item :deep(.ant-form-item-control-input-content) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.left-column .description-item .rich-editor-wrap {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .section-heading {
@@ -564,11 +754,16 @@ function goBack() {
   color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 :deep(.ant-form-item-label > label) {
   color: var(--text-muted);
+}
+
+/* Меньше отступы между полями — карточки становятся компактнее */
+:deep(.ant-form-item) {
+  margin-bottom: 12px;
 }
 
 .fixed-input {
@@ -583,10 +778,14 @@ function goBack() {
 
 /* === Панель форматирования описания === */
 .rich-editor-wrap {
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-elevated);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .rich-editor-wrap:focus-within {
@@ -643,10 +842,14 @@ function goBack() {
 .rich-editor {
   padding: 10px 12px;
   min-height: 100px;
-  max-height: 260px;
   overflow-y: auto;
   font-size: 14px;
   line-height: 1.6;
+}
+
+.left-column .description-item .rich-editor {
+  flex: 1;
+  min-height: 0;
 }
 
 .rich-editor :deep(.ProseMirror) {
@@ -677,6 +880,36 @@ function goBack() {
   height: 0;
   color: var(--text-faint);
   pointer-events: none;
+}
+
+/* === Карточка настроек отображения полей === */
+.settings-card {
+  margin-top: 12px;
+  padding-bottom: 10px;
+}
+
+.settings-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
+.field-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.field-toggle-row:last-child {
+  border-bottom: none;
+}
+
+.field-toggle-label {
+  font-size: 14px;
+  color: var(--text-body);
 }
 
 /* === Обложка ссылки === */
@@ -895,6 +1128,15 @@ function goBack() {
   background-color: #b43c3c !important;
 }
 
+.certificate-row-btn {
+  color: #2f8a35 !important;
+}
+
+.certificate-row-btn:hover {
+  color: #fff !important;
+  background-color: #2f8a35 !important;
+}
+
 /* Контейнер для кнопок */
 .buttons-wrapper {
   display: flex;
@@ -1081,5 +1323,12 @@ function goBack() {
 .works-modal .ant-btn-default:hover {
   border-color: var(--accent) !important;
   color: var(--accent) !important;
+}
+
+.modal-filters-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 </style>

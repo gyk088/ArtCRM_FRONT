@@ -17,7 +17,7 @@
               <span>Мои Ссылки</span>
             </a-menu-item>
 
-            <a-menu-item key="workspace">
+            <a-menu-item v-if="!isArtist" key="workspace">
               <AppstoreOutlined />
               <span>Рабочее Пространство</span>
             </a-menu-item>
@@ -35,6 +35,16 @@
             <a-menu-item key="files">
               <InboxOutlined />
               <span>Файлы</span>
+            </a-menu-item>
+
+            <a-menu-item key="profile">
+              <IdcardOutlined />
+              <span>Профиль</span>
+            </a-menu-item>
+
+            <a-menu-item v-if="isSuperAdmin" key="admin-panel">
+              <TeamOutlined />
+              <span>Админ-панель</span>
             </a-menu-item>
           </a-menu>
         </div>
@@ -75,12 +85,13 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { Modal, message } from "ant-design-vue";
 import FileUploader from "@/components/FileUploader.vue"
 import apiClient from "@/services/api.js";
-import { logout } from "@/services/auth.js"; 
+import { logout, getUser } from "@/services/auth.js";
+import { ROLES } from "@/services/const";
 import {
   PictureOutlined,
   UserOutlined,
@@ -88,12 +99,16 @@ import {
   LinkOutlined,
   AppstoreOutlined,
   InboxOutlined,
-  LogoutOutlined
+  LogoutOutlined,
+  IdcardOutlined,
+  TeamOutlined
 } from '@ant-design/icons-vue'
 
 const collapsed = ref(false);
 const router = useRouter();
 const logoutLoading = ref(false);
+const isArtist = computed(() => getUser()?.role === ROLES.ARTIST);
+const isSuperAdmin = computed(() => getUser()?.role === ROLES.SUPER_ADMIN);
 
 const selectedKey = ref(router.currentRoute.value.name);
 router.afterEach((to) => (selectedKey.value = to.name));
@@ -149,6 +164,9 @@ const handleLogout = () => {
   --accent-strong: #d8c896;
   --border: rgba(255, 255, 255, 0.08);
 
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
   height: 100vh;
   display: flex;
   flex-direction: column;

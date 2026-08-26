@@ -3,10 +3,15 @@ import HomeView from '../views/HomeView.vue'
 import { ROLES } from '@/services/const'
 import { Layout } from 'ant-design-vue'
 import Home from '@/layouts/Home.vue';
+import { getToken, getUser } from '@/services/auth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    {
+      path: '/',
+      redirect: () => (getToken() ? '/home' : '/auth'),
+    },
     {
       path: '/auth',
       name: 'auth',
@@ -14,7 +19,6 @@ const router = createRouter({
       meta: {
         title: 'Вход в личный кабинет',
         layout: 'empty',
-        roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN]
       }
     },
     {
@@ -53,6 +57,7 @@ const router = createRouter({
           component: () => import('@/pages/WorkSpace/index.vue'),
         meta: {
             title: '<Рабочее пространство>',
+            hiddenRoles: [ROLES.ARTIST],
           },
       },{
         path: 'cv',
@@ -78,7 +83,22 @@ const router = createRouter({
           name: 'edit-collection',
           component: () => import('@/pages/Collection/index.vue'),
           meta: { title: 'Редактировать ссылку' },
-        },
+        }, {
+        path: 'profile',
+        name: 'profile',
+        component: () => import('@/pages/UserConfig/index.vue'),
+        meta: {
+            title: 'Профиль',
+          },
+      }, {
+        path: 'admin',
+        name: 'admin-panel',
+        component: () => import('@/pages/AdminPanel/index.vue'),
+        meta: {
+            title: 'Админ-панель',
+            hiddenRoles: [ROLES.GALLERY, ROLES.MANAGER, ROLES.ARTIST],
+          },
+      },
     ],
     },
     {
@@ -99,6 +119,25 @@ const router = createRouter({
       component: () => import('../views/AboutView.vue'),
     },
   ],
+})
+
+router.beforeEach((to) => {
+  const isAuthenticated = !!getToken()
+
+  if (to.path.startsWith('/home') && !isAuthenticated) {
+    return '/auth'
+  }
+
+  if (to.path === '/auth' && isAuthenticated && !to.query.token) {
+    return '/home'
+  }
+
+  if (to.meta?.hiddenRoles?.length && isAuthenticated) {
+    const role = getUser()?.role
+    if (to.meta.hiddenRoles.includes(role)) {
+      return '/home'
+    }
+  }
 })
 
 export default router

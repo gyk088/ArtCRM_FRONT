@@ -1,9 +1,9 @@
 import axios from 'axios'
-import { getToken } from '@/services/auth.js'
+import { getToken, logout } from '@/services/auth.js'
 
 const apiClient = axios.create({
   timeout: 100000,
-  baseURL: 'http://31.220.77.203:9999',
+  baseURL: 'https://artapi.myoffer.life',
   headers: {
     'Content-Type': 'application/json'
   },
@@ -20,6 +20,16 @@ apiClient.interceptors.request.use(
     return config
   },
   (error) => Promise.reject(error)
+)
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      logout()
+    }
+    return Promise.reject(error)
+  }
 )
 
 export default apiClient

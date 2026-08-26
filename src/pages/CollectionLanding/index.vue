@@ -37,7 +37,7 @@
         <div v-if="coverImage" class="hero-bg" :style="{ backgroundImage: `url(${coverImage})` }"></div>
         <div class="hero-overlay"></div>
         <div class="hero-content">
-          <div class="hero-eyebrow">ART CRM · ССЫЛКА</div>
+          <!-- <div class="hero-eyebrow">ART CRM · ССЫЛКА</div> -->
           <h1 class="hero-title">{{ collection.name || 'Без названия' }}</h1>
           <div v-if="collection.description" class="hero-description" v-html="collection.description"></div>
           <div class="hero-meta">
@@ -69,18 +69,19 @@
                 <div v-else class="art-placeholder">
                   <PictureOutlined />
                 </div>
-                <span v-if="getStatusName(work.status)" class="status-badge" :class="statusClass(work.status)">
-                  {{ getStatusName(work.status) }}
-                </span>
               </div>
               <div class="art-info">
                 <h3 class="art-name">{{ work.name || 'Без названия' }}</h3>
+                <p v-if="work.artist_name" class="art-artist">{{ work.artist_name }}</p>
+                <span v-if="work.status_name" class="status-badge status-badge-inline" :class="statusClass(work.status_name)">
+                  {{ work.status_name }}
+                </span>
                 <p class="art-technique">
                   <span v-if="work.technique">{{ work.technique }}</span>
                   <span v-if="work.technique && work.year"> · </span>
                   <span v-if="work.year">{{ work.year }}</span>
                 </p>
-                <p v-if="work.price" class="art-price">{{ formatPrice(work.price) }}</p>
+                <p v-if="work.price && isFieldVisible('price')" class="art-price">{{ formatPrice(work.price) }}</p>
               </div>
             </article>
           </div>
@@ -165,37 +166,38 @@
 
         <transition name="details-fade" mode="out-in">
           <div class="work-modal-details" :key="activeWork.id">
-            <span v-if="getStatusName(activeWork.status)" class="status-badge status-badge-top" :class="statusClass(activeWork.status)">
-              {{ getStatusName(activeWork.status) }}
+            <span v-if="activeWork.status_name" class="status-badge status-badge-top" :class="statusClass(activeWork.status_name)">
+              {{ activeWork.status_name }}
             </span>
             <h2 class="work-modal-title">{{ activeWork.name || 'Без названия' }}</h2>
+            <p v-if="activeWork.artist_name" class="work-modal-artist">{{ activeWork.artist_name }}</p>
 
             <dl class="detail-list">
-              <div v-if="activeWork.technique" class="detail-row">
+              <div v-if="activeWork.technique && isFieldVisible('technique')" class="detail-row">
                 <dt>Техника</dt>
                 <dd>{{ activeWork.technique }}</dd>
               </div>
-              <div v-if="activeWork.year" class="detail-row">
+              <div v-if="activeWork.year && isFieldVisible('year')" class="detail-row">
                 <dt>Год</dt>
                 <dd>{{ activeWork.year }}</dd>
               </div>
-              <div v-if="getSeriaName(activeWork.seria)" class="detail-row">
+              <div v-if="activeWork.seria_name && isFieldVisible('seria')" class="detail-row">
                 <dt>Серия</dt>
-                <dd>{{ getSeriaName(activeWork.seria) }}</dd>
+                <dd>{{ activeWork.seria_name }}</dd>
               </div>
-              <div v-if="getMediaName(activeWork.media)" class="detail-row">
+              <div v-if="activeWork.media_name && isFieldVisible('media')" class="detail-row">
                 <dt>Медиа</dt>
-                <dd>{{ getMediaName(activeWork.media) }}</dd>
+                <dd>{{ activeWork.media_name }}</dd>
               </div>
-              <div v-if="getLocationName(activeWork.location)" class="detail-row">
+              <div v-if="activeWork.location_name && isFieldVisible('location')" class="detail-row">
                 <dt>Локация</dt>
-                <dd>{{ getLocationName(activeWork.location) }}</dd>
+                <dd>{{ activeWork.location_name }}</dd>
               </div>
             </dl>
 
             <p v-if="activeWork.description" class="work-description">{{ activeWork.description }}</p>
 
-            <div v-if="activeWork.price" class="work-price">
+            <div v-if="activeWork.price && isFieldVisible('price')" class="work-price">
               {{ formatPrice(activeWork.price) }}
             </div>
           </div>
@@ -209,20 +211,11 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { PictureOutlined } from '@ant-design/icons-vue'
-import { useArtWork } from '@/stores/artWork.js'
-import { useStatuses } from '@/stores/statuses.js'
-import { useSerias } from '@/stores/seria.js'
-import { useMedia } from '@/stores/media.js'
-import { useLocations } from '@/stores/locations.js'
-import { getUser } from '@/services/auth.js'
+import { useCollection } from '@/stores/collection.js'
 
 const route = useRoute()
 
-const artWorkStore = useArtWork()
-const statusesStore = useStatuses()
-const seriasStore = useSerias()
-const mediaStore = useMedia()
-const locationsStore = useLocations()
+const collectionStore = useCollection()
 
 const loading = ref(true)
 const collection = ref(null)
@@ -254,11 +247,7 @@ watch(theme, (value) => {
   localStorage.setItem(THEME_STORAGE_KEY, value)
 })
 
-const artistName = computed(() => {
-  const user = getUser()
-  if (!user) return ''
-  return [user.name, user.surname].filter(Boolean).join(' ')
-})
+const artistName = computed(() => collection.value?.artistOrGallery || '')
 
 const heroImage = computed(() => {
   const withAvatar = works.value.find(w => w.avatar?.url)
@@ -538,32 +527,22 @@ function setLayer(el, translateX, scale, opacity) {
   el.style.opacity = String(opacity)
 }
 
-function getStatusName(id) {
-  if (!id) return ''
-  const status = statusesStore.listStatuses.find(s => s.id === id)
-  return status?.name || ''
-}
-
-function statusClass(id) {
-  const name = getStatusName(id).toLowerCase()
-  if (name.includes('прода')) return 'status-sold'
-  if (name.includes('налич') || name.includes('доступ')) return 'status-available'
+// Публичная ссылка отдаёт работы уже с резолвленными именами справочников
+// (status_name/seria_name/media_name/location_name) — отдельный зритель
+// не может смотреть их через свои же авторизованные справочники, т.к.
+// он, как правило, не совпадает с владельцем ссылки.
+function statusClass(name) {
+  const n = (name || '').toLowerCase()
+  if (n.includes('прода')) return 'status-sold'
+  if (n.includes('налич') || n.includes('доступ')) return 'status-available'
   return 'status-default'
 }
 
-function getSeriaName(id) {
-  if (!id) return ''
-  return seriasStore.listSerias.find(s => s.id === id)?.name || ''
-}
-
-function getMediaName(id) {
-  if (!id) return ''
-  return mediaStore.listMedia.find(m => m.id === id)?.name || ''
-}
-
-function getLocationName(id) {
-  if (!id) return ''
-  return locationsStore.listLocations.find(l => l.id === id)?.name || ''
+// Настройки отображения полей задаются в редакторе коллекции (Collection/index.vue).
+// Если настройка не задана (старые коллекции без этого поля) — считаем поле видимым.
+function isFieldVisible(key) {
+  const visibleFields = collection.value?.visibleFields
+  return !visibleFields || visibleFields[key] !== false
 }
 
 function formatPrice(price) {
@@ -598,28 +577,14 @@ onMounted(async () => {
 
   loading.value = true
   try {
-    const storedCollections = JSON.parse(localStorage.getItem('collectionList') || '[]')
-    const collectionId = Number(route.params.id)
-    const found = storedCollections.find(c => c.id === collectionId)
+    const found = await collectionStore.getPublicCollection(route.params.id)
 
     if (!found) {
       collection.value = null
       return
     }
     collection.value = found
-
-    const savedSelectedWorks = JSON.parse(localStorage.getItem('selectedWorks') || '{}')
-    const workIds = savedSelectedWorks[collectionId] || found.works || []
-
-    await Promise.all([
-      artWorkStore.getListArtWorks(),
-      statusesStore.getListStatuses(),
-      seriasStore.getListSerias(),
-      mediaStore.getListMedia(),
-      locationsStore.getListLocations()
-    ])
-
-    works.value = artWorkStore.listArtWorks.filter(w => workIds.includes(w.id))
+    works.value = found.works || []
   } finally {
     loading.value = false
   }
@@ -725,6 +690,11 @@ onBeforeUnmount(() => {
   --status-default-fg: #ffffff;
   --status-default-border: rgba(0, 0, 0, 0.18);
 }
+
+/* Стили модалки просмотра работы (.work-modal и всё, что внутри неё)
+   вынесены в отдельный НЕскоуп-блок <style> в конце файла — см. комментарий
+   там. Ant Design телепортирует модалку из дерева этого компонента, из-за
+   чего scoped-стили (в т.ч. CSS-переменные темы) до неё не доходят. */
 
 /* ==== Переключатель темы ==== */
 .theme-toggle {
@@ -1032,12 +1002,14 @@ onBeforeUnmount(() => {
 
 .art-card {
   width: 90%;
+  margin: 0 auto;
   cursor: pointer;
 }
 
 .art-image-wrap {
   position: relative;
   width: 90%;
+  margin: 0 auto;
   background: var(--card-bg);
 }
 
@@ -1083,6 +1055,13 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
+.status-badge-inline {
+  position: static;
+  display: inline-block;
+  margin: 0 0 8px;
+  box-shadow: none;
+}
+
 .status-available {
   background: var(--status-available-bg);
   color: var(--status-available-fg);
@@ -1110,8 +1089,15 @@ onBeforeUnmount(() => {
   font-family: 'Cormorant Garamond', serif;
   font-size: 24px;
   font-weight: 600;
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   color: var(--text-title);
+}
+
+.art-artist {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  margin: 0 0 8px;
 }
 
 .art-technique {
@@ -1142,15 +1128,123 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
 }
 
-/* ==== Modal ==== */
-.work-modal :deep(.ant-modal-content) {
+/* ==== Адаптив ==== */
+@media (max-width: 900px) {
+  .gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  .gallery-grid {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .art-card {
+    max-width: 360px;
+  }
+}
+
+@media (max-width: 760px) {
+  .theme-toggle {
+    top: 9px;
+    right: 14px;
+    width: 38px;
+    height: 38px;
+  }
+
+  .artist-bar {
+    height: 56px;
+    padding: 0 60px 0 16px;
+    font-size: 15px;
+  }
+
+  .hero-content {
+    padding: 64px 20px 36px;
+  }
+
+  .gallery-wrap {
+    padding: 40px 18px 24px;
+  }
+
+  .landing-footer {
+    padding: 20px 20px 32px;
+    flex-direction: column;
+    gap: 6px;
+    text-align: center;
+  }
+}
+</style>
+
+<!--
+  Ant Design Vue's a-modal (просмотр работы) рендерит своё DOM-дерево
+  через Teleport, вынося его из дерева .landing — даже с :get-container="false"
+  узлы модалки не получают scoped data-v-* атрибут этого компонента, поэтому
+  scoped-стили (и, что важнее, CSS-переменные темы) до них не докатываются:
+  без этого блока текст оставался тёмным на тёмном фоне в dark-теме.
+  Тот же приём уже используется для другой модалки в Collection/index.vue.
+-->
+<style>
+.work-modal {
+  --bg-elevated: #16151a;
+  --bg-image: #0c0c0e;
+  --card-bg: #1b1a1e;
+  --text-title: #fbfaf7;
+  --text-body: #f5f3ee;
+  --text-muted: #d8d5cd;
+  --text-faint: #aeaba1;
+  --text-dim: #858175;
+  --text-label: #9a9689;
+  --accent: #c8b789;
+  --accent-strong: #d8c896;
+  --border: rgba(255, 255, 255, 0.14);
+  --border-soft: rgba(255, 255, 255, 0.12);
+  --status-available-bg: #2f9e46;
+  --status-available-fg: #ffffff;
+  --status-available-border: rgba(0, 0, 0, 0.18);
+  --status-sold-bg: #d64545;
+  --status-sold-fg: #ffffff;
+  --status-sold-border: rgba(0, 0, 0, 0.18);
+  --status-default-bg: #8a6d2f;
+  --status-default-fg: #ffffff;
+  --status-default-border: rgba(0, 0, 0, 0.18);
+}
+
+.work-modal.light {
+  --bg-elevated: #ffffff;
+  --bg-image: #efece4;
+  --card-bg: #efece4;
+  --text-title: #1a1814;
+  --text-body: #242219;
+  --text-muted: #4a463c;
+  --text-faint: #665f50;
+  --text-dim: #8f8874;
+  --text-label: #766f5e;
+  --accent: #8a6d2f;
+  --accent-strong: #6f581f;
+  --border: rgba(0, 0, 0, 0.14);
+  --border-soft: rgba(0, 0, 0, 0.12);
+  --status-available-bg: #2f9e46;
+  --status-available-fg: #ffffff;
+  --status-available-border: rgba(0, 0, 0, 0.18);
+  --status-sold-bg: #d64545;
+  --status-sold-fg: #ffffff;
+  --status-sold-border: rgba(0, 0, 0, 0.18);
+  --status-default-bg: #8a6d2f;
+  --status-default-fg: #ffffff;
+  --status-default-border: rgba(0, 0, 0, 0.18);
+}
+
+.work-modal .ant-modal-content {
   background: var(--bg-elevated);
   border-radius: 14px;
   padding: 0;
   overflow: hidden;
 }
 
-.work-modal :deep(.ant-modal-close) {
+.work-modal .ant-modal-close {
   color: var(--text-muted);
   top: 14px;
   inset-inline-end: 14px;
@@ -1176,7 +1270,7 @@ onBeforeUnmount(() => {
   position: relative;
   width: 100%;
   height: 480px;
-  touch-action: pan-y; /* горизонтальный жест забираем себе, вертикальный скролл страницы не блокируем */
+  touch-action: pan-y;
   user-select: none;
   cursor: grab;
 }
@@ -1185,8 +1279,6 @@ onBeforeUnmount(() => {
   cursor: grabbing;
 }
 
-/* Параллакс-фон — размытые, увеличенные копии тех же изображений,
-   двигаются медленнее переднего плана (коэффициент 0.4 в JS) */
 .swipe-bg {
   position: absolute;
   inset: 0;
@@ -1200,11 +1292,9 @@ onBeforeUnmount(() => {
   height: 100%;
   object-fit: cover;
   filter: blur(24px) brightness(0.7) saturate(1.05);
-  transform: scale(1.2); /* запас на размытие, чтобы не было видно краёв */
+  transform: scale(1.2);
 }
 
-/* Передний план — три слоя друг поверх друга, позиционируются через
-   transform: translate3d в JS (см. applyTransforms) */
 .swipe-slide {
   position: absolute;
   inset: 0;
@@ -1219,13 +1309,12 @@ onBeforeUnmount(() => {
 .swipe-image {
   width: 100%;
   height: 100%;
-  object-fit: contain; /* сохраняем пропорции изображения — без обрезки, но заполняем всю область просмотра */
+  object-fit: contain;
   border-radius: 6px;
   pointer-events: none;
   -webkit-user-drag: none;
 }
 
-/* Кроссфейд текстовых деталей при смене работы */
 .details-fade-enter-active,
 .details-fade-leave-active {
   transition: opacity 0.25s ease;
@@ -1278,6 +1367,19 @@ onBeforeUnmount(() => {
   max-height: 560px;
 }
 
+.work-modal .status-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 10px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 20px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
 /* Тот же уровень по высоте, что и кнопка закрытия модалки (top: 14px) */
 .status-badge-top {
   position: absolute;
@@ -1286,12 +1388,37 @@ onBeforeUnmount(() => {
   right: auto;
 }
 
+.work-modal .status-available {
+  background: var(--status-available-bg);
+  color: var(--status-available-fg);
+  border: 1px solid var(--status-available-border);
+}
+
+.work-modal .status-sold {
+  background: var(--status-sold-bg);
+  color: var(--status-sold-fg);
+  border: 1px solid var(--status-sold-border);
+}
+
+.work-modal .status-default {
+  background: var(--status-default-bg);
+  color: var(--status-default-fg);
+  border: 1px solid var(--status-default-border);
+}
+
 .work-modal-title {
   font-family: 'Cormorant Garamond', serif;
   font-size: 30px;
   font-weight: 600;
-  margin: 44px 0 20px;
+  margin: 44px 0 4px;
   color: var(--text-title);
+}
+
+.work-modal-artist {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--accent);
+  margin: 0 0 20px;
 }
 
 .detail-list {
@@ -1335,42 +1462,7 @@ onBeforeUnmount(() => {
   color: var(--accent-strong);
 }
 
-/* ==== Адаптив ==== */
-@media (max-width: 900px) {
-  .gallery-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 32px 20px;
-  }
-}
-
-@media (max-width: 560px) {
-  .gallery-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 760px) {
-  .theme-toggle {
-    top: 9px;
-    right: 14px;
-    width: 38px;
-    height: 38px;
-  }
-
-  .artist-bar {
-    height: 56px;
-    padding: 0 60px 0 16px;
-    font-size: 15px;
-  }
-
-  .hero-content {
-    padding: 64px 20px 36px;
-  }
-
-  .gallery-wrap {
-    padding: 40px 18px 24px;
-  }
-
   .work-modal-content {
     grid-template-columns: 1fr;
   }
@@ -1378,13 +1470,6 @@ onBeforeUnmount(() => {
   .work-modal-details {
     max-height: none;
     padding: 28px 22px 32px;
-  }
-
-  .landing-footer {
-    padding: 20px 20px 32px;
-    flex-direction: column;
-    gap: 6px;
-    text-align: center;
   }
 }
 </style>

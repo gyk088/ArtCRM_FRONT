@@ -1,12 +1,14 @@
+// Значения должны совпадать с backend ROLES (src/bll/utils/const.js в ArtCRM_BACKEND)
 export const ROLES = {
     SUPER_ADMIN: 'super_admin',
-    ART: 'art',
+    GALLERY: 'gallery',
     MANAGER: 'manager',
-    GALLERY: 'gallery'
+    ARTIST: 'artist'
 }
 
 export const TEXT_ROLES = {
-    admin: "Администратор",
+    super_admin: "Супер-админ",
+    gallery: "Галерея",
     manager: "Менеджер",
-    client: "Клиент"
+    artist: "Художник"
 }

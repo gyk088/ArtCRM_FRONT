@@ -118,14 +118,33 @@
           @dragleave="handleDragLeaveFolder(folder.id)"
           @drop="handleDropOnFolder(folder.id)"
         >
-          <a-tooltip title="Удалить папку">
-            <button class="folder-delete" @click.stop="handleDeleteFolder(folder)">
-              <DeleteOutlined />
-            </button>
-          </a-tooltip>
+          <div class="folder-card-actions">
+            <a-tooltip title="Переименовать">
+              <button class="folder-action-btn" @click.stop="startRenameFolder(folder)">
+                <EditOutlined />
+              </button>
+            </a-tooltip>
+            <a-tooltip title="Удалить папку">
+              <button class="folder-action-btn danger" @click.stop="handleDeleteFolder(folder)">
+                <DeleteOutlined />
+              </button>
+            </a-tooltip>
+          </div>
 
           <FolderFilled class="folder-icon" />
-          <div class="folder-name" :title="folder.name">{{ folder.name }}</div>
+
+          <a-input
+            v-if="renamingFolderId === folder.id"
+            ref="folderRenameInputRef"
+            v-model:value="renameFolderValue"
+            size="small"
+            class="folder-rename-input"
+            @click.stop
+            @keyup.enter="confirmRenameFolder(folder)"
+            @keyup.esc="cancelRenameFolder"
+            @blur="confirmRenameFolder(folder)"
+          />
+          <div v-else class="folder-name" :title="folder.name">{{ folder.name }}</div>
         </div>
       </div>
     </template>
@@ -138,11 +157,10 @@
         v-for="item in filteredFiles"
         :key="item.id"
         class="file-card"
-        :class="{ selected: selectedFileId === item.id, dragging: draggingFileId === item.id }"
+        :class="{ dragging: draggingFileId === item.id }"
         draggable="true"
         @dragstart="handleDragStart($event, item)"
         @dragend="handleDragEnd"
-        @click="selectFile(item)"
       >
         <div class="file-thumb" @click.stop>
           <FileView :file="item" />
@@ -164,9 +182,21 @@
             </button>
           </a-tooltip>
 
+          <a-tooltip title="Переименовать">
+            <button class="file-action-btn" @click.stop="startRenameFile(item)">
+              <EditOutlined />
+            </button>
+          </a-tooltip>
+
           <a-tooltip v-if="currentFolder" title="Убрать из папки">
             <button class="file-action-btn" @click.stop="handleRemoveFromFolder(item)">
               <RollbackOutlined />
+            </button>
+          </a-tooltip>
+
+          <a-tooltip title="Скачать">
+            <button class="file-action-btn" @click.stop="handleDownload(item)">
+              <DownloadOutlined />
             </button>
           </a-tooltip>
 
@@ -187,11 +217,44 @@
         : (currentFolder ? 'В папке пока нет файлов' : 'Файлов пока нет')"
     />
 
+    <!-- ✏️ Редактирование файла — отдельное окно, как и при открытии файла -->
+    <a-drawer
+      v-model:open="editDrawerVisible"
+      title="Редактировать файл"
+      placement="right"
+      width="420"
+      destroyOnClose
+      @close="cancelRenameFile"
+    >
+      <div v-if="editingFile" class="file-edit-drawer">
+        <div class="file-edit-preview">
+          <FileView :file="editingFile" />
+        </div>
+
+        <div class="file-edit-field">
+          <label class="file-edit-label">Название</label>
+          <a-input v-model:value="renameFileValue" placeholder="Введите название" />
+        </div>
+
+        <div class="file-edit-field">
+          <label class="file-edit-label">Комментарий</label>
+          <a-textarea v-model:value="renameCommentValue" placeholder="Комментарий" :rows="4" />
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="file-edit-footer">
+          <a-button @click="cancelRenameFile">Отмена</a-button>
+          <a-button type="primary" @click="confirmRenameFile">Сохранить</a-button>
+        </div>
+      </template>
+    </a-drawer>
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, defineProps, defineEmits, h } from "vue"
+import { ref, computed, onMounted, nextTick, defineProps, defineEmits, h } from "vue"
 import { message, Modal } from "ant-design-vue"
 import {
   FolderFilled,
@@ -202,10 +265,13 @@ import {
   InboxOutlined,
   CheckOutlined,
   ExclamationCircleOutlined,
-  RollbackOutlined
+  RollbackOutlined,
+  DownloadOutlined,
+  EditOutlined
 } from "@ant-design/icons-vue"
 import { useFile } from "@/stores/file.js"
 import FileView from "./FileView.vue"
+import { downloadFile } from "@/utils/downloadFile.js"
 
 const emit = defineEmits(["select"])
 
@@ -229,8 +295,6 @@ onMounted(() => {
 })
 
 const pendingFiles = ref([])
-
-const selectedFileId = ref(null)
 
 const generateId = () => Date.now() + Math.random()
 
@@ -320,6 +384,88 @@ const handleDeleteFolder = (folder) => {
   })
 }
 
+// ✏️ Переименование папки
+const renamingFolderId = ref(null)
+const renameFolderValue = ref("")
+const folderRenameInputRef = ref(null)
+
+const startRenameFolder = (folder) => {
+  renamingFolderId.value = folder.id
+  renameFolderValue.value = folder.name
+  nextTick(() => folderRenameInputRef.value?.[0]?.focus?.())
+}
+
+const cancelRenameFolder = () => {
+  renamingFolderId.value = null
+  renameFolderValue.value = ""
+}
+
+const confirmRenameFolder = async (folder) => {
+  if (renamingFolderId.value !== folder.id) return
+
+  const name = renameFolderValue.value.trim()
+  if (!name || name === folder.name) {
+    cancelRenameFolder()
+    return
+  }
+
+  try {
+    await fileStore.renameFolder(folder.id, name)
+    message.success("Папка переименована")
+  } catch {
+    // ошибка уже показана через notifyServerError в сторе
+  } finally {
+    cancelRenameFolder()
+  }
+}
+
+// ✏️ Редактирование файла (название + комментарий) — открывается в отдельном окне (drawer)
+const editDrawerVisible = ref(false)
+const editingFile = ref(null)
+const renameFileValue = ref("")
+const renameCommentValue = ref("")
+
+const startRenameFile = (item) => {
+  editingFile.value = item
+  renameFileValue.value = item.title || item.name
+  renameCommentValue.value = item.comment || ""
+  editDrawerVisible.value = true
+}
+
+const cancelRenameFile = () => {
+  editDrawerVisible.value = false
+  editingFile.value = null
+  renameFileValue.value = ""
+  renameCommentValue.value = ""
+}
+
+const confirmRenameFile = async () => {
+  const item = editingFile.value
+  if (!item) return
+
+  const name = renameFileValue.value.trim()
+  const comment = renameCommentValue.value.trim()
+
+  if (!name) {
+    message.warning("Введите название")
+    return
+  }
+
+  if (name === (item.title || item.name) && comment === (item.comment || "")) {
+    cancelRenameFile()
+    return
+  }
+
+  try {
+    await fileStore.renameFile(item.id, { name, comment })
+    message.success("Файл обновлён")
+  } catch {
+    // ошибка уже показана через notifyServerError в сторе
+  } finally {
+    cancelRenameFile()
+  }
+}
+
 // 🖱 Перетаскивание файлов в папки
 const draggingFileId = ref(null)
 const dragOverTarget = ref(null) // id папки или "root"
@@ -354,6 +500,15 @@ const handleRemoveFromFolder = async (item) => {
   }
 }
 
+const handleDownload = async (item) => {
+  try {
+    await downloadFile(item)
+  } catch (error) {
+    console.error("Ошибка скачивания файла:", error)
+    message.error("Не удалось скачать файл")
+  }
+}
+
 const handleDropOnFolder = async (target) => {
   const fileId = draggingFileId.value
   draggingFileId.value = null
@@ -370,7 +525,14 @@ const handleDropOnFolder = async (target) => {
 }
 
 // 📥 добавление во временные
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 МБ
+
 const handleBeforeUpload = (file) => {
+  if (file.size > MAX_FILE_SIZE) {
+    message.error(`Файл «${file.name}» превышает максимальный размер 5 МБ`)
+    return false
+  }
+
   pendingFiles.value.unshift({
     id: generateId(),
     originalName: file.name,
@@ -430,12 +592,6 @@ const removeFile = (item) => {
       item.loading = false
     }
   })
-}
-
-// 👉 выбор
-const selectFile = (file) => {
-  selectedFileId.value = file.id
-  console.log("Выбран файл:", file)
 }
 </script>
 
@@ -625,7 +781,7 @@ const selectFile = (file) => {
 .folders-grid,
 .files-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -674,27 +830,84 @@ const selectFile = (file) => {
   color: var(--text-title);
 }
 
-.folder-delete {
+.folder-card-actions {
   position: absolute;
   top: 4px;
   right: 4px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.folder-card:hover .folder-card-actions {
+  opacity: 1;
+}
+
+.folder-action-btn {
   border: none;
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
   padding: 3px;
   border-radius: 4px;
-  opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
-.folder-card:hover .folder-delete {
-  opacity: 1;
+.folder-action-btn:hover {
+  color: var(--accent);
+  background: var(--accent-tint);
 }
 
-.folder-delete:hover {
+.folder-action-btn.danger:hover {
   color: var(--danger);
   background: var(--danger-tint);
+}
+
+.folder-rename-input {
+  width: 100%;
+}
+
+.folder-rename-input :deep(.ant-input) {
+  text-align: center;
+}
+
+.file-edit-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.file-edit-preview {
+  width: 120px;
+  height: 120px;
+  margin: 0 auto;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--card-bg);
+}
+
+.file-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.file-edit-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-label);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.file-edit-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .folder-card.drag-over {
@@ -710,21 +923,15 @@ const selectFile = (file) => {
 }
 
 /* Карточка файла */
-.file-card.selected {
-  border-color: var(--accent);
-  background: var(--accent-tint);
-  box-shadow: 0 0 0 2px rgba(138, 109, 47, 0.18);
-}
-
 .file-card.dragging {
   opacity: 0.4;
 }
 
-/* Фиксированный размер контейнера — изображение вписывается целиком (contain),
-   без обрезки и без растягивания */
+/* Превью растягивается на всю ширину карточки (не выходя за её пределы)
+   и центрируется, оставаясь квадратным */
 .file-thumb {
-  width: 90px;
-  height: 90px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
   margin: 0 0 5px 0;
   border-radius: 6px;
   overflow: hidden;
@@ -755,6 +962,7 @@ const selectFile = (file) => {
 
 .file-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 4px;
   margin-top: 6px;
@@ -762,8 +970,7 @@ const selectFile = (file) => {
   transition: opacity 0.15s ease;
 }
 
-.file-card:hover .file-actions,
-.file-card.selected .file-actions {
+.file-card:hover .file-actions {
   opacity: 1;
 }
 

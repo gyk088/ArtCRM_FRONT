@@ -5,7 +5,7 @@ import { toEditableHtml, htmlToPlainText } from './richText.js'
 
 // jsPDF не умеет рендерить кириллицу встроенными шрифтами,
 // поэтому контент отрисовывается в DOM и захватывается html2canvas.
-function escapeHtml(str) {
+export function escapeHtml(str) {
   const div = document.createElement('div')
   div.textContent = str ?? ''
   return div.innerHTML

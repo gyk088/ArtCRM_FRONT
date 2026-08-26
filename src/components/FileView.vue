@@ -152,13 +152,14 @@ const iconComponent = computed(() => {
   cursor: pointer;
 }
 
-/* маленький превью — фиксированный размер контейнера и картинки,
-   изображение вписывается целиком, без обрезки и растягивания */
+/* превью заполняет весь контейнер .file-thumb (какого бы размера он ни был),
+   картинка центрируется и обрезается по краям без искажений */
 .image,
 .media {
-  height: 90px;
-  width: 90px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
 }
 
@@ -168,12 +169,13 @@ const iconComponent = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 90px;
-  width: 90px;
+  width: 100%;
+  height: 100%;
   justify-content: center;
   border: 1px dashed #ccc;
   border-radius: 8px;
   padding: 20px;
+  box-sizing: border-box;
 }
 
 /* fullscreen */
@@ -195,8 +197,8 @@ const iconComponent = computed(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 90px;
-  width: 90px;
+  height: 100%;
+  width: 100%;
   border: 1px dashed #ccc;
   border-radius: 8px;
   font-size: 24px;
