@@ -1,7 +1,10 @@
 // stores/art.js
 import { defineStore } from 'pinia'
+import { Modal } from 'ant-design-vue'
 import apiClient from '@/services/api.js'
 import { notifyServerError, notifyServerSuccess } from '@/services/notify.js'
+import { useArtWork } from '@/stores/artWork.js'
+import { useCollection } from '@/stores/collection.js'
 
 export const useFile = defineStore('file', {
   state: () => {
@@ -63,6 +66,36 @@ export const useFile = defineStore('file', {
       return success
     },
 
+    /**
+     * Проверить, используется ли файл в работах или ссылках (коллекциях),
+     * чтобы предупредить пользователя перед безвозвратным удалением.
+     * Работа ссылается на файл через avatar_id/avatar.id и images[].id,
+     * ссылка (коллекция) — через avatar.id.
+     */
+    async checkFileUsage(fileId) {
+      const artWorkStore = useArtWork()
+      const collectionStore = useCollection()
+
+      if (!artWorkStore.listArtWorks.length) {
+        await artWorkStore.getListArtWorks()
+      }
+      if (!collectionStore.listCollections.length) {
+        await collectionStore.getAllCollections()
+      }
+
+      const works = artWorkStore.listArtWorks.filter(w =>
+        w.avatar_id === fileId ||
+        w.avatar?.id === fileId ||
+        (w.images || []).some(img => img?.id === fileId)
+      )
+
+      const collections = collectionStore.listCollections.filter(c =>
+        c.avatar?.id === fileId
+      )
+
+      return { works, collections }
+    },
+
     async deleteFile(fileId) {
       let success = true
       try {
@@ -71,8 +104,19 @@ export const useFile = defineStore('file', {
         notifyServerSuccess('Файл успешно удален')
       } catch (e) {
         console.error('Error deleting file:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to delete file')
-        this.error = e?.response?.data?.message || 'Failed to delete file'
+        const rawMessage = e?.response?.data?.message || ''
+
+        if (rawMessage.includes('foreign key constraint')) {
+          Modal.warning({
+            title: 'Нельзя удалить файл',
+            content: 'Файл используется в работе или ссылке и не может быть удалён.',
+            okText: 'Понятно'
+          })
+        } else {
+          notifyServerError(rawMessage || 'Failed to delete file')
+        }
+
+        this.error = rawMessage || 'Failed to delete file'
         success = false
       }
       return success

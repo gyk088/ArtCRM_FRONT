@@ -379,10 +379,12 @@ const rules = {
 
 const fieldToggles = [
   { key: 'technique', label: 'Техника' },
+  { key: 'size', label: 'Размер' },
   { key: 'year', label: 'Год' },
   { key: 'seria', label: 'Серия' },
   { key: 'media', label: 'Медиа' },
   { key: 'location', label: 'Локация' },
+  { key: 'status', label: 'Статус' },
   { key: 'price', label: 'Цена' },
 ]
 
@@ -394,10 +396,12 @@ const form = reactive({
   works: [],
   visibleFields: {
     technique: true,
+    size: true,
     year: true,
     seria: true,
     media: true,
     location: true,
+    status: true,
     price: true
   }
 })
@@ -432,7 +436,12 @@ onMounted(async () => {
     // === Редактирование существующей ссылки — подгружаем её с бэкенда ===
     const existing = await collectionStore.getCollectionById(route.params.id)
     if (existing) {
-      Object.assign(form, existing)
+      // Мёрджим, а не затираем visibleFields — иначе у ссылок, сохранённых
+      // до добавления новых полей (размер/статус), переключатели показывались бы
+      // выключенными, хотя на публичной странице отсутствующий ключ считается видимым.
+      Object.assign(form, existing, {
+        visibleFields: { ...form.visibleFields, ...existing.visibleFields }
+      })
       form.description = toEditableHtml(form.description)
       descriptionEditor.value?.commands.setContent(form.description)
     }

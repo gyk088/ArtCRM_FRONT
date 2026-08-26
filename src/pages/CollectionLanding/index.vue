@@ -71,16 +71,13 @@
                 </div>
               </div>
               <div class="art-info">
-                <h3 class="art-name">{{ work.name || 'Без названия' }}</h3>
                 <p v-if="work.artist_name" class="art-artist">{{ work.artist_name }}</p>
-                <span v-if="work.status_name" class="status-badge status-badge-inline" :class="statusClass(work.status_name)">
-                  {{ work.status_name }}
-                </span>
-                <p class="art-technique">
-                  <span v-if="work.technique">{{ work.technique }}</span>
-                  <span v-if="work.technique && work.year"> · </span>
-                  <span v-if="work.year">{{ work.year }}</span>
+                <p class="art-title">
+                  {{ work.name || 'Без названия' }}<template v-if="work.year && isFieldVisible('year')">, {{ work.year }}</template>
                 </p>
+                <p v-if="work.technique && isFieldVisible('technique')" class="art-detail">{{ work.technique }}</p>
+                <p v-if="work.size && isFieldVisible('size')" class="art-detail">{{ work.size }}</p>
+                <p v-if="work.status_name && isFieldVisible('status')" class="art-detail">{{ work.status_name }}</p>
                 <p v-if="work.price && isFieldVisible('price')" class="art-price">{{ formatPrice(work.price) }}</p>
               </div>
             </article>
@@ -94,53 +91,45 @@
       </div>
     </div>
 
-    <!-- ==== Модалка просмотра работы ==== -->
-    <a-modal
-      v-model:open="viewerOpen"
-      :footer="null"
-      width="920px"
-      centered
-      :class="['work-modal', theme]"
-      :get-container="false"
-      destroyOnClose
-    >
-      <div v-if="activeWork" class="work-modal-content">
+    <!-- ==== Полноэкранный просмотр работы ==== -->
+    <div v-if="viewerOpen && activeWork" class="work-modal" :class="theme">
+      <button class="viewer-close-btn" aria-label="Закрыть" @click="closeViewer">
+        <CloseOutlined />
+      </button>
+
+      <button v-if="prevWork" class="viewer-nav-btn viewer-nav-prev" aria-label="Предыдущая работа" @click="goToPrev">
+        <LeftOutlined />
+      </button>
+      <button v-if="nextWork" class="viewer-nav-btn viewer-nav-next" aria-label="Следующая работа" @click="goToNext">
+        <RightOutlined />
+      </button>
+
+      <div class="work-modal-content" :class="{ 'info-hidden': infoHidden }">
         <div class="work-modal-image">
 
           <!--
             Свайп-вьювер между работами.
-            Три слоя переднего плана (prev / current / next) и три слоя
-            параллакс-фона всегда смонтированы одновременно — переключение
-            происходит через transform/opacity, а не через v-if/пересоздание
-            DOM, поэтому изображения соседних работ уже предзагружены и
-            не мигают при переходе.
+            Три слоя переднего плана (prev / current / next) всегда смонтированы
+            одновременно — переключение происходит через transform/opacity, а не
+            через v-if/пересоздание DOM, поэтому изображения соседних работ уже
+            предзагружены и не мигают при переходе.
           -->
           <div
             class="swipe-viewer"
+            :class="{ zoomed: zoomLevel > 1 }"
             ref="viewerEl"
             @pointerdown="onPointerDown"
             @pointermove="onPointerMove"
             @pointerup="onPointerUp"
             @pointercancel="onPointerUp"
           >
-            <!-- Параллакс-фон — движется медленнее переднего плана (0.4×) -->
-            <div class="swipe-bg" ref="bgPrevEl" v-if="prevWork">
-              <img :src="workImage(prevWork)" alt="" />
-            </div>
-            <div class="swipe-bg" ref="bgCurrentEl">
-              <img v-if="activeImage" :src="activeImage" alt="" />
-            </div>
-            <div class="swipe-bg" ref="bgNextEl" v-if="nextWork">
-              <img :src="workImage(nextWork)" alt="" />
-            </div>
-
             <!-- Передний план -->
             <div class="swipe-slide" ref="slidePrevEl" v-if="prevWork">
               <img :src="workImage(prevWork)" :alt="prevWork.name" class="swipe-image" />
             </div>
 
             <div class="swipe-slide swipe-slide-current" ref="slideCurrentEl">
-              <img v-if="activeImage" :src="activeImage" :alt="activeWork.name" class="swipe-image" />
+              <img v-if="activeImage" :src="activeImage" :alt="activeWork.name" class="swipe-image" :style="currentImageStyle" />
               <div v-else class="art-placeholder large">
                 <PictureOutlined />
               </div>
@@ -151,66 +140,106 @@
             </div>
           </div>
 
-          <div v-if="thumbnails.length > 1" class="thumb-row">
-            <button
-              v-for="(thumb, idx) in thumbnails"
-              :key="thumb.url + idx"
-              class="thumb-btn"
-              :class="{ active: idx === activeImageIndex }"
-              @click="activeImageIndex = idx"
-            >
-              <img :src="thumb.url" :alt="`${activeWork.name} ${idx + 1}`" />
-            </button>
+          <!-- Место под превью зарезервировано всегда (даже без доп. фото) —
+               иначе высота картинки увеличивалась бы для работ без превью -->
+          <div class="thumb-row">
+            <template v-if="thumbnails.length > 1">
+              <button
+                v-for="(thumb, idx) in thumbnails"
+                :key="thumb.url + idx"
+                class="thumb-btn"
+                :class="{ active: idx === activeImageIndex }"
+                @click="activeImageIndex = idx"
+              >
+                <img :src="thumb.url" :alt="`${activeWork.name} ${idx + 1}`" />
+              </button>
+            </template>
           </div>
         </div>
 
-        <transition name="details-fade" mode="out-in">
-          <div class="work-modal-details" :key="activeWork.id">
-            <span v-if="activeWork.status_name" class="status-badge status-badge-top" :class="statusClass(activeWork.status_name)">
-              {{ activeWork.status_name }}
-            </span>
-            <h2 class="work-modal-title">{{ activeWork.name || 'Без названия' }}</h2>
-            <p v-if="activeWork.artist_name" class="work-modal-artist">{{ activeWork.artist_name }}</p>
+        <div class="work-modal-details-wrap" :class="{ collapsed: infoHidden }">
+          <transition name="details-fade" mode="out-in">
+            <div class="work-modal-details" :key="activeWork.id">
+              <p v-if="activeWork.artist_name" class="work-modal-artist">{{ activeWork.artist_name }}</p>
+              <h2 class="work-modal-title">
+                {{ activeWork.name || 'Без названия' }}<template v-if="activeWork.year && isFieldVisible('year')">, {{ activeWork.year }}</template>
+              </h2>
 
-            <dl class="detail-list">
-              <div v-if="activeWork.technique && isFieldVisible('technique')" class="detail-row">
-                <dt>Техника</dt>
-                <dd>{{ activeWork.technique }}</dd>
-              </div>
-              <div v-if="activeWork.year && isFieldVisible('year')" class="detail-row">
-                <dt>Год</dt>
-                <dd>{{ activeWork.year }}</dd>
-              </div>
-              <div v-if="activeWork.seria_name && isFieldVisible('seria')" class="detail-row">
-                <dt>Серия</dt>
-                <dd>{{ activeWork.seria_name }}</dd>
-              </div>
-              <div v-if="activeWork.media_name && isFieldVisible('media')" class="detail-row">
-                <dt>Медиа</dt>
-                <dd>{{ activeWork.media_name }}</dd>
-              </div>
-              <div v-if="activeWork.location_name && isFieldVisible('location')" class="detail-row">
-                <dt>Локация</dt>
-                <dd>{{ activeWork.location_name }}</dd>
-              </div>
-            </dl>
+              <dl class="detail-list">
+                <div v-if="activeWork.technique && isFieldVisible('technique')" class="detail-row">
+                  <dt>Техника</dt>
+                  <dd>{{ activeWork.technique }}</dd>
+                </div>
+                <div v-if="activeWork.size && isFieldVisible('size')" class="detail-row">
+                  <dt>Размер</dt>
+                  <dd>{{ activeWork.size }}</dd>
+                </div>
+                <div v-if="activeWork.seria_name && isFieldVisible('seria')" class="detail-row">
+                  <dt>Серия</dt>
+                  <dd>{{ activeWork.seria_name }}</dd>
+                </div>
+                <div v-if="activeWork.media_name && isFieldVisible('media')" class="detail-row">
+                  <dt>Медиа</dt>
+                  <dd>{{ activeWork.media_name }}</dd>
+                </div>
+                <div v-if="activeWork.location_name && isFieldVisible('location')" class="detail-row">
+                  <dt>Локация</dt>
+                  <dd>{{ activeWork.location_name }}</dd>
+                </div>
+              </dl>
 
-            <p v-if="activeWork.description" class="work-description">{{ activeWork.description }}</p>
+              <span v-if="activeWork.status_name && isFieldVisible('status')" class="work-status-text">
+                {{ activeWork.status_name }}
+              </span>
+              <p v-if="activeWork.description" class="work-description">{{ activeWork.description }}</p>
 
-            <div v-if="activeWork.price && isFieldVisible('price')" class="work-price">
-              {{ formatPrice(activeWork.price) }}
+              <div v-if="activeWork.price && isFieldVisible('price')" class="work-price">
+                {{ formatPrice(activeWork.price) }}
+              </div>
+
+              <div class="details-divider"></div>
             </div>
-          </div>
-        </transition>
+          </transition>
+        </div>
       </div>
-    </a-modal>
+
+      <!-- Тулбар зафиксирован справа, под панелью информации — виден и когда
+           панель свёрнута, поэтому кнопки всегда доступны -->
+      <div class="viewer-toolbar">
+        <a-tooltip :title="infoHidden ? 'Показать информацию' : 'Скрыть информацию'">
+          <button class="viewer-toolbar-btn" @click="infoHidden = !infoHidden">
+            <transition name="icon-swap" mode="out-in">
+              <EyeInvisibleOutlined v-if="!infoHidden" key="hide" />
+              <EyeOutlined v-else key="show" />
+            </transition>
+          </button>
+        </a-tooltip>
+        <a-tooltip :title="isMaxZoom ? 'Сбросить увеличение' : 'Увеличить картинку'">
+          <button class="viewer-toolbar-btn" @click="cycleZoom">
+            <transition name="icon-swap" mode="out-in">
+              <ZoomOutOutlined v-if="isMaxZoom" key="out" />
+              <ZoomInOutlined v-else key="in" />
+            </transition>
+          </button>
+        </a-tooltip>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { PictureOutlined } from '@ant-design/icons-vue'
+import {
+  PictureOutlined,
+  EyeOutlined,
+  EyeInvisibleOutlined,
+  ZoomInOutlined,
+  ZoomOutOutlined,
+  CloseOutlined,
+  LeftOutlined,
+  RightOutlined
+} from '@ant-design/icons-vue'
 import { useCollection } from '@/stores/collection.js'
 
 const route = useRoute()
@@ -224,6 +253,67 @@ const works = ref([])
 const viewerOpen = ref(false)
 const activeWork = ref(null)
 const activeImageIndex = ref(0)
+const infoHidden = ref(false)
+
+// --- увеличение картинки: циклический зум (кнопка) + перетаскивание, когда увеличено ---
+const ZOOM_LEVELS = [1, 1.5, 2, 3]
+const zoomLevel = ref(1)
+const pan = reactive({ x: 0, y: 0 })
+// reactive — currentImageStyle должен реагировать на panDrag.active (курсор/transition)
+const panDrag = reactive({ active: false, pointerId: null, startX: 0, startY: 0, startPanX: 0, startPanY: 0 })
+
+// Пока можно увеличивать дальше — показываем «+», на последнем уровне
+// следующий клик сбрасывает зум, поэтому показываем «-»
+const isMaxZoom = computed(() => zoomLevel.value === ZOOM_LEVELS[ZOOM_LEVELS.length - 1])
+
+const currentImageStyle = computed(() => {
+  if (zoomLevel.value <= 1) return {}
+  const style = {
+    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel.value})`,
+    cursor: panDrag.active ? 'grabbing' : 'grab'
+  }
+  // Во время самого перетаскивания transition должен быть выключен — иначе
+  // палец/курсор будет обгонять картинку (транзишен «догоняет» с задержкой)
+  if (panDrag.active) style.transition = 'none'
+  return style
+})
+
+function cycleZoom() {
+  const idx = ZOOM_LEVELS.indexOf(zoomLevel.value)
+  zoomLevel.value = ZOOM_LEVELS[(idx + 1) % ZOOM_LEVELS.length]
+  pan.x = 0
+  pan.y = 0
+}
+
+function resetZoom() {
+  zoomLevel.value = 1
+  pan.x = 0
+  pan.y = 0
+}
+
+// Не даём утащить увеличенную картинку за пределы, где она перестаёт
+// перекрывать рамку вьювера
+function clampPan() {
+  if (!viewerEl.value) return
+  const maxX = (viewerEl.value.clientWidth * (zoomLevel.value - 1)) / 2
+  const maxY = (viewerEl.value.clientHeight * (zoomLevel.value - 1)) / 2
+  pan.x = clamp(pan.x, -maxX, maxX)
+  pan.y = clamp(pan.y, -maxY, maxY)
+}
+
+// Полноэкранный просмотрщик — закрытие по Escape и блокировка скролла страницы под ним
+function handleViewerKeydown(event) {
+  if (event.key === 'Escape') closeViewer()
+}
+
+watch(viewerOpen, (isOpen) => {
+  document.body.style.overflow = isOpen ? 'hidden' : ''
+  if (isOpen) {
+    window.addEventListener('keydown', handleViewerKeydown)
+  } else {
+    window.removeEventListener('keydown', handleViewerKeydown)
+  }
+})
 
 // Прозрачный фон плашки артиста поверх hero, обычный фон после прокрутки
 const scrolled = ref(false)
@@ -298,9 +388,6 @@ const viewerEl = ref(null)
 const slidePrevEl = ref(null)
 const slideCurrentEl = ref(null)
 const slideNextEl = ref(null)
-const bgPrevEl = ref(null)
-const bgCurrentEl = ref(null)
-const bgNextEl = ref(null)
 
 // --- соседи текущей работы в списке (для свайпа между ними) ---
 const activeWorkIndex = computed(() => {
@@ -368,10 +455,45 @@ function rubberBand(delta, width) {
   return sign * (width * RUBBER_BAND_FACTOR * (1 - 1 / (abs / width + 1)))
 }
 
+// --- кнопки «вперёд»/«назад» — переиспользуют ту же пружину, что и свайп ---
+
+function goToPrev() {
+  if (!prevWork.value || swipe.dragging) return
+  cancelAnimationFrame(swipe.raf)
+  swipe.width = viewerEl.value?.clientWidth || 1
+  swipe.pendingDirection = 1
+  swipe.target = swipe.width
+  swipe.v = 0
+  runSpring()
+}
+
+function goToNext() {
+  if (!nextWork.value || swipe.dragging) return
+  cancelAnimationFrame(swipe.raf)
+  swipe.width = viewerEl.value?.clientWidth || 1
+  swipe.pendingDirection = -1
+  swipe.target = -swipe.width
+  swipe.v = 0
+  runSpring()
+}
+
 // --- обработчики жеста (Pointer Events — единый API для мыши/тача/пера) ---
 
 function onPointerDown(event) {
   if (!activeWork.value) return
+
+  // Картинка увеличена — тащим саму картинку, а не переключаем работы
+  if (zoomLevel.value > 1) {
+    panDrag.active = true
+    panDrag.pointerId = event.pointerId
+    panDrag.startX = event.clientX
+    panDrag.startY = event.clientY
+    panDrag.startPanX = pan.x
+    panDrag.startPanY = pan.y
+    viewerEl.value?.setPointerCapture(event.pointerId)
+    return
+  }
+
   cancelAnimationFrame(swipe.raf)
 
   swipe.dragging = true
@@ -385,6 +507,14 @@ function onPointerDown(event) {
 }
 
 function onPointerMove(event) {
+  if (panDrag.active) {
+    if (event.pointerId !== panDrag.pointerId) return
+    pan.x = panDrag.startPanX + (event.clientX - panDrag.startX)
+    pan.y = panDrag.startPanY + (event.clientY - panDrag.startY)
+    clampPan()
+    return
+  }
+
   if (!swipe.dragging || event.pointerId !== swipe.pointerId) return
 
   const now = performance.now()
@@ -408,6 +538,13 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if (panDrag.active) {
+    if (event.pointerId !== panDrag.pointerId) return
+    panDrag.active = false
+    viewerEl.value?.releasePointerCapture(event.pointerId)
+    return
+  }
+
   if (!swipe.dragging || event.pointerId !== swipe.pointerId) return
   swipe.dragging = false
   viewerEl.value?.releasePointerCapture(event.pointerId)
@@ -473,6 +610,7 @@ function onSpringSettled() {
     if (newWork) {
       activeWork.value = newWork
       activeImageIndex.value = 0
+      resetZoom()
     }
   }
 
@@ -482,7 +620,16 @@ function onSpringSettled() {
   swipe.v = 0
   swipe.target = 0
   swipe.pendingDirection = 0
-  applyTransforms()
+
+  // Если у нового activeWork появился слайд, которого не было (например,
+  // мы были на последней работе — v-if="nextWork" ничего не рендерил),
+  // Vue создаёт его в DOM асинхронно. Без nextTick() applyTransforms()
+  // выполнится до появления элемента и не выставит ему transform — на миг
+  // (или до следующего кадра) он рендерится без него, то есть поверх
+  // текущего слайда, во весь экран — и перекрывает картинку неправильной.
+  nextTick(() => {
+    applyTransforms()
+  })
 }
 
 // Применяет transform/opacity к DOM-слоям напрямую — вызывается на каждом
@@ -497,7 +644,6 @@ function applyTransforms() {
   const currentScale = interpolate(Math.abs(t), 0, 1, 1, 0.94)
   const currentOpacity = interpolate(Math.abs(t), 0, 1, 1, 0.85)
   setLayer(slideCurrentEl.value, x, currentScale, currentOpacity)
-  setLayer(bgCurrentEl.value, x * 0.4, currentScale, currentOpacity)
 
   // Слайд, который раскрывается (prev — тянем вправо, next — тянем влево):
   // масштаб 0.96 → 1.0, непрозрачность едва заметно 0.9 → 1
@@ -507,15 +653,9 @@ function applyTransforms() {
   if (slidePrevEl.value) {
     setLayer(slidePrevEl.value, x - width, revealScale, x > 0 ? revealOpacity : 0)
   }
-  if (bgPrevEl.value) {
-    setLayer(bgPrevEl.value, (x - width) * 0.4, revealScale, x > 0 ? revealOpacity : 0)
-  }
 
   if (slideNextEl.value) {
     setLayer(slideNextEl.value, x + width, revealScale, x < 0 ? revealOpacity : 0)
-  }
-  if (bgNextEl.value) {
-    setLayer(bgNextEl.value, (x + width) * 0.4, revealScale, x < 0 ? revealOpacity : 0)
   }
 }
 
@@ -531,13 +671,6 @@ function setLayer(el, translateX, scale, opacity) {
 // (status_name/seria_name/media_name/location_name) — отдельный зритель
 // не может смотреть их через свои же авторизованные справочники, т.к.
 // он, как правило, не совпадает с владельцем ссылки.
-function statusClass(name) {
-  const n = (name || '').toLowerCase()
-  if (n.includes('прода')) return 'status-sold'
-  if (n.includes('налич') || n.includes('доступ')) return 'status-available'
-  return 'status-default'
-}
-
 // Настройки отображения полей задаются в редакторе коллекции (Collection/index.vue).
 // Если настройка не задана (старые коллекции без этого поля) — считаем поле видимым.
 function isFieldVisible(key) {
@@ -551,13 +684,19 @@ function formatPrice(price) {
   return new Intl.NumberFormat('ru-RU').format(num) + ' ₽'
 }
 
+function closeViewer() {
+  viewerOpen.value = false
+}
+
 function openViewer(work) {
   activeWork.value = work
   activeImageIndex.value = 0
   viewerOpen.value = true
+  infoHidden.value = false
+  resetZoom()
 
   // Сбрасываем свайп в состояние покоя и ждём, пока смонтируются refs
-  // нового экземпляра модалки (destroyOnClose пересоздаёт DOM при каждом открытии)
+  // нового экземпляра просмотрщика (v-if пересоздаёт DOM при каждом открытии)
   cancelAnimationFrame(swipe.raf)
   swipe.dragging = false
   swipe.x = 0
@@ -615,11 +754,21 @@ onBeforeUnmount(() => {
   revealObserver?.disconnect()
   cancelAnimationFrame(swipe.raf)
   window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('keydown', handleViewerKeydown)
+  document.body.style.overflow = ''
 })
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap');
+
+@font-face {
+  font-family: 'Default Sans';
+  src: url('@/assets/fonts/DefaultSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 .landing {
   --bg: #0f0f11;
@@ -637,9 +786,6 @@ onBeforeUnmount(() => {
   --accent-strong: #d8c896;
   --border: rgba(255, 255, 255, 0.14);
   --border-soft: rgba(255, 255, 255, 0.12);
-  --hero-overlay-from: rgba(15, 15, 17, 0.35);
-  --hero-overlay-mid: rgba(15, 15, 17, 0.55);
-  --hero-overlay-to: #0f0f11;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-hover: 0 14px 32px rgba(0, 0, 0, 0.5);
   --status-available-bg: #2f9e46;
@@ -655,13 +801,13 @@ onBeforeUnmount(() => {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text-body);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Default Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   transition: background 0.3s ease, color 0.3s ease;
 }
 
 .landing.light {
-  --bg: #f7f5f0;
-  --bg-soft: radial-gradient(circle at 30% 20%, #ffffff 0%, #f7f5f0 70%);
+  --bg: #ffffff;
+  --bg-soft: radial-gradient(circle at 30% 20%, #ffffff 0%, #ffffff 70%);
   --bg-elevated: #ffffff;
   --bg-image: #efece4;
   --card-bg: #efece4;
@@ -675,9 +821,6 @@ onBeforeUnmount(() => {
   --accent-strong: #6f581f;
   --border: rgba(0, 0, 0, 0.14);
   --border-soft: rgba(0, 0, 0, 0.12);
-  --hero-overlay-from: rgba(247, 245, 240, 0.25);
-  --hero-overlay-mid: rgba(247, 245, 240, 0.55);
-  --hero-overlay-to: #f7f5f0;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
   --shadow-hover: 0 14px 32px rgba(0, 0, 0, 0.16);
   --status-available-bg: #2f9e46;
@@ -727,7 +870,9 @@ onBeforeUnmount(() => {
   height: 20px;
 }
 
-/* Имя артиста — фиксированная плашка вверху слева, всегда поверх контента */
+/* Имя артиста — фиксированная плашка вверху слева, всегда поверх контента.
+   Сам фон вынесен в ::before (см. ниже), чтобы анимировать его отдельно
+   от высоты самой плашки. */
 .artist-bar {
   position: fixed;
   top: 0;
@@ -737,9 +882,8 @@ onBeforeUnmount(() => {
   height: 64px;
   display: flex;
   align-items: center;
-  padding: 0 76px 0 64px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
-  background: transparent;
+  padding: 0 20%;
+  border-bottom: 1px solid #ffffff;
   color: #ffffff;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5), 0 1px 4px rgba(0, 0, 0, 0.4);
   font-family: 'Cormorant Garamond', serif;
@@ -750,16 +894,36 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   box-shadow: none;
-  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, text-shadow 0.3s ease;
+  transition: height 1.5s cubic-bezier(0.16, 1, 0.3, 1),
+    color 1.5s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 1.5s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 1.5s cubic-bezier(0.16, 1, 0.3, 1),
+    text-shadow 1.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* После прокрутки — обычный фон лендинга вместо прозрачного поверх hero */
-.artist-bar.scrolled {
-  border-bottom: 1px solid var(--border);
+/* Заливка фона плашки — только плавное появление/исчезание по прозрачности */
+.artist-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: var(--bg-elevated);
+  opacity: 0;
+  transition: opacity 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* После прокрутки — белый фон и чуть меньшая высота плашки;
+   при возврате наверх (фон снова прозрачный) высота возвращается к исходной */
+.artist-bar.scrolled {
+  height: 56px;
+  border-bottom: 1px solid #d9d9d9;
   color: var(--text-title);
   text-shadow: none;
   box-shadow: var(--shadow);
+}
+
+.artist-bar.scrolled::before {
+  opacity: 1;
 }
 
 .state-screen {
@@ -796,36 +960,52 @@ onBeforeUnmount(() => {
    прокрутке визуально "накрывает" его. */
 .hero {
   position: relative;
-  min-height: 52vh;
+  /* Фиксированная (не min-) высота — контент должен помещаться строго в
+     границах картинки, а не растягивать секцию дальше её высоты */
+  height: 48vh;
   display: flex;
   align-items: flex-end;
   background: var(--bg-soft);
+  overflow: hidden;
 }
 
 .hero.no-image {
-  min-height: 38vh;
+  height: 38vh;
 }
 
 .hero-bg {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48vh;
   z-index: 0;
   background-size: cover;
-  background-position: center;
-  filter: blur(1px) brightness(0.58) saturate(1.1);
+  background-position: center 20%;
+  filter: blur(1px) brightness(0.68) saturate(1.1);
 }
 
 .landing.light .hero-bg {
   /* Затемняем так же сильно, как в тёмной теме — белый текст должен
      одинаково хорошо читаться независимо от переключателя темы */
-  filter: blur(1px) brightness(0.82) saturate(1.05);
+  filter: blur(1px) brightness(0.88) saturate(1.05);
 }
 
+/* Затемнение строго по границам самой картинки (0-48vh) и ни пикселем
+   дальше — под картинкой сразу обычный фон страницы, без градиента/шва */
 .hero-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48vh;
   z-index: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.55) 55%, var(--hero-overlay-to) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.25) 0%,
+    rgba(0, 0, 0, 0.42) 30%,
+    rgba(0, 0, 0, 0.42) 100%
+  );
 }
 
 .hero-content {
@@ -841,12 +1021,17 @@ onBeforeUnmount(() => {
 
   position: relative;
   z-index: 1;
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 96px 32px 48px;
   width: 100%;
+  max-height: 100%;
   box-sizing: border-box;
   text-align: center;
+  /* Заголовок и мета (ФИО) — фиксированного размера, описание — гибкое
+     и при нехватке места сжимается вместо того, чтобы растянуть секцию */
+  display: flex;
+  flex-direction: column;
 }
 
 /* Фон hero теперь одинаково затемнён в обеих темах, поэтому белый текст
@@ -926,22 +1111,44 @@ onBeforeUnmount(() => {
 }
 
 .hero-title {
+  flex-shrink: 0;
   font-family: 'Cormorant Garamond', serif;
   font-weight: 600;
-  font-size: clamp(60px, 11vw, 96px);
+  font-size: clamp(40px, 6vw, 60px);
   line-height: 1.08;
   margin: 0 0 20px;
   color: var(--hero-title-color);
   animation-delay: 0.15s;
 }
 
+/* Единственный гибкий элемент внутри .hero-content: сжимается вместо того,
+   чтобы растянуть hero выше высоты картинки, и скроллится сам по себе,
+   если после сжатия текст всё равно не помещается — без видимого скроллбара */
 .hero-description {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   font-size: 18px;
+  font-style: italic;
+  font-weight: 300;
   line-height: 1.7;
-  color: var(--hero-body-color);
-  max-width: 620px;
+  color: #ffffff;
+  max-width: 1100px;
   margin: 0 auto 22px;
   animation-delay: 0.3s;
+}
+
+.hero-description::-webkit-scrollbar {
+  display: none;
+}
+
+/* Текст из редактора может содержать <strong>/<b> — принудительно убираем
+   жирность и там тоже, раз весь блок должен быть не жирным */
+.hero-description :deep(strong),
+.hero-description :deep(b) {
+  font-weight: 300;
 }
 
 .hero-description :deep(p) {
@@ -967,6 +1174,7 @@ onBeforeUnmount(() => {
 }
 
 .hero-meta {
+  flex-shrink: 0;
   font-size: 15px;
   letter-spacing: 0.12em;
   color: var(--hero-meta-color);
@@ -978,6 +1186,18 @@ onBeforeUnmount(() => {
 .hero-dot {
   margin: 0 8px;
   color: var(--text-dim);
+}
+
+/* На компьютере гарантируем минимум 3 видимые строки описания
+   (18px * 1.7 line-height ≈ 30.6px на строку) и лёгкий отступ перед ФИО */
+@media (min-width: 761px) {
+  .hero-description {
+    min-height: 92px;
+  }
+
+  .hero-meta {
+    margin-top: 8px;
+  }
 }
 
 /* ==== Gallery ==== */
@@ -1009,16 +1229,17 @@ onBeforeUnmount(() => {
 .art-image-wrap {
   position: relative;
   width: 90%;
+  aspect-ratio: 4 / 5;
   margin: 0 auto;
-  background: var(--card-bg);
+  background: var(--bg);
 }
 
 .art-image {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 5;
-  object-fit: cover;
-  background: var(--card-bg);
+  height: 100%;
+  object-fit: contain;
+  background: var(--bg);
   transition: opacity 0.25s ease;
 }
 
@@ -1042,75 +1263,34 @@ onBeforeUnmount(() => {
   border-radius: 10px;
 }
 
-.status-badge {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  padding: 4px 10px;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  border-radius: 20px;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-}
-
-.status-badge-inline {
-  position: static;
-  display: inline-block;
-  margin: 0 0 8px;
-  box-shadow: none;
-}
-
-.status-available {
-  background: var(--status-available-bg);
-  color: var(--status-available-fg);
-  border: 1px solid var(--status-available-border);
-}
-
-.status-sold {
-  background: var(--status-sold-bg);
-  color: var(--status-sold-fg);
-  border: 1px solid var(--status-sold-border);
-}
-
-.status-default {
-  background: var(--status-default-bg);
-  color: var(--status-default-fg);
-  border: 1px solid var(--status-default-border);
-}
-
 .art-info {
   padding: 24px 0 0;
   text-align: center;
-}
-
-.art-name {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 24px;
-  font-weight: 600;
-  margin: 0 0 4px;
+  font-style: italic;
   color: var(--text-title);
 }
 
 .art-artist {
   font-size: 13px;
-  font-weight: 500;
-  color: var(--accent);
-  margin: 0 0 8px;
+  font-weight: 600;
+  margin: 0 0 2px;
 }
 
-.art-technique {
+.art-title {
   font-size: 13px;
-  color: var(--text-faint);
-  margin: 0 0 8px;
+  font-weight: 400;
+  margin: 0 0 4px;
+}
+
+.art-detail {
+  font-size: 13px;
+  margin: 0 0 2px;
 }
 
 .art-price {
-  font-size: 14px;
-  color: var(--accent-strong);
-  margin: 0;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 400;
+  margin: 4px 0 0;
 }
 
 /* ==== Footer ==== */
@@ -1237,39 +1417,153 @@ onBeforeUnmount(() => {
   --status-default-border: rgba(0, 0, 0, 0.18);
 }
 
-.work-modal .ant-modal-content {
+.work-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
   background: var(--bg-elevated);
-  border-radius: 14px;
-  padding: 0;
-  overflow: hidden;
 }
 
-.work-modal .ant-modal-close {
+.viewer-close-btn {
+  position: fixed;
+  top: 18px;
+  right: 24px;
+  z-index: 1001;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
   color: var(--text-muted);
-  top: 14px;
-  inset-inline-end: 14px;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.viewer-close-btn:hover {
+  background: var(--border-soft);
+  color: var(--text-title);
+}
+
+/* Стрелки «предыдущая/следующая работа» — та же навигация, что и свайп */
+.viewer-nav-btn {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1001;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--text-body);
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.viewer-nav-btn:hover {
+  color: var(--accent);
+}
+
+.viewer-nav-prev {
+  left: 24px;
+}
+
+.viewer-nav-next {
+  right: 24px;
+}
+
+/* Тулбар справа внизу, под панелью информации — виден и когда она свёрнута */
+.viewer-toolbar {
+  position: fixed;
+  bottom: 28px;
+  right: 36px;
+  z-index: 1001;
+  display: flex;
+  gap: 12px;
+}
+
+.viewer-toolbar-btn {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--text-body);
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.viewer-toolbar-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .work-modal-content {
-  display: grid;
-  grid-template-columns: 1.1fr 1fr;
+  display: flex;
+  height: 100%;
 }
 
 .work-modal-image {
-  background: var(--bg-image);
+  background: var(--bg-elevated);
   display: flex;
+  flex: 0 0 50%;
+  width: 50%;
+  min-width: 0;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  height: 100%;
+  padding: 40px;
   overflow: hidden;
+  /* Ширина колонки не меняется (без пересчёта раскладки на каждый кадр) —
+     сдвиг к центру экрана делается через transform: скользит плавно, а не «растёт» */
+  transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Информация скрыта — картинка скользит к центру экрана.
+   translateX(50%) от 50%-ширины колонки = сдвиг на 25% всей ширины экрана,
+   ровно столько, чтобы центр колонки (25%) совпал с центром экрана (50%). */
+.work-modal-content.info-hidden .work-modal-image {
+  transform: translateX(50%);
+}
+
+/* Обёртка колонки с информацией — сама колонка не сжимается (без reflow),
+   а плавно уезжает за правый край экрана через transform + fade */
+.work-modal-details-wrap {
+  flex: 0 0 50%;
+  width: 50%;
+  max-width: 50%;
+  opacity: 1;
+  overflow: hidden;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+}
+
+.work-modal-details-wrap.collapsed {
+  transform: translateX(100%);
+  opacity: 0;
 }
 
 /* ==== Свайп-вьювер между работами ==== */
 .swipe-viewer {
   position: relative;
   width: 100%;
-  height: 480px;
+  flex: 1;
+  min-height: 0;
   touch-action: pan-y;
   user-select: none;
   cursor: grab;
@@ -1277,22 +1571,6 @@ onBeforeUnmount(() => {
 
 .swipe-viewer:active {
   cursor: grabbing;
-}
-
-.swipe-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.swipe-bg img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(24px) brightness(0.7) saturate(1.05);
-  transform: scale(1.2);
 }
 
 .swipe-slide {
@@ -1312,7 +1590,15 @@ onBeforeUnmount(() => {
   object-fit: contain;
   border-radius: 6px;
   pointer-events: none;
+  transition: transform 0.25s ease;
   -webkit-user-drag: none;
+}
+
+/* Масштаб и перетаскивание увеличенной картинки задаются инлайн-стилем
+   (currentImageStyle) — там нужны непрерывные числовые значения pan/zoom,
+   а не фиксированные CSS-классы */
+.swipe-viewer.zoomed {
+  cursor: grab;
 }
 
 .details-fade-enter-active,
@@ -1325,11 +1611,38 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 
+/* Смена иконки на кнопках тулбара — лёгкий поворот + масштаб вместо
+   мгновенной подмены */
+.icon-swap-enter-active,
+.icon-swap-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.icon-swap-enter-from {
+  opacity: 0;
+  transform: scale(0.6) rotate(-45deg);
+}
+
+.icon-swap-leave-to {
+  opacity: 0;
+  transform: scale(0.6) rotate(45deg);
+}
+
+/* Высота зарезервирована всегда (min-height, а не только max-height) —
+   рендерится независимо от наличия превью (см. шаблон), поэтому картинка
+   не увеличивается по высоте для работ без доп. фото. flex-shrink: 0 и
+   nowrap+overflow-x — чтобы у работ с большим числом фото строка не
+   переносилась на 2+ ряда и не «отъедала» высоту у самой картинки. */
 .thumb-row {
   display: flex;
+  flex-shrink: 0;
   gap: 8px;
   margin-top: 14px;
-  flex-wrap: wrap;
+  min-height: 56px;
+  max-height: 56px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
   justify-content: center;
 }
 
@@ -1361,115 +1674,162 @@ onBeforeUnmount(() => {
 
 .work-modal-details {
   position: relative;
-  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 36px 40px 24px;
   color: var(--text-body);
+  background: var(--bg-elevated);
+  font-style: italic;
   overflow-y: auto;
-  max-height: 560px;
+  height: 100%;
 }
 
-.work-modal .status-badge {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  padding: 4px 10px;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  border-radius: 20px;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-}
-
-/* Тот же уровень по высоте, что и кнопка закрытия модалки (top: 14px) */
-.status-badge-top {
-  position: absolute;
-  top: 0px;
-  left: 30px;
-  right: auto;
-}
-
-.work-modal .status-available {
-  background: var(--status-available-bg);
-  color: var(--status-available-fg);
-  border: 1px solid var(--status-available-border);
-}
-
-.work-modal .status-sold {
-  background: var(--status-sold-bg);
-  color: var(--status-sold-fg);
-  border: 1px solid var(--status-sold-border);
-}
-
-.work-modal .status-default {
-  background: var(--status-default-bg);
-  color: var(--status-default-fg);
-  border: 1px solid var(--status-default-border);
-}
-
-.work-modal-title {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 30px;
-  font-weight: 600;
-  margin: 44px 0 4px;
-  color: var(--text-title);
+/* Статус — просто неприметный курсивный текст рядом с описанием,
+   без цветного бейджа (в отличие от карточки в галерее) */
+.work-status-text {
+  display: block;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0 0 4px;
 }
 
 .work-modal-artist {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-title);
+  margin: 44px 0 4px;
+}
+
+.work-modal-title {
+  font-style: italic;
   font-size: 15px;
-  font-weight: 500;
-  color: var(--accent);
-  margin: 0 0 20px;
+  font-weight: 400;
+  margin: 0 0 12px;
+  color: var(--text-title);
 }
 
 .detail-list {
-  margin: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 10px;
 }
 
 .detail-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border-soft);
-  font-size: 13px;
+  padding: 0;
+  font-size: 14px;
 }
 
+/* Подписи (Техника/Размер/…) не показываем — только значения, как в макете */
 .detail-row dt {
-  color: var(--text-label);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 11px;
+  display: none;
 }
 
 .detail-row dd {
   margin: 0;
-  color: var(--text-body);
-  font-weight: 500;
-  text-align: right;
+  color: var(--text-title);
+  font-weight: 400;
+  text-align: left;
 }
 
 .work-description {
   font-size: 14px;
   line-height: 1.75;
-  color: var(--text-muted);
+  color: var(--text-title);
   white-space: pre-wrap;
 }
 
 .work-price {
-  margin-top: 24px;
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 26px;
-  font-weight: 600;
-  color: var(--accent-strong);
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-title);
+}
+
+.details-divider {
+  width: 140px;
+  height: 1px;
+  margin-top: 28px;
+  background: var(--border);
 }
 
 @media (max-width: 760px) {
+  .work-modal {
+    overflow-y: auto;
+  }
+
   .work-modal-content {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    height: auto;
+    min-height: 100%;
+  }
+
+  .work-modal-image {
+    width: 100%;
+    flex: none;
+    height: auto;
+    /* Убираем десктопный нижний паддинг — иначе между превью и текстом
+       остаётся большой зазор ещё до собственного отступа панели информации */
+    padding: 24px 16px 4px;
+  }
+
+  /* На мобильном картинка не двигается по горизонтали — сброс десктопного сдвига */
+  .work-modal-content.info-hidden .work-modal-image {
+    transform: none;
+  }
+
+  .swipe-viewer {
+    height: 60vh;
+    flex: none;
+  }
+
+  /* На мобильном колонка стоит друг под другом — схлопываем по высоте, а не по ширине/сдвигу */
+  .work-modal-details-wrap {
+    width: auto;
+    max-width: none;
+    height: auto;
+    transform: none;
+    transition: max-height 0.7s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+    max-height: 2000px;
+  }
+
+  .work-modal-details-wrap.collapsed {
+    width: auto;
+    transform: none;
+    max-height: 0;
   }
 
   .work-modal-details {
-    max-height: none;
-    padding: 28px 22px 32px;
+    height: auto;
+    padding: 0 22px 32px;
+    /* Скруглённые верхние углы у панели с текстом — картинка выше остаётся
+       на весь экран, скругляется только эта панель */
+    border-radius: 20px 20px 0 0;
+  }
+
+  /* Десктопный отступ сверху (44px) рассчитан на вертикальное центрирование
+     панели — на мобильном текст должен идти сразу под превью */
+  .work-modal-artist {
+    margin-top: 4px;
+  }
+
+  .viewer-toolbar {
+    right: 22px;
+    bottom: 22px;
+  }
+
+  /* Белый непрозрачный круг поверх угла картинки, а не прозрачная кнопка
+     над всем экраном */
+  .viewer-close-btn {
+    top: 12px;
+    right: 16px;
+    background: #ffffff;
+    color: #1a1814;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
   }
 }
 </style>

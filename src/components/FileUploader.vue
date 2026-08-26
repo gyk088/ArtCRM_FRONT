@@ -201,8 +201,13 @@
           </a-tooltip>
 
           <a-tooltip v-if="remove" title="Удалить">
-            <button class="file-action-btn danger" @click.stop="removeFile(item)">
-              <DeleteOutlined />
+            <button
+              class="file-action-btn danger"
+              :disabled="item.loading"
+              @click.stop="removeFile(item)"
+            >
+              <LoadingOutlined v-if="item.loading" spin />
+              <DeleteOutlined v-else />
             </button>
           </a-tooltip>
         </div>
@@ -267,7 +272,8 @@ import {
   ExclamationCircleOutlined,
   RollbackOutlined,
   DownloadOutlined,
-  EditOutlined
+  EditOutlined,
+  LoadingOutlined
 } from "@ant-design/icons-vue"
 import { useFile } from "@/stores/file.js"
 import FileView from "./FileView.vue"
@@ -578,19 +584,49 @@ const removePending = (id) => {
 }
 
 // ❌ удалить сохранённый
-const removeFile = (item) => {
-  Modal.confirm({
-    title: "Удалить файл?",
-    icon: () => h(ExclamationCircleOutlined),
-    content: `Файл «${item.title || item.name}» будет удалён без возможности восстановления.`,
-    okText: "Удалить",
-    okType: "danger",
-    cancelText: "Отмена",
-    onOk: async () => {
-      item.loading = true
-      await fileStore.deleteFile(item.id) // Удаляем с сервера
-      item.loading = false
-    }
+const removeFile = async (item) => {
+  // Кнопка сразу показывает индикатор загрузки, чтобы клик не выглядел «зависшим»,
+  // пока идёт проверка использования файла.
+  item.loading = true
+
+  let works = []
+  let collections = []
+  try {
+    const usage = await fileStore.checkFileUsage(item.id)
+    works = usage.works
+    collections = usage.collections
+  } catch (e) {
+    console.error("Ошибка проверки использования файла:", e)
+  }
+
+  const usageLines = [
+    ...works.map(w => `Используется в работе «${w.name}»`),
+    ...collections.map(c => `Используется в ссылке «${c.name}»`)
+  ]
+
+  // Файл нигде не используется — удаляем сразу, без подтверждения
+  if (!usageLines.length) {
+    await fileStore.deleteFile(item.id)
+    item.loading = false
+    return
+  }
+
+  item.loading = false
+
+  // Файл привязан к работе или ссылке — на сервере это защищено внешним ключом
+  // (my_art_object_image_file_id_fkey и т.п.), удаление всегда завершится ошибкой БД.
+  // Поэтому вместо подтверждения удаления показываем блокирующее предупреждение.
+  Modal.warning({
+    title: "Нельзя удалить файл",
+    content: h("div", [
+      h("p", { style: "margin-bottom: 8px;" },
+        `Файл «${item.title || item.name}» используется и не может быть удалён:`),
+      h("ul", { style: "margin: 0; padding-left: 20px;" },
+        usageLines.map(line => h("li", line))),
+      h("p", { style: "margin-top: 8px;" },
+        "Сначала отвяжите файл от работы или ссылки, затем повторите удаление.")
+    ]),
+    okText: "Понятно"
   })
 }
 </script>
