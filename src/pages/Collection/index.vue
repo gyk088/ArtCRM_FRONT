@@ -6,11 +6,25 @@
     </div>
 
     <div class="edit-container">
-      <!-- Левая колонка — ФОРМА -->
+      <!-- Левая колонка — ФОРМА (с обложкой внутри карточки) -->
       <div class="left-column">
         <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
           <section class="form-section">
             <div class="section-heading">Основная информация</div>
+
+            <a-form-item :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
+              <div v-if="!form.avatar" class="upload-trigger" @click="openFilesModal">
+                <div class="upload-placeholder">
+                  <PlusOutlined />
+                  <div>Загрузить</div>
+                </div>
+              </div>
+
+              <div v-else class="avatar-preview">
+                <img :src="form.avatar.url" class="avatar-image" />
+                <button class="delete-btn" @click="removeAvatar">×</button>
+              </div>
+            </a-form-item>
 
             <a-form-item label="Название" name="name">
               <a-input v-model:value="form.name" placeholder="Например, «Осенняя ссылка" class="fixed-input" />
@@ -119,22 +133,8 @@
         </a-form>
       </div>
 
-      <!-- Правая колонка — ОБЛОЖКА -->
+      <!-- Правая колонка — НАСТРОЙКИ ОТОБРАЖЕНИЯ -->
       <div class="right-column">
-        <a-form-item label="Обложка ссылки" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }" class="images-item">
-          <div v-if="!form.avatar" class="upload-trigger" @click="openFilesModal">
-            <div class="upload-placeholder">
-              <PlusOutlined />
-              <div>Загрузить</div>
-            </div>
-          </div>
-
-          <div v-else class="avatar-preview">
-            <img :src="form.avatar.url" class="avatar-image" />
-            <button class="delete-btn" @click="removeAvatar">×</button>
-          </div>
-        </a-form-item>
-
         <section class="form-section settings-card">
           <div class="section-heading">Отображение полей</div>
           <p class="settings-hint">Выключенные поля не будут показаны в карточке работы на странице коллекции</p>
@@ -175,6 +175,12 @@
           </template>
           <template v-else-if="column.dataIndex === 'seria'">
             {{ getSeriaName(record.seria) }}
+          </template>
+          <template v-else-if="column.dataIndex === 'media'">
+            {{ getMediaName(record.media) }}
+          </template>
+          <template v-else-if="column.dataIndex === 'location'">
+            {{ getLocationName(record.location) }}
           </template>
           <template v-else-if="column.dataIndex === 'status'">
             {{ getStatusName(record.status) }}
@@ -239,7 +245,11 @@
         <a-select v-model:value="filterSeria" placeholder="Серия" allowClear style="width: 180px" :options="seriaOptions" />
         <a-select v-model:value="filterMedia" placeholder="Медиа" allowClear style="width: 180px" :options="mediaFilterOptions" />
         <a-select v-model:value="filterStatus" placeholder="Статус" allowClear style="width: 180px" :options="statusFilterOptions" />
+        <a-input-number v-model:value="filterPriceFrom" placeholder="Цена от" :min="0" style="width: 120px" />
+        <a-input-number v-model:value="filterPriceTo" placeholder="Цена до" :min="0" style="width: 120px" />
       </div>
+
+      <div class="modal-selected-count">Выбрано работ: {{ selectedRowKeys.length }}</div>
 
       <a-table
         :data-source="filteredWorksTable"
@@ -354,6 +364,8 @@ const filterLocation = ref(null)
 const filterSeria = ref(null)
 const filterMedia = ref(null)
 const filterStatus = ref(null)
+const filterPriceFrom = ref(null)
+const filterPriceTo = ref(null)
 
 const artistOptions = computed(() => artistStore.listArtists.map(a => ({ label: a.name, value: a.id })))
 const locationOptions = computed(() => locationsStore.listLocations.map(l => ({ label: l.name, value: l.id })))
@@ -369,6 +381,8 @@ const filteredWorksTable = computed(() => {
   if (filterSeria.value) result = result.filter(w => w.seria === filterSeria.value)
   if (filterMedia.value) result = result.filter(w => w.media === filterMedia.value)
   if (filterStatus.value) result = result.filter(w => w.status === filterStatus.value)
+  if (filterPriceFrom.value != null) result = result.filter(w => Number(w.price) >= filterPriceFrom.value)
+  if (filterPriceTo.value != null) result = result.filter(w => Number(w.price) <= filterPriceTo.value)
 
   return result
 })
@@ -536,18 +550,29 @@ const columns = [
   { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 100, sorter: (a, b) => a.price - b.price },
 ]
 
-// выбранные работы
-const selectedWorksColumns = [
+// выбранные работы — колонки собираются из toggle'ов "Отображение полей"
+// выше, чтобы таблица показывала ровно те поля, что включены для карточек
+// на публичной странице коллекции
+const toggleableColumnDefs = {
+  technique: { title: 'Техника', dataIndex: 'technique', key: 'technique', width: 140 },
+  size: { title: 'Размер', dataIndex: 'size', key: 'size', width: 120 },
+  year: { title: 'Год', dataIndex: 'year', key: 'year', width: 90 },
+  seria: { title: 'Серия', dataIndex: 'seria', key: 'seria', width: 160 },
+  media: { title: 'Медиа', dataIndex: 'media', key: 'media', width: 140 },
+  location: { title: 'Локация', dataIndex: 'location', key: 'location', width: 140 },
+  status: { title: 'Статус', dataIndex: 'status', key: 'status', width: 160 },
+  price: { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 160 },
+}
+
+const selectedWorksColumns = computed(() => [
   { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: 100 },
   { title: "Название", dataIndex: "name", key: "name", width: 220 },
   { title: 'Художник', dataIndex: 'artist', key: 'artist', width: 160 },
-  { title: 'Техника', dataIndex: 'technique', key: 'technique', width: 140 },
-  { title: 'Год', dataIndex: 'year', key: 'year', width: 90 },
-  { title: 'Серия', dataIndex: 'seria', key: 'seria', width: 160 },
-  { title: 'Статус', dataIndex: 'status', key: 'status', width: 160 },
-  { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 160 },
-  { title: "Действия", dataIndex: "actions", key: "actions", width: 110 }
-]
+  ...fieldToggles
+    .filter(field => form.visibleFields[field.key])
+    .map(field => toggleableColumnDefs[field.key]),
+  { title: "Действия", dataIndex: "actions", key: "actions", width: 130 }
+])
 
 function openWorksModal() {
   loadWorks()
@@ -560,6 +585,10 @@ const selectedRowKeys = ref([])
 
 const rowSelection = computed(() => ({
   selectedRowKeys: selectedRowKeys.value,
+  // Без этого таблица сама снимает выбор со строк, пропавших из
+  // data-source при фильтрации (считая их "недоступными"), хотя
+  // работа должна оставаться выбранной, пока юзер сам не снимет галочку.
+  preserveSelectedRowKeys: true,
   onChange: (keys) => {
     selectedRowKeys.value = keys
   }
@@ -640,7 +669,7 @@ function goBack() {
   --border-soft: rgba(0, 0, 0, 0.07);
 
   min-height: 100vh;
-  padding: 20px 24px;
+  padding: 20px 10px;
   background: var(--bg);
   color: var(--text-body);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -674,10 +703,12 @@ function goBack() {
 .left-column {
   width: 60%;
   display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .left-column :deep(.ant-form) {
-  flex: 1;
+  flex: none;
   display: flex;
   flex-direction: column;
 }
@@ -699,18 +730,17 @@ function goBack() {
 }
 
 .left-column .form-section {
-  flex: 1;
-  height: 100%;
+  flex: none;
+  height: auto;
 }
 
-/* Поле "Описание" растягивается на всё оставшееся место в карточке */
+/* Поле "Описание" — фиксированная высота, не растягивается на карточку */
 .left-column .description-item {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   width: 100%;
-  flex: 1;
-  min-height: 0;
+  flex: none;
   margin-bottom: 12px;
 }
 
@@ -719,8 +749,6 @@ function goBack() {
   flex-direction: column;
   align-items: stretch;
   width: 100%;
-  flex: 1;
-  min-height: 0;
 }
 
 .left-column .description-item :deep(.ant-form-item-control) {
@@ -729,8 +757,6 @@ function goBack() {
   align-items: stretch;
   width: 100% !important;
   max-width: 100% !important;
-  flex: 1;
-  min-height: 0;
 }
 
 .left-column .description-item :deep(.ant-form-item-control-input) {
@@ -738,8 +764,6 @@ function goBack() {
   flex-direction: column;
   align-items: stretch;
   width: 100%;
-  flex: 1;
-  min-height: 0;
 }
 
 .left-column .description-item :deep(.ant-form-item-control-input-content) {
@@ -747,14 +771,11 @@ function goBack() {
   flex-direction: column;
   align-items: stretch;
   width: 100%;
-  flex: 1;
-  min-height: 0;
 }
 
 .left-column .description-item .rich-editor-wrap {
   width: 100%;
-  flex: 1;
-  min-height: 0;
+  flex: none;
 }
 
 .section-heading {
@@ -850,15 +871,15 @@ function goBack() {
 
 .rich-editor {
   padding: 10px 12px;
-  min-height: 100px;
+  min-height: 70px;
   overflow-y: auto;
   font-size: 14px;
   line-height: 1.6;
 }
 
 .left-column .description-item .rich-editor {
-  flex: 1;
-  min-height: 0;
+  flex: none;
+  height: 150px;
 }
 
 .rich-editor :deep(.ProseMirror) {
@@ -924,13 +945,6 @@ function goBack() {
 /* === Обложка ссылки === */
 .images-item {
   display: block;
-}
-
-.images-item :deep(.ant-form-item-label > label) {
-  font-size: 20px;
-  font-weight: 500;
-  font-family: 'Cormorant Garamond', serif;
-  color: var(--text-title);
 }
 
 .upload-trigger {
@@ -1027,7 +1041,7 @@ function goBack() {
   background: var(--bg-elevated);
   border: 1px solid var(--border-soft);
   border-radius: 12px;
-  padding: 16px 18px;
+  padding: 16px 10px;
   margin-bottom: 20px;
 }
 
@@ -1117,6 +1131,10 @@ function goBack() {
 .works-section :deep(.ant-pagination-next:hover .ant-pagination-item-link) {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+.works-section :deep(.ant-table-tbody > tr > td:has(.edit-row-btn)) {
+  white-space: nowrap;
 }
 
 .edit-row-btn {
@@ -1339,5 +1357,12 @@ function goBack() {
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.modal-selected-count {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
 }
 </style>

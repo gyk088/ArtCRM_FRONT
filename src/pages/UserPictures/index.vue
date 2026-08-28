@@ -16,6 +16,8 @@
           :options="mediaFilterOptions" />
         <a-select v-model:value="filterStatus" placeholder="Статус" allowClear style="width: 200px"
           :options="statusOptions" />
+        <a-input-number v-model:value="filterPriceFrom" placeholder="Цена от" :min="0" style="width: 120px" />
+        <a-input-number v-model:value="filterPriceTo" placeholder="Цена до" :min="0" style="width: 120px" />
       </div>
 
       <div class="filters-right">
@@ -25,6 +27,8 @@
         <a-button class="buttons" type="primary" @click="openEditPage()">Добавить</a-button>
       </div>
     </div>
+
+    <div class="selected-count">Выбрано работ: {{ selectedRowKeys.length }}</div>
 
     <!-- Таблица -->
     <a-table class="custom-table" :columns="columns" :data-source="filteredData" row-key="id"
@@ -44,25 +48,70 @@
           </span>
         </template>
         <template v-else-if="column.dataIndex === 'artist'">
-          <span class="cell-clamp">{{ getArtistName(record.artist) }}</span>
+          <a-dropdown :trigger="['click']" @click.stop>
+            <span
+              class="editable-cell cell-clamp"
+              :class="{ 'editable-cell-updating': isCellUpdating(record, 'artist') }"
+              @click.stop
+            >
+              {{ getArtistName(record.artist) || 'Не указан' }}
+            </span>
+            <template #overlay>
+              <a-menu @click="({ key }) => handleFieldChange(record, 'artist', key)">
+                <a-menu-item v-for="artist in artistOptions" :key="artist.value">
+                  {{ artist.label }}
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </template>
         <template v-else-if="column.dataIndex === 'seria'">
-          <span class="cell-clamp">{{ getSeriaName(record.seria) }}</span>
+          <a-dropdown :trigger="['click']" @click.stop>
+            <span
+              class="editable-cell cell-clamp"
+              :class="{ 'editable-cell-updating': isCellUpdating(record, 'seria') }"
+              @click.stop
+            >
+              {{ getSeriaName(record.seria) || 'Не указана' }}
+            </span>
+            <template #overlay>
+              <a-menu @click="({ key }) => handleFieldChange(record, 'seria', key)">
+                <a-menu-item v-for="seria in seriaOptions" :key="seria.value">
+                  {{ seria.label }}
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </template>
         <template v-else-if="column.dataIndex === 'media'">
-          <span class="cell-clamp">{{ getMediaName(record.media) }}</span>
+          <a-dropdown :trigger="['click']" @click.stop>
+            <span
+              class="editable-cell cell-clamp"
+              :class="{ 'editable-cell-updating': isCellUpdating(record, 'media') }"
+              @click.stop
+            >
+              {{ getMediaName(record.media) || 'Не указано' }}
+            </span>
+            <template #overlay>
+              <a-menu @click="({ key }) => handleFieldChange(record, 'media', key)">
+                <a-menu-item v-for="media in mediaFilterOptions" :key="media.value">
+                  {{ media.label }}
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </template>
         <template v-else-if="column.dataIndex === 'status'">
           <a-dropdown :trigger="['click']" @click.stop>
             <span
               class="status-pill status-pill-editable"
-              :class="[statusPillClass(record.status), { 'status-pill-updating': updatingStatusId === record.id }]"
+              :class="[statusPillClass(record.status), { 'status-pill-updating': isCellUpdating(record, 'status') }]"
               @click.stop
             >
               {{ getStatusName(record.status) || 'Не указан' }}
             </span>
             <template #overlay>
-              <a-menu @click="({ key }) => handleStatusChange(record, key)">
+              <a-menu @click="({ key }) => handleFieldChange(record, 'status', key)">
                 <a-menu-item v-for="status in statusOptions" :key="status.value">
                   {{ status.label }}
                 </a-menu-item>
@@ -71,7 +120,22 @@
           </a-dropdown>
         </template>
         <template v-else-if="column.dataIndex === 'location'">
-          <span class="cell-clamp">{{ getLocationName(record.location) }}</span>
+          <a-dropdown :trigger="['click']" @click.stop>
+            <span
+              class="editable-cell cell-clamp"
+              :class="{ 'editable-cell-updating': isCellUpdating(record, 'location') }"
+              @click.stop
+            >
+              {{ getLocationName(record.location) || 'Не указана' }}
+            </span>
+            <template #overlay>
+              <a-menu @click="({ key }) => handleFieldChange(record, 'location', key)">
+                <a-menu-item v-for="location in locationOptions" :key="location.value">
+                  {{ location.label }}
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </template>
         <template v-else-if="column.dataIndex === 'price'">
           <span v-if="record.price" class="cell-clamp">{{ record.price }} {{ getCurrencySymbol(record.currency) }}</span>
@@ -169,6 +233,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
@@ -180,6 +245,7 @@ import { useStatuses } from '@/stores/statuses.js'
 import { useLocations } from '@/stores/locations.js'
 import { useArtist } from '@/stores/artist.js'
 import { useFile } from "@/stores/file.js"
+import { useUserPicturesFilters } from '@/stores/userPicturesFilters.js'
 import { getUser } from '@/services/auth.js'
 import { ROLES } from '@/services/const'
 
@@ -207,11 +273,19 @@ const openPreview = (record) => {
   previewWork.value = record
   isPreviewOpen.value = true
 }
-const filterArtist = ref(null)
-const filterLocation = ref(null)
-const filterSeria = ref(null)
-const filterMedia = ref(null)
-const filterStatus = ref(null)
+// Фильтры хранятся в Pinia-сторе, а не в локальных ref, чтобы их значения
+// сохранялись при уходе со страницы и возврате обратно (компонент
+// пересоздаётся при каждой навигации, а стор — нет).
+const filtersStore = useUserPicturesFilters()
+const {
+  artist: filterArtist,
+  location: filterLocation,
+  seria: filterSeria,
+  media: filterMedia,
+  status: filterStatus,
+  priceFrom: filterPriceFrom,
+  priceTo: filterPriceTo,
+} = storeToRefs(filtersStore)
 
 
 // Хранилища для маппинга ID -> название
@@ -406,6 +480,14 @@ const filteredData = computed(() => {
     result = result.filter(item => item.status === filterStatus.value)
   }
 
+  if (filterPriceFrom.value != null) {
+    result = result.filter(item => Number(item.price) >= filterPriceFrom.value)
+  }
+
+  if (filterPriceTo.value != null) {
+    result = result.filter(item => Number(item.price) <= filterPriceTo.value)
+  }
+
   return result
 })
 
@@ -489,27 +571,33 @@ const openCertificatePreview = (record) => {
   isCertPreviewOpen.value = true
 }
 
-// Смена статуса работы прямо из таблицы
-const updatingStatusId = ref(null)
+// Смена справочного поля (статус, художник, серия, медиа, локация) прямо из таблицы
+const updatingCell = ref({ id: null, field: null })
 
-const handleStatusChange = async (record, statusId) => {
-  if (statusId === record.status || updatingStatusId.value) return
+const isCellUpdating = (record, field) => updatingCell.value.id === record.id && updatingCell.value.field === field
 
-  updatingStatusId.value = record.id
+const handleFieldChange = async (record, field, value) => {
+  if (value === record[field] || isCellUpdating(record, field)) return
+
+  updatingCell.value = { id: record.id, field }
   try {
-    await artWorkStore.patchArtWork(record.id, { status: statusId })
+    await artWorkStore.patchArtWork(record.id, { [field]: value })
   } finally {
-    updatingStatusId.value = null
+    updatingCell.value = { id: null, field: null }
   }
 }
 
 // Выбранные строки
-const rowSelection = {
+const rowSelection = computed(() => ({
+  selectedRowKeys: selectedRowKeys.value,
+  // Без этого таблица сама снимает выбор со строк, пропавших из
+  // data-source при фильтрации, хотя работа должна оставаться
+  // выбранной, пока юзер сам не снимет галочку.
+  preserveSelectedRowKeys: true,
   onChange: (selectedKeys) => {
     selectedRowKeys.value = selectedKeys
-    console.log('Выбранные строки:', selectedKeys)
   },
-}
+}))
 
 const createCollection = () => {
   router.push({
@@ -591,6 +679,13 @@ onMounted(async () => {
   min-width: 0;
 }
 
+.selected-count {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+}
+
 .filters-right {
   display: flex;
   gap: 12px;
@@ -620,6 +715,25 @@ onMounted(async () => {
 }
 
 .filters-left :deep(.ant-select:hover .ant-select-selector) {
+  border-color: var(--accent) !important;
+}
+
+.filters-left :deep(.ant-input-number) {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  border-radius: 20px !important;
+  overflow: hidden;
+}
+
+.filters-left :deep(.ant-input-number-input) {
+  color: var(--text-body) !important;
+}
+
+.filters-left :deep(.ant-input-number-handler-wrap) {
+  border-radius: 0 20px 20px 0;
+}
+
+.filters-left :deep(.ant-input-number:hover) {
   border-color: var(--accent) !important;
 }
 
@@ -845,6 +959,25 @@ onMounted(async () => {
 }
 
 .status-pill-updating {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* === Редактируемые справочные поля (художник/серия/медиа/локация) === */
+.editable-cell {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.editable-cell:hover {
+  background: var(--card-bg);
+  color: var(--accent);
+}
+
+.editable-cell-updating {
   opacity: 0.5;
   pointer-events: none;
 }
