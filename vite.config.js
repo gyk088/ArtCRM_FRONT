@@ -46,6 +46,17 @@ export default defineConfig(({mode}) => {
         },
       },
     },
+    server: {
+      proxy: {
+        // Публичная страница ссылки (SSR) и её статика живут на бэкенде —
+        // в проде это делает nginx (art.myoffer.life -> 127.0.0.1:9999),
+        // здесь то же самое для локальной разработки, чтобы
+        // window.location.origin + '/collection/:id' работал одинаково
+        // в обоих окружениях.
+        '/collection': 'http://localhost:9999',
+        '/static': 'http://localhost:9999',
+      },
+    },
   }
 })
 

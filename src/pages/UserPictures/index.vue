@@ -106,6 +106,7 @@
             <span
               class="status-pill status-pill-editable"
               :class="[statusPillClass(record.status), { 'status-pill-updating': isCellUpdating(record, 'status') }]"
+              :style="getStatusColorStyle(record.status)"
               @click.stop
             >
               {{ getStatusName(record.status) || 'Не указан' }}
@@ -173,7 +174,12 @@
 
         <div class="preview-heading">
           <h3 class="preview-name">{{ previewWork.name || 'Без названия' }}</h3>
-          <span v-if="getStatusName(previewWork.status)" class="status-pill" :class="statusPillClass(previewWork.status)">
+          <span
+            v-if="getStatusName(previewWork.status)"
+            class="status-pill"
+            :class="statusPillClass(previewWork.status)"
+            :style="getStatusColorStyle(previewWork.status)"
+          >
             {{ getStatusName(previewWork.status) }}
           </span>
         </div>
@@ -345,10 +351,37 @@ const getStatusName = (statusId) => {
 }
 
 function statusPillClass(statusId) {
+  // Если у статуса задан явный цвет — им и рулит getStatusColorStyle() через
+  // инлайн-стиль; этот класс тогда нужен только как фолбэк для старых
+  // статусов без цвета (эвристика по названию).
   const name = getStatusName(statusId).toLowerCase()
   if (name.includes('прода')) return 'status-sold'
   if (name.includes('налич') || name.includes('доступ')) return 'status-available'
   return 'status-default'
+}
+
+function hexToRgba(hex, alpha) {
+  const clean = (hex || '').replace('#', '')
+  if (clean.length !== 6) return null
+  const bigint = parseInt(clean, 16)
+  if (Number.isNaN(bigint)) return null
+  const r = (bigint >> 16) & 255
+  const g = (bigint >> 8) & 255
+  const b = bigint & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+// Явный цвет статуса (задаётся в Справочнике) перекрывает эвристику по названию
+function getStatusColorStyle(statusId) {
+  const status = statusesStore.listStatuses.find(s => s.id === statusId)
+  const color = status?.color
+  if (!color) return {}
+
+  return {
+    background: hexToRgba(color, 0.12),
+    color,
+    borderColor: color,
+  }
 }
 
 const getLocationName = (locationId) => {

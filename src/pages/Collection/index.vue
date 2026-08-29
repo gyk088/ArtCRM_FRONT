@@ -144,6 +144,44 @@
             <a-switch v-model:checked="form.visibleFields[field.key]" />
           </div>
         </section>
+
+        <section class="form-section settings-card">
+          <div class="section-heading">Валюта</div>
+          <p class="settings-hint">
+            По умолчанию цены показываются в своей валюте каждой работы. Можно задать
+            валюту показа для этой ссылки — цены будут пересчитаны по указанному курсу.
+          </p>
+
+          <a-form-item label="Показывать цены в валюте">
+            <a-select
+              v-model:value="form.displayCurrency"
+              placeholder="Без переопределения (как у работы)"
+              allow-clear
+              :options="CURRENCY_OPTIONS"
+              class="fixed-input"
+            />
+          </a-form-item>
+
+          <template v-if="form.displayCurrency">
+            <a-form-item label="Курс (умножается на цену работы)">
+              <a-input-number
+                v-model:value="form.currencyRate"
+                :min="0.0001"
+                :step="0.01"
+                style="width: 100%"
+              />
+            </a-form-item>
+
+            <a-form-item label="Округление (до кратного)">
+              <a-input-number
+                v-model:value="form.currencyRounding"
+                :min="0.01"
+                :step="1"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </template>
+        </section>
       </div>
     </div>
 
@@ -417,8 +455,21 @@ const form = reactive({
     location: true,
     status: true,
     price: true
-  }
+  },
+  // Переопределение валюты показа цен на публичной странице ссылки —
+  // работы заведены в своей валюте, но, например, в конкретной ссылке
+  // цены нужно показать в евро по заданному вручную курсу.
+  displayCurrency: null,
+  currencyRate: 1,
+  currencyRounding: 1,
 })
+
+const CURRENCY_OPTIONS = [
+  { value: 'RUB', label: 'RUB — ₽' },
+  { value: 'BYN', label: 'BYN — Br' },
+  { value: 'USD', label: 'USD — $' },
+  { value: 'EUR', label: 'EUR — €' },
+]
 
 const descriptionEditor = useEditor({
   content: '',
@@ -636,6 +687,9 @@ const saveChanges = async () => {
     avatar: form.avatar,
     works: form.works,
     visibleFields: form.visibleFields,
+    displayCurrency: form.displayCurrency || null,
+    currencyRate: form.currencyRate || 1,
+    currencyRounding: form.currencyRounding || 1,
   }
 
   const result = isNewCollection.value

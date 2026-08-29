@@ -1,6 +1,13 @@
 <!-- src/layouts/HomeLayout.vue -->
 <template>
-  <a-layout style="min-height: 100vh">
+  <div v-if="impersonating" class="impersonation-banner">
+    <span class="impersonation-text">Вы вошли как <strong>{{ impersonatedName }}</strong> ({{ impersonatedRoleLabel }})</span>
+    <a-button size="small" class="impersonation-btn" :loading="stoppingImpersonation" @click="handleStopImpersonation">
+      Вернуться к администратору
+    </a-button>
+  </div>
+
+  <a-layout style="min-height: 100vh" :class="{ 'with-impersonation-banner': impersonating }">
     <!-- Боковое меню -->
     <a-layout-sider :width="260" collapsible v-model:collapsed="collapsed" class="custom-sider">
       <div class="sidebar-content">
@@ -35,6 +42,11 @@
             <a-menu-item key="files">
               <InboxOutlined />
               <span>Файлы</span>
+            </a-menu-item>
+
+            <a-menu-item key="reference">
+              <BookOutlined />
+              <span>Справочник</span>
             </a-menu-item>
 
             <a-menu-item key="profile">
@@ -90,8 +102,9 @@ import { useRouter } from "vue-router";
 import { Modal, message } from "ant-design-vue";
 import FileUploader from "@/components/FileUploader.vue"
 import apiClient from "@/services/api.js";
-import { logout, getUser } from "@/services/auth.js";
-import { ROLES } from "@/services/const";
+import { logout, getUser, isImpersonating } from "@/services/auth.js";
+import { useAdmin } from "@/stores/admin.js";
+import { ROLES, TEXT_ROLES } from "@/services/const";
 import {
   PictureOutlined,
   UserOutlined,
@@ -101,7 +114,8 @@ import {
   InboxOutlined,
   LogoutOutlined,
   IdcardOutlined,
-  TeamOutlined
+  TeamOutlined,
+  BookOutlined
 } from '@ant-design/icons-vue'
 
 const collapsed = ref(false);
@@ -109,6 +123,25 @@ const router = useRouter();
 const logoutLoading = ref(false);
 const isArtist = computed(() => getUser()?.role === ROLES.ARTIST);
 const isSuperAdmin = computed(() => getUser()?.role === ROLES.SUPER_ADMIN);
+
+// === Баннер имперсонации (вход под пользователем из админ-панели) ===
+const adminStore = useAdmin();
+const impersonating = ref(isImpersonating());
+const impersonatedName = computed(() => {
+  const user = getUser();
+  return [user?.name, user?.surname].filter(Boolean).join(' ') || user?.email || '';
+});
+const impersonatedRoleLabel = computed(() => {
+  const role = getUser()?.role;
+  return TEXT_ROLES[role] || role;
+});
+
+const stoppingImpersonation = ref(false);
+async function handleStopImpersonation() {
+  stoppingImpersonation.value = true;
+  await adminStore.stopImpersonation();
+  window.location.href = '/home/admin';
+}
 
 const selectedKey = ref(router.currentRoute.value.name);
 router.afterEach((to) => (selectedKey.value = to.name));
@@ -153,6 +186,47 @@ const handleLogout = () => {
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+.impersonation-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1100;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 16px;
+  background: #6f581f;
+  color: #fff;
+  font-size: 13px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  /* На узких экранах текст+кнопка в одну строку без переноса вылезали за
+     пределы viewport — а т.к. баннер fixed и висит на всех страницах, это
+     тянуло за собой горизонтальный скролл всего документа. Текст обрезаем
+     многоточием, кнопку никогда не сжимаем. */
+  overflow: hidden;
+}
+
+.impersonation-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.impersonation-btn {
+  flex: 0 0 auto;
+}
+
+.with-impersonation-banner {
+  padding-top: 44px;
+}
 
 .custom-sider {
   --bg: #0f0f11;

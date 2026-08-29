@@ -64,6 +64,22 @@
             </template>
 
             <template v-else-if="column.dataIndex === 'actions'">
+              <a-tooltip v-if="record.id === currentUserId" title="Это ваш аккаунт">
+                <a-button type="text" size="small" disabled>
+                  <LoginOutlined />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip v-else :title="record.active === false ? 'Пользователь заблокирован' : 'Войти под пользователем'">
+                <a-button
+                  type="text"
+                  size="small"
+                  :disabled="record.active === false"
+                  :loading="impersonatingId === record.id"
+                  @click="handleImpersonate(record)"
+                >
+                  <LoginOutlined />
+                </a-button>
+              </a-tooltip>
               <a-button type="text" size="small" @click="openChangePassword(record)">Пароль</a-button>
               <a-button type="text" size="small" @click="openChangeEmail(record)">Email</a-button>
             </template>
@@ -112,6 +128,22 @@
             </template>
 
             <template v-else-if="column.dataIndex === 'actions'">
+              <a-tooltip v-if="record.id === currentUserId" title="Это ваш аккаунт">
+                <a-button type="text" size="small" disabled>
+                  <LoginOutlined />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip v-else :title="record.active === false ? 'Пользователь заблокирован' : 'Войти под пользователем'">
+                <a-button
+                  type="text"
+                  size="small"
+                  :disabled="record.active === false"
+                  :loading="impersonatingId === record.id"
+                  @click="handleImpersonate(record)"
+                >
+                  <LoginOutlined />
+                </a-button>
+              </a-tooltip>
               <a-button type="text" size="small" @click="openChangePassword(record)">Пароль</a-button>
               <a-button type="text" size="small" @click="openChangeEmail(record)">Email</a-button>
             </template>
@@ -214,14 +246,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { ref, computed, onMounted, h } from 'vue'
+import { message, Modal } from 'ant-design-vue'
+import { PlusOutlined, SearchOutlined, LoginOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAdmin } from '@/stores/admin.js'
 import { ROLES, TEXT_ROLES } from '@/services/const.js'
+import { getUser } from '@/services/auth.js'
 
 const adminStore = useAdmin()
 const activeTab = ref('users')
+const currentUserId = getUser()?.id
 
 onMounted(() => {
   adminStore.getAllUsers()
@@ -269,7 +303,7 @@ const userColumns = [
   { title: 'Роль', dataIndex: 'role', key: 'role', width: 180 },
   { title: 'Галерея', dataIndex: 'gallery', key: 'gallery' },
   { title: 'Статус', dataIndex: 'active', key: 'active', width: 200 },
-  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 160 },
+  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 210 },
 ]
 
 const galleryColumns = [
@@ -277,7 +311,7 @@ const galleryColumns = [
   { title: 'Email', dataIndex: 'email', key: 'email' },
   { title: 'Управляемых', dataIndex: 'managedCount', key: 'managedCount', width: 140 },
   { title: 'Статус', dataIndex: 'active', key: 'active', width: 200 },
-  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 160 },
+  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 210 },
 ]
 
 // === Роль ===
@@ -295,6 +329,32 @@ const handleToggleBlock = async (record, checked) => {
   blockPendingId.value = record.id
   await adminStore.toggleBlock(record.id, checked)
   blockPendingId.value = null
+}
+
+// === Войти под пользователем (имперсонация) ===
+const impersonatingId = ref(null)
+function handleImpersonate(record) {
+  const fullName = [record.name, record.surname].filter(Boolean).join(' ') || record.email
+
+  Modal.confirm({
+    title: 'Войти под пользователем?',
+    icon: () => h(ExclamationCircleOutlined),
+    content: `Вы перейдёте в аккаунт «${fullName}». Вернуться в свой аккаунт можно будет через баннер вверху страницы.`,
+    okText: 'Войти',
+    cancelText: 'Отмена',
+    onOk: async () => {
+      impersonatingId.value = record.id
+      const success = await adminStore.impersonate(record.id)
+      impersonatingId.value = null
+
+      if (success) {
+        // Полная перезагрузка — самый надёжный способ сбросить кэш всех
+        // остальных сторов (работы, ссылки и т.д.), которые могли успеть
+        // подгрузить данные ещё от лица администратора/галереи.
+        window.location.href = '/home'
+      }
+    }
+  })
 }
 
 // === Создание пользователя ===

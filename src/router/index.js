@@ -84,6 +84,13 @@ const router = createRouter({
           component: () => import('@/pages/Collection/index.vue'),
           meta: { title: 'Редактировать ссылку' },
         }, {
+        path: 'reference',
+        name: 'reference',
+        component: () => import('@/pages/Reference/index.vue'),
+        meta: {
+            title: 'Справочник',
+          },
+      }, {
         path: 'profile',
         name: 'profile',
         component: () => import('@/pages/UserConfig/index.vue'),
@@ -100,15 +107,6 @@ const router = createRouter({
           },
       },
     ],
-    },
-    {
-      path: '/collection/:id',
-      name: 'collection-landing',
-      component: () => import('@/pages/CollectionLanding/index.vue'),
-      meta: {
-        title: 'Ссылка',
-        layout: 'public',
-      },
     },
     {
       path: '/about',

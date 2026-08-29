@@ -2,6 +2,7 @@
 import { defineStore } from 'pinia'
 import apiClient from '@/services/api.js'
 import { notifyServerError, notifyServerSuccess } from '@/services/notify.js'
+import { startImpersonation, endImpersonation } from '@/services/auth.js'
 
 export const useAdmin = defineStore('admin', {
   state: () => {
@@ -152,6 +153,41 @@ export const useAdmin = defineStore('admin', {
         result = null
       }
       return result
+    },
+
+    /**
+     * POST /api/v1/admin/users/:id/impersonate - Зайти под пользователем.
+     * Переключает активную сессию браузера на имперсонируемого пользователя,
+     * запомнив исходную (свою) сессию для последующего возврата.
+     */
+    async impersonate(id) {
+      let success = true
+      try {
+        const resp = await apiClient.post(`/api/v1/admin/users/${id}/impersonate`)
+        const { user, session } = resp.data
+        startImpersonation(user, session)
+      } catch (e) {
+        console.error('Error impersonating user:', e)
+        notifyServerError(e?.response?.data?.error || 'Не удалось зайти под пользователем')
+        success = false
+      }
+      return success
+    },
+
+    /**
+     * POST /api/v1/admin/impersonate/stop - Выйти из режима имперсонации
+     * обратно в свой аккаунт. Запрос обязан уйти ДО переключения токена
+     * обратно — бэкенд определяет завершаемую сессию по текущему заголовку
+     * Authorization (см. UserManagementService.stopImpersonation).
+     */
+    async stopImpersonation() {
+      try {
+        await apiClient.post('/api/v1/admin/impersonate/stop')
+      } catch (e) {
+        console.error('Error stopping impersonation:', e)
+      } finally {
+        endImpersonation()
+      }
     },
   }
 })

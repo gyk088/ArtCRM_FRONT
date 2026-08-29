@@ -11,8 +11,8 @@
 
 <style scoped>
 .empty-layout {
-  min-height: 100vh;
-  min-width: 100vw;
+  min-height: 100vh;   
+  max-width: 100vw;
   display: flex;
   align-items: center;
   justify-content: center;

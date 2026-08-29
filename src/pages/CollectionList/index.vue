@@ -29,11 +29,54 @@
         placeholder="Вставьте ссылку"
         class="import-link-input"
         autofocus
-        @pressEnter="importCollection"
+        @pressEnter="fetchImportPreview"
       />
-      <a-button type="primary" class="import-link-btn" :loading="importing" @click="importCollection">Добавить</a-button>
+      <a-button type="primary" class="import-link-btn" :loading="importing" @click="fetchImportPreview">Добавить</a-button>
       <a-button class="import-cancel-btn" :disabled="importing" @click="isImportOpen = false">Отмена</a-button>
     </div>
+
+    <a-modal
+      v-model:open="isImportModalOpen"
+      title="Выберите работы для импорта"
+      width="720px"
+      ok-text="Импортировать выбранное"
+      cancel-text="Отмена"
+      :confirm-loading="importing"
+      :ok-button-props="{ disabled: !selectedImportKeys.length }"
+      @ok="confirmImport"
+      @cancel="closeImportModal"
+    >
+      <p class="import-modal-hint">
+        Работы, отмеченные меткой «Уже есть в каталоге», совпадают по названию и художнику с одной из ваших
+        работ — по умолчанию они не выбраны, чтобы не создавать дубликаты, но их можно выбрать вручную.
+      </p>
+      <a-table
+        class="import-preview-table"
+        :columns="importPreviewColumns"
+        :data-source="importCandidates"
+        :row-selection="importRowSelection"
+        row-key="id"
+        :pagination="false"
+        size="small"
+        :scroll="{ y: 360 }"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'cover'">
+            <img v-if="record.avatar?.url" :src="record.avatar.url" class="import-preview-thumb" />
+            <div v-else class="import-preview-thumb import-preview-thumb--empty">
+              <PictureOutlined />
+            </div>
+          </template>
+          <template v-else-if="column.key === 'name'">
+            {{ record.name || 'Без названия' }}
+            <a-tag v-if="record.isDuplicate" color="gold" class="duplicate-tag">Уже есть в каталоге</a-tag>
+          </template>
+          <template v-else-if="column.key === 'artist'">
+            {{ record.artist_name || record.artistName || '—' }}
+          </template>
+        </template>
+      </a-table>
+    </a-modal>
 
     <div class="filters-panel">
       <a-input
@@ -136,6 +179,10 @@ import { ImportOutlined, CopyOutlined, DeleteOutlined, PlusOutlined, FolderOpenO
 import { htmlToPlainText } from '@/utils/richText.js'
 import { useArtWork } from '@/stores/artWork.js'
 import { useArtist } from '@/stores/artist.js'
+import { useSerias } from '@/stores/seria.js'
+import { useMedia } from '@/stores/media.js'
+import { useLocations } from '@/stores/locations.js'
+import { useStatuses } from '@/stores/statuses.js'
 import { useCollection } from '@/stores/collection.js'
 import { getUser } from '@/services/auth.js'
 import { ROLES } from '@/services/const'
@@ -145,12 +192,35 @@ const importLink = ref('')
 const isImportOpen = ref(false)
 const importing = ref(false)
 
+// Предпросмотр импорта: сначала показываем модалку со списком работ из
+// чужой ссылки и даём выбрать, какие из них реально нужно затянуть к себе,
+// а не копируем всё скопом.
+const isImportModalOpen = ref(false)
+const importCandidates = ref([]) // [{...work, isDuplicate}]
+const selectedImportKeys = ref([])
+const importedCollectionMeta = ref(null) // name/description/avatar/visibleFields найденной ссылки
+
+const importPreviewColumns = [
+  { title: '', key: 'cover', width: 56 },
+  { title: 'Название', key: 'name', dataIndex: 'name' },
+  { title: 'Художник', key: 'artist', width: 180 },
+]
+
+const importRowSelection = computed(() => ({
+  selectedRowKeys: selectedImportKeys.value,
+  onChange: (keys) => { selectedImportKeys.value = keys },
+}))
+
 // Для роли "художник" импорт ссылки и фильтр по художнику убраны — у
 // художника все работы и так только свои.
 const isArtistRole = computed(() => getUser()?.role === ROLES.ARTIST)
 
 const artWorkStore = useArtWork()
 const artistStore = useArtist()
+const seriaStore = useSerias()
+const mediaStore = useMedia()
+const locationStore = useLocations()
+const statusStore = useStatuses()
 const collectionStore = useCollection()
 const filterArtist = ref(null)
 const searchQuery = ref('')
@@ -162,7 +232,11 @@ onMounted(async () => {
     await Promise.all([
       collectionStore.getAllCollections(),
       artWorkStore.getListArtWorks(),
-      artistStore.getListArtists()
+      artistStore.getListArtists(),
+      seriaStore.getListSerias(),
+      mediaStore.getListMedia(),
+      locationStore.getListLocations(),
+      statusStore.getListStatuses()
     ])
   } catch (error) {
     console.error('Error loading directories:', error)
@@ -218,16 +292,61 @@ function extractCollectionId(link) {
   }
 }
 
+// id справочника (художник/локация/медиа/серия/статус) в чужой ссылке
+// принадлежит каталогу другого пользователя и у нас бессмысленен — поэтому
+// связанные справочники сопоставляются по имени: если у пользователя уже
+// есть запись с таким именем, используется она, иначе создаётся новая.
+// cache нужен, чтобы за один импорт не создать несколько одинаковых записей
+// (например, если у художника все работы — одной и той же серии).
+async function resolveReferenceId({ cache, ownList, createAction, name, extra }) {
+  const trimmed = (name || '').trim()
+  if (!trimmed) return null
+
+  const key = trimmed.toLowerCase()
+  if (cache.has(key)) return cache.get(key)
+
+  const existing = ownList.find(item => (item.name || '').trim().toLowerCase() === key)
+  if (existing) {
+    cache.set(key, existing.id)
+    return existing.id
+  }
+
+  const created = await createAction({ user_id: getUser()?.id, name: trimmed, ...extra })
+  const id = created?.id || null
+  cache.set(key, id)
+  return id
+}
+
 // Копируем работы из импортированной (чужой) публичной ссылки в собственный
 // каталог работ — публичная ссылка отдаёт работы уже полностью резолвленными
-// (включая доп. изображения), поэтому лишних запросов не требуется.
-// Возвращает id только что созданных у нас копий — из них соберётся works
-// новой ссылки. Копии помечаются imported: true на бэкенде — по этому полю
-// UserPictures подсвечивает импортированные строки.
+// (включая доп. изображения и имена связанных справочников), поэтому лишних
+// запросов не требуется. Возвращает id только что созданных у нас копий —
+// из них соберётся works новой ссылки. Копии помечаются imported: true на
+// бэкенде — по этому полю UserPictures подсвечивает импортированные строки.
 async function importWorksFromCollection(sourceWorks) {
   const newWorkIds = []
 
+  const artistCache = new Map()
+  const locationCache = new Map()
+  const mediaCache = new Map()
+  const seriaCache = new Map()
+  const statusCache = new Map()
+
   for (const sourceWork of sourceWorks) {
+    const [artistId, locationId, mediaId, seriaId, statusId] = await Promise.all([
+      resolveReferenceId({ cache: artistCache, ownList: artistStore.listArtists, createAction: artistStore.createArtist, name: sourceWork.artist_name }),
+      resolveReferenceId({ cache: locationCache, ownList: locationStore.listLocations, createAction: locationStore.createLocation, name: sourceWork.location_name }),
+      resolveReferenceId({ cache: mediaCache, ownList: mediaStore.listMedia, createAction: mediaStore.createMedia, name: sourceWork.media_name }),
+      resolveReferenceId({ cache: seriaCache, ownList: seriaStore.listSerias, createAction: seriaStore.createSeria, name: sourceWork.seria_name }),
+      resolveReferenceId({
+        cache: statusCache,
+        ownList: statusStore.listStatuses,
+        createAction: statusStore.createStatus,
+        name: sourceWork.status_name,
+        extra: sourceWork.status_color ? { color: sourceWork.status_color } : undefined,
+      }),
+    ])
+
     const created = await artWorkStore.createArtWork({
       user_id: getUser()?.id,
       name: sourceWork.name,
@@ -235,11 +354,11 @@ async function importWorksFromCollection(sourceWorks) {
       size: sourceWork.size,
       year: sourceWork.year,
       description: sourceWork.description,
-      location: sourceWork.location,
-      seria: sourceWork.seria,
-      media: sourceWork.media,
-      status: sourceWork.status,
-      artist: sourceWork.artist,
+      location: locationId,
+      seria: seriaId,
+      media: mediaId,
+      status: statusId,
+      artist: artistId,
       price: sourceWork.price,
       avatar_id: sourceWork.avatar?.id || null,
       images: sourceWork.images || [],
@@ -254,9 +373,27 @@ async function importWorksFromCollection(sourceWorks) {
   return newWorkIds
 }
 
-// Импорт ссылки по ссылке — тянем чужую публичную ссылку с бэкенда,
-// копируем её работы себе и создаём свою собственную ссылку с этими копиями.
-const importCollection = async () => {
+// Работа считается уже существующей у пользователя, если у него уже есть
+// своя работа с тем же названием и тем же художником (сравнение без учёта
+// регистра/пробелов) — id художника не подходит для сравнения, т.к. это id
+// из каталога художника чужой ссылки, а не наш собственный.
+function duplicateKey(name, artistName) {
+  return `${(name || '').trim().toLowerCase()}|${(artistName || '').trim().toLowerCase()}`
+}
+
+const ownWorksDuplicateKeys = computed(() => {
+  const keys = new Set()
+  for (const work of artWorkStore.listArtWorks) {
+    const artistName = artistStore.findArtistById(work.artist)?.name
+    keys.add(duplicateKey(work.name, artistName))
+  }
+  return keys
+})
+
+// Тянем чужую публичную ссылку с бэкенда и показываем модалку с её
+// работами — импорт (копирование к себе) происходит только после того,
+// как пользователь выберет нужные работы и подтвердит через confirmImport.
+const fetchImportPreview = async () => {
   if (!importLink.value.trim()) {
     message.warning('Пожалуйста, введите ссылку')
     return
@@ -281,14 +418,57 @@ const importCollection = async () => {
       return
     }
 
-    const newWorkIds = await importWorksFromCollection(found.works || [])
+    if (!found.works?.length) {
+      message.warning('В этой ссылке нет работ')
+      return
+    }
 
-    const created = await collectionStore.createCollection({
+    importedCollectionMeta.value = {
       name: found.name,
       artistOrGallery: found.artistOrGallery,
       description: found.description,
       avatar: found.avatar,
       visibleFields: found.visibleFields,
+    }
+
+    importCandidates.value = found.works.map(work => ({
+      ...work,
+      isDuplicate: ownWorksDuplicateKeys.value.has(duplicateKey(work.name, work.artist_name)),
+    }))
+
+    // По умолчанию выбраны все работы, кроме уже существующих у пользователя.
+    selectedImportKeys.value = importCandidates.value
+      .filter(work => !work.isDuplicate)
+      .map(work => work.id)
+
+    isImportModalOpen.value = true
+  } finally {
+    importing.value = false
+  }
+}
+
+function closeImportModal() {
+  isImportModalOpen.value = false
+  importCandidates.value = []
+  selectedImportKeys.value = []
+  importedCollectionMeta.value = null
+}
+
+// Копируем к себе только те работы, что пользователь отметил в модалке,
+// и создаём свою ссылку уже из этих копий.
+const confirmImport = async () => {
+  if (!selectedImportKeys.value.length) {
+    message.warning('Выберите хотя бы одну работу')
+    return
+  }
+
+  importing.value = true
+  try {
+    const selectedSourceWorks = importCandidates.value.filter(work => selectedImportKeys.value.includes(work.id))
+    const newWorkIds = await importWorksFromCollection(selectedSourceWorks)
+
+    const created = await collectionStore.createCollection({
+      ...importedCollectionMeta.value,
       works: newWorkIds,
       imported: true,
     })
@@ -297,12 +477,9 @@ const importCollection = async () => {
 
     isImportOpen.value = false
     importLink.value = ''
+    closeImportModal()
 
-    if (newWorkIds.length > 0) {
-      message.success(`Ссылка добавлена, работ добавлено в «Мои работы»: ${newWorkIds.length}`)
-    } else {
-      message.success('Ссылка добавлена в список')
-    }
+    message.success(`Ссылка добавлена, работ добавлено в «Мои работы»: ${newWorkIds.length}`)
   } finally {
     importing.value = false
   }
@@ -310,7 +487,9 @@ const importCollection = async () => {
 
 // Функция копирования ссылки на коллекцию
 const copyCollectionLink = async (collection) => {
-  // Формируем ссылку
+  // Страница ссылки теперь рендерится сервером на бэкенде, но nginx проксирует
+  // /collection/* и /static/* на том же домене, что и сам фронтенд (art.myoffer.life) —
+  // поэтому просто origin текущей страницы, без отдельного домена API.
   const link = `${window.location.origin}/collection/${collection.id}`
 
   try {
@@ -690,6 +869,33 @@ function pluralizeWorks(count) {
 .import-cancel-btn:hover {
   border-color: var(--accent) !important;
   color: var(--accent) !important;
+}
+
+.import-modal-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.import-preview-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  display: block;
+}
+
+.import-preview-thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg, #f2f0ea);
+  color: var(--text-faint, #aaa);
+  font-size: 16px;
+}
+
+.duplicate-tag {
+  margin-left: 8px;
 }
 
 /* Пустое состояние — направляет пользователя к первому действию */
