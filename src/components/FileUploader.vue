@@ -112,9 +112,17 @@
           v-for="folder in childFolders"
           :key="folder.id"
           class="folder-card"
-          :class="{ 'drag-over': dragOverTarget === folder.id }"
+          :class="{
+            'drag-over': dragOverTarget === folder.id && dropZone === 'inside',
+            'drop-before': dragOverTarget === folder.id && dropZone === 'before',
+            'drop-after': dragOverTarget === folder.id && dropZone === 'after',
+            dragging: draggingFolderId === folder.id
+          }"
+          :draggable="renamingFolderId !== folder.id"
           @click="openFolder(folder.id)"
-          @dragover.prevent="handleDragOverFolder(folder.id)"
+          @dragstart="handleFolderDragStart($event, folder)"
+          @dragend="handleFolderDragEnd"
+          @dragover.prevent="handleFolderCardDragOver($event, folder)"
           @dragleave="handleDragLeaveFolder(folder.id)"
           @drop="handleDropOnFolder(folder.id)"
         >
@@ -157,10 +165,13 @@
         v-for="item in filteredFiles"
         :key="item.id"
         class="file-card"
-        :class="{ dragging: draggingFileId === item.id }"
-        draggable="true"
+        :class="{ dragging: draggingFileId === item.id, 'reorder-over': reorderOverFileId === item.id }"
+        :draggable="!search"
         @dragstart="handleDragStart($event, item)"
         @dragend="handleDragEnd"
+        @dragover.prevent="handleFileReorderDragOver(item.id)"
+        @dragleave="handleFileReorderDragLeave(item.id)"
+        @drop.stop="handleFileReorderDrop(item.id)"
       >
         <div class="file-thumb" @click.stop>
           <FileView :file="item" />
@@ -472,12 +483,15 @@ const confirmRenameFile = async () => {
   }
 }
 
-// 🖱 Перетаскивание файлов в папки
+// 🖱 Перетаскивание файлов в папки + пересортировка файлов/папок между собой
 const draggingFileId = ref(null)
-const dragOverTarget = ref(null) // id папки или "root"
+const draggingFolderId = ref(null)
+const dragOverTarget = ref(null) // id папки или "root" — подсветка папки-цели
+const reorderOverFileId = ref(null) // id файла, над которым сейчас держат перетаскиваемый файл
 
 const handleDragStart = (event, item) => {
   draggingFileId.value = item.id
+  draggingFolderId.value = null
   event.dataTransfer.effectAllowed = "move"
   event.dataTransfer.setData("text/plain", item.id)
 }
@@ -485,16 +499,92 @@ const handleDragStart = (event, item) => {
 const handleDragEnd = () => {
   draggingFileId.value = null
   dragOverTarget.value = null
+  dropZone.value = null
+  reorderOverFileId.value = null
 }
 
+const handleFolderDragStart = (event, folder) => {
+  draggingFolderId.value = folder.id
+  draggingFileId.value = null
+  event.dataTransfer.effectAllowed = "move"
+  event.dataTransfer.setData("text/plain", folder.id)
+}
+
+const handleFolderDragEnd = () => {
+  draggingFolderId.value = null
+  dragOverTarget.value = null
+  dropZone.value = null
+}
+
+const dropZone = ref(null) // 'before' | 'inside' | 'after' — актуально только при перетаскивании папки
+
+// Используется для «плоских» целей без понятия позиции — хлебных крошек
+// (включая «Все файлы»). Бросить папку на крошку — всегда значит
+// «вложить в неё» (или вынести на корень), поэтому зона всегда 'inside'.
 const handleDragOverFolder = (target) => {
   dragOverTarget.value = target
+  dropZone.value = 'inside'
+}
+
+// Перетаскивание над карточкой папки — если тащат другую папку, зона
+// (до/внутрь/после) определяется горизонтальным положением курсора: края
+// карточки — переставить местами, середина — вложить внутрь. Если тащат
+// файл — как и раньше, вся карточка целиком означает «переместить в папку».
+const handleFolderCardDragOver = (event, folder) => {
+  dragOverTarget.value = folder.id
+
+  if (!draggingFolderId.value) {
+    dropZone.value = 'inside'
+    return
+  }
+
+  // Карточки в сетке узкие, поэтому зона «вложить» (середина) не должна
+  // отъедать слишком много места — иначе почти любое положение курсора
+  // читается как «вложить», и переставить местами становится практически
+  // невозможно попасть. Оставляем центру только 20%, а «переставить» — по
+  // 40% с каждого края, это гораздо проще зацепить курсором.
+  const rect = event.currentTarget.getBoundingClientRect()
+  const relativeX = (event.clientX - rect.left) / rect.width
+  dropZone.value = relativeX < 0.4 ? 'before' : relativeX > 0.6 ? 'after' : 'inside'
 }
 
 const handleDragLeaveFolder = (target) => {
   if (dragOverTarget.value === target) {
     dragOverTarget.value = null
+    dropZone.value = null
   }
+}
+
+// Перетаскивание одного файла на другой — меняет их местами в общем
+// порядке (в пределах текущей папки/поиска, как они сейчас показаны).
+const handleFileReorderDragOver = (targetId) => {
+  if (!draggingFileId.value || draggingFileId.value === targetId) return
+  reorderOverFileId.value = targetId
+}
+
+const handleFileReorderDragLeave = (targetId) => {
+  if (reorderOverFileId.value === targetId) {
+    reorderOverFileId.value = null
+  }
+}
+
+const handleFileReorderDrop = async (targetId) => {
+  const sourceId = draggingFileId.value
+  reorderOverFileId.value = null
+  draggingFileId.value = null
+  dragOverTarget.value = null
+
+  if (!sourceId || sourceId === targetId || search.value) return
+
+  const ids = filteredFiles.value.map(f => f.id)
+  const from = ids.indexOf(sourceId)
+  const to = ids.indexOf(targetId)
+  if (from === -1 || to === -1) return
+
+  ids.splice(from, 1)
+  ids.splice(to, 0, sourceId)
+
+  await fileStore.reorderFiles(ids)
 }
 
 const handleRemoveFromFolder = async (item) => {
@@ -517,8 +607,57 @@ const handleDownload = async (item) => {
 
 const handleDropOnFolder = async (target) => {
   const fileId = draggingFileId.value
+  const folderId = draggingFolderId.value
+  const zone = dropZone.value
   draggingFileId.value = null
+  draggingFolderId.value = null
   dragOverTarget.value = null
+  dropZone.value = null
+
+  // Перетащили папку на другую папку (или на хлебную крошку/«Все файлы») —
+  // либо вкладываем одну в другую (бросили в середину карточки или на
+  // крошку), либо переставляем местами среди папок одного уровня (бросили
+  // сбоку карточки). Папки в одной сетке всегда на одном уровне вложенности,
+  // поэтому переставлять их местами можно без дополнительных проверок.
+  if (folderId) {
+    if (folderId === target) return
+
+    if (target === "root") {
+      const draggedFolder = folders.value.find(f => f.id === folderId)
+      try {
+        await fileStore.moveFolderToParent(folderId, null)
+        message.success(`Папка «${draggedFolder?.name || ''}» перемещена в «Все файлы»`)
+      } catch {
+        // ошибка уже показана через notifyServerError в сторе
+      }
+      return
+    }
+
+    const targetFolder = folders.value.find(f => f.id === target)
+    const draggedFolder = folders.value.find(f => f.id === folderId)
+    if (!targetFolder || !draggedFolder) return
+
+    if (zone === 'inside') {
+      try {
+        await fileStore.moveFolderToParent(folderId, target)
+        message.success(`Папка «${draggedFolder.name}» вложена в «${targetFolder.name}»`)
+      } catch {
+        // ошибка уже показана через notifyServerError в сторе
+      }
+      return
+    }
+
+    const ids = childFolders.value.map(f => f.id)
+    const from = ids.indexOf(folderId)
+    let to = ids.indexOf(target)
+    if (from === -1 || to === -1) return
+
+    ids.splice(from, 1)
+    to = ids.indexOf(target)
+    ids.splice(zone === 'after' ? to + 1 : to, 0, folderId)
+    await fileStore.reorderFolders(ids)
+    return
+  }
 
   if (!fileId) return
 
@@ -952,15 +1091,45 @@ const removeFile = async (item) => {
   box-shadow: 0 0 0 2px rgba(138, 109, 47, 0.25);
 }
 
+/* Бросили сбоку карточки — покажем, куда именно встанет папка (до/после),
+   а не что она вложится внутрь */
+.folder-card.drop-before::before,
+.folder-card.drop-after::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.folder-card.drop-before::before {
+  left: -2px;
+}
+
+.folder-card.drop-after::after {
+  right: -2px;
+}
+
 .path-crumb.drag-over {
   background: var(--accent-tint);
   border-radius: 4px;
   padding: 0 4px;
 }
 
+.folder-card.dragging {
+  opacity: 0.4;
+}
+
 /* Карточка файла */
 .file-card.dragging {
   opacity: 0.4;
+}
+
+.file-card.reorder-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(138, 109, 47, 0.25);
 }
 
 /* Превью растягивается на всю ширину карточки (не выходя за её пределы)

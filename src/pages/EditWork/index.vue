@@ -71,13 +71,6 @@
 
                     <a-divider style="margin: 4px 0" />
 
-                    <div class="chip-list">
-                      <span v-for="(item, idx) in artistOptions" :key="item.value" class="chip">
-                        {{ item.label }}
-                        <button @click.prevent="removeArtist(idx)" class="chip-remove">×</button>
-                      </span>
-                    </div>
-
                     <a-space class="add-row">
                       <a-input ref="artistInputRef" v-model:value="newArtist"
                         @keyup.enter="addArtist" />
@@ -116,20 +109,14 @@
               </div>
 
               <div class="field-row">
-                <a-form-item label="Город" class="field-half">
-                  <a-select v-model:value="form.address" placeholder="Выберите или введите город" class="series-select"
+                <a-form-item label="Локация" class="field-half">
+                  <a-select v-model:value="form.address" placeholder="Выберите или введите локацию" class="series-select"
                     :options="items.map(item => ({ value: item }))" allowClear>
                     <template #dropdownRender="{ menuNode: menu }">
                       <VNodes :vnodes="menu" />
                       <a-divider style="margin: 4px 0" />
-                      <div class="chip-list">
-                        <span v-for="(item, idx) in items" :key="item" class="chip">
-                          {{ item }}
-                          <button @click.prevent="removeItem(idx)" class="chip-remove">×</button>
-                        </span>
-                      </div>
                       <a-space class="add-row">
-                        <a-input ref="inputRef" v-model:value="name" placeholder="Введите город" @keyup.enter="addItem" />
+                        <a-input ref="inputRef" v-model:value="name" placeholder="Введите локацию" @keyup.enter="addItem" />
                         <a-button type="text" @click="addItem">
                           <template #icon>
                             <PlusOutlined />
@@ -149,15 +136,6 @@
 
                       <a-divider style="margin: 4px 0" />
 
-                      <!-- Блок списка серий с кнопками удаления -->
-                      <div class="chip-list">
-                        <span v-for="(item, idx) in seriesOptions" :key="item.value" class="chip">
-                          {{ item.label }}
-                          <button @click.prevent="removeSeries(idx)" class="chip-remove">×</button>
-                        </span>
-                      </div>
-
-                      <!-- Добавляем инпут для добавления новой серии (как у городов) -->
                       <a-space class="add-row">
                         <a-input ref="seriesInputRef" v-model:value="newSeries" placeholder="Введите серию"
                           @keyup.enter="addSeries" />
@@ -183,13 +161,6 @@
 
                       <a-divider style="margin: 4px 0" />
 
-                      <div class="chip-list">
-                        <span v-for="(item, idx) in mediaOptions" :key="item.value" class="chip">
-                          {{ item.label }}
-                          <button @click.prevent="removeMedia(idx)" class="chip-remove">×</button>
-                        </span>
-                      </div>
-
                       <a-space class="add-row">
                         <a-input ref="mediaInputRef" v-model:value="newMedia" placeholder="Введите медиа"
                           @keyup.enter="addMedia" />
@@ -211,15 +182,6 @@
 
                       <a-divider style="margin: 4px 0" />
 
-                      <!-- Блок списка статусов с кнопками удаления -->
-                      <div class="chip-list">
-                        <span v-for="(item, idx) in statusOptions" :key="item.value" class="chip">
-                          {{ item.label }}
-                          <button @click.prevent="removeStatus(idx)" class="chip-remove">×</button>
-                        </span>
-                      </div>
-
-                      <!-- Добавляем инпут для добавления нового статуса -->
                       <a-space class="add-row">
                         <a-input ref="statusInputRef" v-model:value="newStatus" placeholder="Введите статус"
                           @keyup.enter="addStatus" />
@@ -644,27 +606,6 @@ const onYearSelect = (value) => {
   }
 }
 
-// Удаление серии из списка
-const removeSeries = async (idx) => {
-  const removed = seriesOptions.value[idx]
-  if (!removed) return
-
-  try {
-    await seriasStore.deleteSeria(removed.value)
-    seriasStore.listSerias = seriasStore.listSerias.filter(s => s.id !== removed.value)
-    message.success(`Серия "${removed.label}" удалена на сервере`)
-  } catch (error) {
-    console.error('Error deleting seria via API:', error)
-  }
-
-  // Если удалённая серия была выбрана, сбрасываем
-  if (form.seria === removed.value) {
-    form.seria = null
-  }
-
-  seriesOptions.value.splice(idx, 1)
-}
-
 // Добавление новой серии
 const addSeries = async (e) => {
   e?.preventDefault()
@@ -707,18 +648,6 @@ const addSeries = async (e) => {
   setTimeout(() => seriesInputRef.value?.focus(), 0)
 }
 
-// Удаление локации через API
-const deleteLocation = async (locationId) => {
-  try {
-    await locationsStore.deleteLocation(locationId)
-    console.log('Location deleted:', locationId)
-    return true
-  } catch (error) {
-    console.error('Error deleting location:', error)
-    return false
-  }
-}
-
 const addItem = async (e) => {
   e?.preventDefault()
   const cityName = name.value.trim()
@@ -735,26 +664,15 @@ const addItem = async (e) => {
     await locationsStore.createLocation({ user_id: userId, name: cityName })
     await locationsStore.getListLocations()
     items.value = locationsStore.listLocations.map(loc => loc.name)
-    message.success(`Город "${cityName}" добавлен`)
+    message.success(`Локация "${cityName}" добавлена`)
   } catch (error) {
     console.error('Error creating location:', error)
-    message.warning('Город добавлен локально')
+    message.warning('Локация добавлена локально')
     items.value.push(cityName)
   } finally {
     form.address = cityName
     name.value = ''
     inputRef.value?.focus()
-  }
-}
-
-const removeItem = async (idx) => {
-  const removedCity = items.value[idx]
-  const locationToDelete = locationsStore.listLocations.find(loc => loc.name === removedCity)
-
-  if (locationToDelete && locationToDelete.id) {
-    await deleteLocation(locationToDelete.id)
-    items.value.splice(idx, 1)
-    message.success(`Город "${removedCity}" удалён`)
   }
 }
 
@@ -772,18 +690,6 @@ const createStatus = async (statusName) => {
     }
   } catch (error) {
     console.error('Error creating status:', error)
-    return false
-  }
-}
-
-// Удаление статуса через API
-const deleteStatusAPI = async (statusId) => {
-  try {
-    await statusesStore.deleteStatus(statusId)
-    console.log('Status deleted:', statusId)
-    return true
-  } catch (error) {
-    console.error('Error deleting status:', error)
     return false
   }
 }
@@ -830,24 +736,6 @@ const addStatus = async (e) => {
   setTimeout(() => statusInputRef.value?.focus(), 0)
 }
 
-// Удаление статуса из списка
-const removeStatus = async (idx) => {
-  const removed = statusOptions.value[idx]
-  if (!removed) return
-
-  try {
-    await deleteStatusAPI(removed.value)
-    message.success(`Статус "${removed.label}" удалён на сервере`)
-  } catch (error) {
-    console.error('Error deleting status via API:', error)
-  }
-
-  if (form.status === removed.value) {
-    form.status = null
-  }
-  statusOptions.value.splice(idx, 1)
-}
-
 // Создание нового медиа через API
 const createMedia = async (mediaName) => {
   try {
@@ -862,18 +750,6 @@ const createMedia = async (mediaName) => {
     }
   } catch (error) {
     console.error('Error creating media:', error)
-    return false
-  }
-}
-
-// Удаление медиа через API
-const deleteMediaAPI = async (mediaId) => {
-  try {
-    await mediaStore.deleteMedia(mediaId)
-    console.log('Media deleted:', mediaId)
-    return true
-  } catch (error) {
-    console.error('Error deleting media:', error)
     return false
   }
 }
@@ -918,24 +794,6 @@ const addMedia = async (e) => {
   setTimeout(() => mediaInputRef.value?.focus(), 0)
 }
 
-// Удаление медиа из списка
-const removeMedia = async (idx) => {
-  const removed = mediaOptions.value[idx]
-  if (!removed) return
-
-  try {
-    await deleteMediaAPI(removed.value)
-    message.success(`Медиа "${removed.label}" удалено на сервере`)
-  } catch (error) {
-    console.error('Error deleting media via API:', error)
-  }
-
-  if (form.media === removed.value) {
-    form.media = null
-  }
-  mediaOptions.value.splice(idx, 1)
-}
-
 // Добавление нового Художника
 const addArtist = async (e) => {
   e?.preventDefault()
@@ -976,24 +834,6 @@ const addArtist = async (e) => {
 
   newArtist.value = ''
   setTimeout(() => artistInputRef.value?.focus(), 0)
-}
-
-// Удаление Художника из списка
-const removeArtist = async (idx) => {
-  const removed = artistOptions.value[idx]
-  if (!removed) return
-
-  try {
-    await artistStore.deleteArtist(removed.value)
-    message.success(`Художник "${removed.label}" удалён на сервере`)
-  } catch (error) {
-    console.error('Error deleting artist via API:', error)
-  }
-
-  if (form.artist === removed.value) {
-    form.artist = null
-  }
-  artistOptions.value.splice(idx, 1)
 }
 
 const getLocationIdByName = (locationName) => {
@@ -1297,38 +1137,6 @@ function goBack() {
 
 .currency-select:hover :deep(.ant-select-selector) {
   border-color: var(--accent) !important;
-}
-
-/* === Чипы (города/серии/медиа/статусы) в выпадающих списках === */
-.chip-list {
-  padding: 4px 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chip {
-  display: flex;
-  align-items: center;
-  background: var(--card-bg);
-  color: var(--text-body);
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-size: 13px;
-}
-
-.chip-remove {
-  margin-left: 6px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: #b43c3c;
-  font-size: 13px;
-  line-height: 1;
-}
-
-.chip-remove:hover {
-  color: #8f2c2c;
 }
 
 .add-row {

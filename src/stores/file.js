@@ -227,6 +227,68 @@ export const useFile = defineStore('file', {
       }
     },
 
+    /**
+     * Пересортировка файлов внутри одной папки/корня после drag&drop —
+     * ids передаются в новом визуальном порядке.
+     */
+    async reorderFiles(ids) {
+      const previous = this.files
+      // Оптимистично переставляем локально сразу, не дожидаясь ответа
+      // сервера — иначе список на секунду "прыгнет" обратно на старое место.
+      const orderIndex = new Map(ids.map((id, i) => [id, i]))
+      this.files = [...this.files].sort((a, b) => {
+        const ai = orderIndex.has(a.id) ? orderIndex.get(a.id) : Infinity
+        const bi = orderIndex.has(b.id) ? orderIndex.get(b.id) : Infinity
+        return ai - bi
+      })
+
+      try {
+        await apiClient.patch('/api/v1/file/reorder', { ids })
+      } catch (e) {
+        console.error('Error reordering files:', e)
+        notifyServerError(e?.response?.data?.error || 'Failed to reorder files')
+        this.files = previous
+      }
+    },
+
+    /**
+     * Пересортировка папок внутри одного уровня вложенности после drag&drop.
+     */
+    async reorderFolders(ids) {
+      const previous = this.folders
+      const orderIndex = new Map(ids.map((id, i) => [id, i]))
+      this.folders = [...this.folders].sort((a, b) => {
+        const ai = orderIndex.has(a.id) ? orderIndex.get(a.id) : Infinity
+        const bi = orderIndex.has(b.id) ? orderIndex.get(b.id) : Infinity
+        return ai - bi
+      })
+
+      try {
+        await apiClient.patch('/api/v1/file/folder/reorder', { ids })
+      } catch (e) {
+        console.error('Error reordering folders:', e)
+        notifyServerError(e?.response?.data?.error || 'Failed to reorder folders')
+        this.folders = previous
+      }
+    },
+
+    /**
+     * Вложить папку в другую папку (или вынести на корневой уровень,
+     * если parentId === null) — например, при перетаскивании одной
+     * папки на другую в файловом менеджере.
+     */
+    async moveFolderToParent(folderId, parentId) {
+      try {
+        const resp = await apiClient.put(`/api/v1/file/folder/${folderId}`, { parent_id: parentId })
+        this.folders = this.folders.map(f => f.id === folderId ? resp.data : f)
+        return resp.data
+      } catch (e) {
+        console.error('Error moving folder:', e)
+        notifyServerError(e?.response?.data?.error || 'Failed to move folder')
+        throw e
+      }
+    },
+
     async moveFileToFolder(fileId, folderId) {
       try {
         const resp = await apiClient.patch(`/api/v1/file/${fileId}/folder`, { folderId })
