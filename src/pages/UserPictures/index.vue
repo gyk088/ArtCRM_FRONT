@@ -163,7 +163,7 @@
     </a-table>
 
     <!-- Быстрый просмотр работы (без редактирования) -->
-    <a-drawer v-model:open="isPreviewOpen" title="Просмотр работы" placement="right" width="700px" destroyOnClose>
+    <a-drawer v-model:open="isPreviewOpen" placement="right" width="700px" destroyOnClose root-class-name="preview-drawer">
       <div v-if="previewWork" class="work-preview">
         <div class="preview-cover">
           <img v-if="previewWork.avatar && previewWork.avatar.url" :src="previewWork.avatar.url" />
@@ -172,52 +172,32 @@
           </div>
         </div>
 
-        <div class="preview-heading">
-          <h3 class="preview-name">{{ previewWork.name || 'Без названия' }}</h3>
-          <span
+        <div class="preview-info">
+          <div class="preview-artist">{{ getArtistName(previewWork.artist) || 'Не указан' }}</div>
+          <div class="preview-title">
+            {{ previewWork.name || 'Без названия' }}<template v-if="previewWork.year">, {{ previewWork.year }}</template>
+          </div>
+
+          <p v-if="previewWork.description" class="preview-description">{{ previewWork.description }}</p>
+
+          <div class="preview-meta">
+            <div v-if="previewWork.technique" class="preview-meta-line">{{ previewWork.technique }}</div>
+            <div v-if="previewWork.size" class="preview-meta-line">{{ previewWork.size }}</div>
+            <div v-if="getMediaName(previewWork.media)" class="preview-meta-line">{{ getMediaName(previewWork.media) }}</div>
+            <div v-if="getSeriaName(previewWork.seria)" class="preview-meta-line">Серия: {{ getSeriaName(previewWork.seria) }}</div>
+            <div v-if="getLocationName(previewWork.location)" class="preview-meta-line">Локация: {{ getLocationName(previewWork.location) }}</div>
+          </div>
+
+          <div
             v-if="getStatusName(previewWork.status)"
-            class="status-pill"
-            :class="statusPillClass(previewWork.status)"
-            :style="getStatusColorStyle(previewWork.status)"
+            class="preview-status"
+            :style="{ color: getStatusTextColor(previewWork.status) }"
           >
             {{ getStatusName(previewWork.status) }}
-          </span>
-        </div>
+          </div>
 
-        <p v-if="previewWork.description" class="preview-description">{{ previewWork.description }}</p>
-
-        <div class="preview-fields">
-          <div v-if="getArtistName(previewWork.artist)" class="preview-field">
-            <span class="preview-field-label">Художник</span>
-            <span class="preview-field-value">{{ getArtistName(previewWork.artist) }}</span>
-          </div>
-          <div v-if="previewWork.technique" class="preview-field">
-            <span class="preview-field-label">Техника</span>
-            <span class="preview-field-value">{{ previewWork.technique }}</span>
-          </div>
-          <div v-if="previewWork.size" class="preview-field">
-            <span class="preview-field-label">Размер</span>
-            <span class="preview-field-value">{{ previewWork.size }}</span>
-          </div>
-          <div v-if="previewWork.year" class="preview-field">
-            <span class="preview-field-label">Год</span>
-            <span class="preview-field-value">{{ previewWork.year }}</span>
-          </div>
-          <div v-if="getMediaName(previewWork.media)" class="preview-field">
-            <span class="preview-field-label">Медиа</span>
-            <span class="preview-field-value">{{ getMediaName(previewWork.media) }}</span>
-          </div>
-          <div v-if="getSeriaName(previewWork.seria)" class="preview-field">
-            <span class="preview-field-label">Серия</span>
-            <span class="preview-field-value">{{ getSeriaName(previewWork.seria) }}</span>
-          </div>
-          <div v-if="getLocationName(previewWork.location)" class="preview-field">
-            <span class="preview-field-label">Локация</span>
-            <span class="preview-field-value">{{ getLocationName(previewWork.location) }}</span>
-          </div>
-          <div v-if="previewWork.price" class="preview-field">
-            <span class="preview-field-label">Стоимость</span>
-            <span class="preview-field-value">{{ previewWork.price }} {{ getCurrencySymbol(previewWork.currency) }}</span>
+          <div v-if="previewWork.price" class="preview-price">
+            {{ formatPrice(previewWork.price) }} {{ getCurrencySymbol(previewWork.currency) }}
           </div>
         </div>
 
@@ -398,6 +378,18 @@ const getLocationName = (locationId) => {
 
 const CURRENCY_SYMBOLS = { RUB: '₽', BYN: 'Br', USD: '$', EUR: '€' }
 const getCurrencySymbol = (currency) => CURRENCY_SYMBOLS[currency] || CURRENCY_SYMBOLS.RUB
+const formatPrice = (price) => Number(price).toLocaleString('ru-RU')
+
+// Цвет статуса для текстового (не pill) отображения в детальном просмотре
+function getStatusTextColor(statusId) {
+  const status = statusesStore.listStatuses.find(s => s.id === statusId)
+  if (status?.color) return status.color
+
+  const cls = statusPillClass(statusId)
+  if (cls === 'status-available') return 'var(--status-available-fg)'
+  if (cls === 'status-sold') return 'var(--status-sold-fg)'
+  return 'var(--status-default-fg)'
+}
 
 // Загрузка всех справочников
 const loadDirectories = async () => {
@@ -648,7 +640,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Inter:wght@400;500;600&display=swap');
 
 .pictures-page {
   --bg: #f7f5f0;
@@ -1113,9 +1105,9 @@ onMounted(async () => {
 
 .preview-cover {
   width: 100%;
-  max-width: 320px;
+  max-width: 460px;
   aspect-ratio: 1 / 1;
-  margin: 0 auto 20px;
+  margin: 0 auto 24px;
   border-radius: 12px;
   overflow: hidden;
   background: var(--card-bg);
@@ -1139,62 +1131,104 @@ onMounted(async () => {
   color: var(--text-dim);
 }
 
-.preview-heading {
+.preview-info {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.preview-artist {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-title);
+  margin-bottom: 2px;
+}
+
+.preview-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-title);
   margin-bottom: 8px;
 }
 
-.preview-name {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--text-title);
-  margin: 0;
-}
-
 .preview-description {
-  font-size: 13px;
-  line-height: 1.6;
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.4;
   color: var(--text-muted);
-  margin: 0 0 20px;
+  margin: 0 0 8px;
 }
 
-.preview-fields {
+.preview-meta {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 24px;
+  gap: 0;
+  margin-bottom: 8px;
 }
 
-.preview-field {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border-soft);
-  font-size: 13px;
+.preview-meta-line {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.3;
+  color: var(--text-muted);
 }
 
-.preview-field-label {
-  color: var(--text-faint);
+.preview-status {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 15px;
+  margin-bottom: 6px;
 }
 
-.preview-field-value {
-  color: var(--text-body);
-  font-weight: 500;
-  text-align: right;
+.preview-price {
+  display: inline-block;
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 17px;
+  color: var(--text-title);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
 }
 
 .preview-edit-btn {
   background: var(--accent);
   border-color: var(--accent);
+  box-shadow: none;
 }
 
-.preview-edit-btn:hover {
+.preview-edit-btn:hover,
+.preview-edit-btn:focus {
   background: var(--accent-strong) !important;
   border-color: var(--accent-strong) !important;
+  box-shadow: none !important;
+}
+
+</style>
+
+<style>
+/* Не scoped: a-drawer телепортируется в body, поэтому scoped-стили
+   (даже с :deep()) до его шапки не достают — data-v-атрибут на
+   корневой узел drawer'а не попадает. Изолируем через свой класс,
+   переданный в root-class-name. */
+.preview-drawer .ant-drawer-header {
+  padding: 8px 16px;
+  border-bottom: none;
+}
+
+.preview-drawer .ant-drawer-close {
+  margin-top: 6px;
+}
+
+.preview-drawer .ant-drawer-body {
+  padding-top: 4px;
 }
 </style>
