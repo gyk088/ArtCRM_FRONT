@@ -54,6 +54,7 @@ export default defineConfig(({mode}) => {
         // window.location.origin + '/collection/:id' работал одинаково
         // в обоих окружениях.
         '/collection': 'http://localhost:9999',
+        '/exhibition': 'http://localhost:9999',
         '/static': 'http://localhost:9999',
       },
     },

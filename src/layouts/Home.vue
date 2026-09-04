@@ -24,6 +24,11 @@
               <span>Мои Ссылки</span>
             </a-menu-item>
 
+            <a-menu-item key="exhibition">
+              <BankOutlined />
+              <span>Мои Выставки</span>
+            </a-menu-item>
+
             <a-menu-item v-if="!isArtist" key="workspace">
               <AppstoreOutlined />
               <span>Рабочее Пространство</span>
@@ -115,7 +120,8 @@ import {
   LogoutOutlined,
   IdcardOutlined,
   TeamOutlined,
-  BookOutlined
+  BookOutlined,
+  BankOutlined
 } from '@ant-design/icons-vue'
 
 const collapsed = ref(false);
@@ -185,7 +191,6 @@ const handleLogout = () => {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
 .impersonation-banner {
   position: fixed;

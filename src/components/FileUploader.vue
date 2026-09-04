@@ -248,13 +248,13 @@
         </div>
 
         <div class="file-edit-field">
-          <label class="file-edit-label">Название</label>
-          <a-input v-model:value="renameFileValue" placeholder="Введите название" />
+          <label class="file-edit-label" for="fileEditName">Название</label>
+          <a-input id="fileEditName" v-model:value="renameFileValue" placeholder="Введите название" />
         </div>
 
         <div class="file-edit-field">
-          <label class="file-edit-label">Комментарий</label>
-          <a-textarea v-model:value="renameCommentValue" placeholder="Комментарий" :rows="4" />
+          <label class="file-edit-label" for="fileEditComment">Комментарий</label>
+          <a-textarea id="fileEditComment" v-model:value="renameCommentValue" placeholder="Комментарий" :rows="4" />
         </div>
       </div>
 
@@ -771,7 +771,6 @@ const removeFile = async (item) => {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
 .file-uploader {
   --bg: #f7f5f0;

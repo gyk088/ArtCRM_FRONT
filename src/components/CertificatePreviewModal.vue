@@ -11,8 +11,9 @@
     <div v-if="work" class="cert-preview">
       <div class="cert-header">
         <div class="cert-title">СЕРТИФИКАТ ПОДЛИННОСТИ</div>
-        <label class="cert-header-label">Текст в шапке сертификата</label>
+        <label class="cert-header-label" for="certHeaderText">Текст в шапке сертификата</label>
         <a-textarea
+          id="certHeaderText"
           v-model:value="headerText"
           :rows="4"
           class="cert-header-input"

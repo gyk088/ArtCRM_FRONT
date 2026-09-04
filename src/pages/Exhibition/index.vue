@@ -1,7 +1,7 @@
 <template>
   <div class="edit-page">
     <div class="page-header">
-      <h2 class="page-title">{{ isNewCollection ? "Создать ссылку" : "Редактировать ссылку" }}</h2>
+      <h2 class="page-title">{{ isNewExhibition ? "Создать выставку" : "Редактировать выставку" }}</h2>
       <p class="page-subtitle">{{ form.name || "Без названия" }}</p>
     </div>
 
@@ -27,16 +27,46 @@
             </a-form-item>
 
             <a-form-item label="Название" name="name">
-              <a-input id="collectionName" name="collectionName" v-model:value="form.name" placeholder="Например, «Осенняя ссылка" class="fixed-input" />
+              <a-input id="exhibitionName" name="exhibitionName" v-model:value="form.name" placeholder="Например, «Осенний вернисаж»" class="fixed-input" />
             </a-form-item>
 
             <a-form-item label="Подзаголовок" name="subtitle">
-              <a-input id="collectionSubtitle" name="collectionSubtitle" v-model:value="form.subtitle" placeholder="Короткая подпись под названием" class="fixed-input" />
+              <a-input id="exhibitionSubtitle" name="exhibitionSubtitle" v-model:value="form.subtitle" placeholder="Короткая подпись под названием" class="fixed-input" />
             </a-form-item>
 
             <a-form-item label="Художник/Галерея" name="artistOrGallery">
-              <a-input id="collectionArtistOrGallery" name="collectionArtistOrGallery" v-model:value="form.artistOrGallery" class="fixed-input" />
+              <a-input id="exhibitionArtistOrGallery" name="exhibitionArtistOrGallery" v-model:value="form.artistOrGallery" class="fixed-input" />
             </a-form-item>
+
+            <a-form-item label="Место проведения" name="venue">
+              <a-input id="exhibitionVenue" name="exhibitionVenue" v-model:value="form.venue" placeholder="Например, «Галерея XYZ, Москва»" class="fixed-input" />
+            </a-form-item>
+
+            <div class="date-range-row">
+              <a-form-item label="Дата начала" name="startDate">
+                <a-date-picker
+                  id="exhibitionStartDate"
+                  v-model:value="form.startDate"
+                  value-format="YYYY-MM-DD"
+                  format="DD.MM.YYYY"
+                  placeholder="Не задана"
+                  class="fixed-input"
+                  style="width: 100%"
+                />
+              </a-form-item>
+
+              <a-form-item label="Дата окончания" name="endDate">
+                <a-date-picker
+                  id="exhibitionEndDate"
+                  v-model:value="form.endDate"
+                  value-format="YYYY-MM-DD"
+                  format="DD.MM.YYYY"
+                  placeholder="По настоящее время"
+                  class="fixed-input"
+                  style="width: 100%"
+                />
+              </a-form-item>
+            </div>
 
             <a-form-item label="Описание" class="description-item">
               <div class="rich-editor-wrap">
@@ -134,6 +164,58 @@
               </div>
             </a-form-item>
           </section>
+
+          <!-- Галерея фото события — требует сохранённой выставки, т.к. фото
+               привязаны к её id (в отличие от обложки/списка работ, которые
+               просто едут одним payload'ом при создании). -->
+          <section class="form-section gallery-section">
+            <div class="table-header">
+              <div class="section-heading">Галерея (фото события)</div>
+              <a-tooltip :title="isNewExhibition ? 'Сначала сохраните выставку' : ''">
+                <a-button type="dashed" :disabled="isNewExhibition" @click="openPhotoFilesModal" class="add-more-btn">
+                  <PlusOutlined /> Добавить фото
+                </a-button>
+              </a-tooltip>
+            </div>
+
+            <p v-if="isNewExhibition" class="settings-hint">
+              Сохраните выставку — после этого можно будет добавить фото экспозиции, открытия и т.п.
+            </p>
+            <p v-else-if="!form.photos.length" class="settings-hint">
+              Пока нет фото — добавьте виды экспозиции, открытие и т.п.
+            </p>
+
+            <div v-if="form.photos.length" class="photo-gallery-grid">
+              <div
+                v-for="photo in form.photos"
+                :key="photo.id"
+                class="photo-gallery-card"
+                :class="{
+                  dragging: draggingPhotoId === photo.id,
+                  'reorder-over': reorderOverPhotoId === photo.id,
+                }"
+                draggable="true"
+                @dragstart="handlePhotoDragStart($event, photo)"
+                @dragend="handlePhotoDragEnd"
+                @dragover.prevent="handlePhotoDragOver(photo.id)"
+                @dragleave="handlePhotoDragLeave(photo.id)"
+                @drop="handlePhotoDrop(photo.id)"
+              >
+                <img :src="photo.file.url" class="photo-gallery-img" />
+                <a-input
+                  :id="`exhibitionPhotoCaption-${photo.id}`"
+                  :name="`exhibitionPhotoCaption-${photo.id}`"
+                  v-model:value="photo.caption"
+                  placeholder="Подпись (необязательно)"
+                  size="small"
+                  class="photo-caption-input"
+                  @blur="savePhotoCaption(photo)"
+                  @keyup.enter="savePhotoCaption(photo)"
+                />
+                <button type="button" class="photo-delete-btn" @click="handleDeletePhoto(photo.id)">×</button>
+              </div>
+            </div>
+          </section>
         </a-form>
       </div>
 
@@ -141,7 +223,7 @@
       <div class="right-column">
         <section class="form-section settings-card" style="margin-top: 0px">
           <div class="section-heading">Отображение полей</div>
-          <p class="settings-hint">Выключенные поля не будут показаны в карточке работы на странице коллекции</p>
+          <p class="settings-hint">Выключенные поля не будут показаны в карточке работы на странице выставки</p>
 
           <div v-for="field in fieldToggles" :key="field.key" class="field-toggle-row">
             <span class="field-toggle-label">{{ field.label }}</span>
@@ -151,7 +233,7 @@
 
         <section class="form-section settings-card">
           <div class="section-heading">Сортировка и фильтры</div>
-          <p class="settings-hint">Дают посетителям возможность сортировать и фильтровать работы прямо на странице ссылки</p>
+          <p class="settings-hint">Дают посетителям возможность сортировать и фильтровать работы прямо на странице выставки</p>
 
           <div class="field-toggle-row">
             <span class="field-toggle-label">Сортировка по цене</span>
@@ -168,12 +250,12 @@
           <div class="section-heading">Валюта</div>
           <p class="settings-hint">
             По умолчанию цены показываются в своей валюте каждой работы. Можно задать
-            валюту показа для этой ссылки — цены будут пересчитаны по указанному курсу.
+            валюту показа для этой выставки — цены будут пересчитаны по указанному курсу.
           </p>
 
           <a-form-item label="Показывать цены в валюте">
             <a-select
-              id="collectionDisplayCurrency"
+              id="exhibitionDisplayCurrency"
               v-model:value="form.displayCurrency"
               placeholder="Без переопределения (как у работы)"
               allow-clear
@@ -185,8 +267,8 @@
           <template v-if="form.displayCurrency">
             <a-form-item label="Курс (умножается на цену работы)">
               <a-input-number
-                id="collectionCurrencyRate"
-                name="collectionCurrencyRate"
+                id="exhibitionCurrencyRate"
+                name="exhibitionCurrencyRate"
                 v-model:value="form.currencyRate"
                 :min="0.0001"
                 :step="0.01"
@@ -196,8 +278,8 @@
 
             <a-form-item label="Округление (до кратного)">
               <a-input-number
-                id="collectionCurrencyRounding"
-                name="collectionCurrencyRounding"
+                id="exhibitionCurrencyRounding"
+                name="exhibitionCurrencyRounding"
                 v-model:value="form.currencyRounding"
                 :min="0.01"
                 :step="1"
@@ -312,13 +394,13 @@
       @ok="addSelectedWorks"
     >
       <div class="modal-filters-panel">
-        <a-select id="collectionFilterArtist" v-model:value="filterArtist" placeholder="Художник" allowClear style="width: 180px" :options="artistOptions" />
-        <a-select id="collectionFilterLocation" v-model:value="filterLocation" placeholder="Локация" allowClear style="width: 180px" :options="locationOptions" />
-        <a-select id="collectionFilterSeria" v-model:value="filterSeria" placeholder="Серия" allowClear style="width: 180px" :options="seriaOptions" />
-        <a-select id="collectionFilterMedia" v-model:value="filterMedia" placeholder="Медиа" allowClear style="width: 180px" :options="mediaFilterOptions" />
-        <a-select id="collectionFilterStatus" v-model:value="filterStatus" placeholder="Статус" allowClear style="width: 180px" :options="statusFilterOptions" />
-        <a-input-number id="collectionFilterPriceFrom" name="collectionFilterPriceFrom" v-model:value="filterPriceFrom" placeholder="Цена от" :min="0" style="width: 120px" />
-        <a-input-number id="collectionFilterPriceTo" name="collectionFilterPriceTo" v-model:value="filterPriceTo" placeholder="Цена до" :min="0" style="width: 120px" />
+        <a-select id="exhibitionFilterArtist" v-model:value="filterArtist" placeholder="Художник" allowClear style="width: 180px" :options="artistOptions" />
+        <a-select id="exhibitionFilterLocation" v-model:value="filterLocation" placeholder="Локация" allowClear style="width: 180px" :options="locationOptions" />
+        <a-select id="exhibitionFilterSeria" v-model:value="filterSeria" placeholder="Серия" allowClear style="width: 180px" :options="seriaOptions" />
+        <a-select id="exhibitionFilterMedia" v-model:value="filterMedia" placeholder="Медиа" allowClear style="width: 180px" :options="mediaFilterOptions" />
+        <a-select id="exhibitionFilterStatus" v-model:value="filterStatus" placeholder="Статус" allowClear style="width: 180px" :options="statusFilterOptions" />
+        <a-input-number id="exhibitionFilterPriceFrom" name="exhibitionFilterPriceFrom" v-model:value="filterPriceFrom" placeholder="Цена от" :min="0" style="width: 120px" />
+        <a-input-number id="exhibitionFilterPriceTo" name="exhibitionFilterPriceTo" v-model:value="filterPriceTo" placeholder="Цена до" :min="0" style="width: 120px" />
       </div>
 
       <div class="modal-selected-count">Выбрано работ: {{ selectedRowKeys.length }}</div>
@@ -363,7 +445,7 @@
 
     </a-modal>
 
-    <!-- Файлы — выбор обложки -->
+    <!-- Файлы — выбор обложки или фото галереи (режим переключается fileSelectMode) -->
     <a-drawer v-model:open="isFilesModalOpen" title="Файлы" placement="right" width="700px" destroyOnClose>
       <FileUploader :remove="true" :select="true" @select="handleFileSelect" />
     </a-drawer>
@@ -410,7 +492,7 @@ import { useSerias } from '@/stores/seria.js'
 import { useArtist } from '@/stores/artist.js'
 import { useMedia } from '@/stores/media.js'
 import { useLocations } from '@/stores/locations.js'
-import { useCollection } from '@/stores/collection.js'
+import { useExhibition } from '@/stores/exhibition.js'
 import { downloadCatalogPdf } from '@/utils/catalogPdf.js'
 import FileUploader from "@/components/FileUploader.vue"
 
@@ -423,16 +505,17 @@ const seriasStore = useSerias()
 const artistStore = useArtist()
 const mediaStore = useMedia()
 const locationsStore = useLocations()
-const collectionStore = useCollection()
+const exhibitionStore = useExhibition()
 
 const isWorksModalOpen = ref(false)
 const worksTable = ref([])
 const worksLoading = ref(false)
 const isFilesModalOpen = ref(false)
+const fileSelectMode = ref('avatar') // 'avatar' | 'photo' — что делать с выбранным файлом
 const formRef = ref(null)
-const isNewCollection = computed(() => route.params.id === 'new')
+const isNewExhibition = computed(() => route.params.id === 'new')
 
-// Фильтры в модалке выбора работ — как на UserPictures
+// Фильтры в модалке выбора работ — как в ссылках/UserPictures
 const filterArtist = ref(null)
 const filterLocation = ref(null)
 const filterSeria = ref(null)
@@ -462,7 +545,7 @@ const filteredWorksTable = computed(() => {
 })
 
 const rules = {
-  name: [{ required: true, message: 'Введите название ссылки', trigger: 'blur' }]
+  name: [{ required: true, message: 'Введите название выставки', trigger: 'blur' }]
 }
 
 const fieldToggles = [
@@ -480,9 +563,13 @@ const form = reactive({
   name: '',
   subtitle: '',
   artistOrGallery: '',
+  venue: '',
+  startDate: null,
+  endDate: null,
   description: '',
   avatar: null,
   works: [],
+  photos: [], // [{id, caption, file: {id, ext, name, url}}]
   visibleFields: {
     technique: true,
     size: true,
@@ -492,15 +579,9 @@ const form = reactive({
     location: true,
     status: true,
     price: true,
-    // Инструменты публичной страницы (не поля работы, но переиспользуем
-    // тот же visibleFields — так проще мёрджится при загрузке существующей
-    // ссылки и не нужен отдельный payload на бэкенде).
     priceSort: true,
     artistFilter: true
   },
-  // Переопределение валюты показа цен на публичной странице ссылки —
-  // работы заведены в своей валюте, но, например, в конкретной ссылке
-  // цены нужно показать в евро по заданному вручную курсу.
   displayCurrency: null,
   currencyRate: 1,
   currencyRounding: 1,
@@ -518,7 +599,7 @@ const descriptionEditor = useEditor({
   extensions: [
     StarterKit,
     Underline,
-    Placeholder.configure({ placeholder: 'Коротко расскажите о ссылке' }),
+    Placeholder.configure({ placeholder: 'Коротко расскажите о выставке' }),
   ],
   onUpdate: ({ editor: instance }) => {
     form.description = instance.getHTML()
@@ -539,21 +620,19 @@ onMounted(async () => {
     locationsStore.getListLocations()
   ])
 
-  if (!isNewCollection.value) {
-    // === Редактирование существующей ссылки — подгружаем её с бэкенда ===
-    const existing = await collectionStore.getCollectionById(route.params.id)
+  if (!isNewExhibition.value) {
+    // === Редактирование существующей выставки — подгружаем её с бэкенда ===
+    const existing = await exhibitionStore.getExhibitionById(route.params.id)
     if (existing) {
-      // Мёрджим, а не затираем visibleFields — иначе у ссылок, сохранённых
-      // до добавления новых полей (размер/статус), переключатели показывались бы
-      // выключенными, хотя на публичной странице отсутствующий ключ считается видимым.
       Object.assign(form, existing, {
-        visibleFields: { ...form.visibleFields, ...existing.visibleFields }
+        visibleFields: { ...form.visibleFields, ...existing.visibleFields },
+        photos: existing.photos || [],
       })
       form.description = toEditableHtml(form.description)
       descriptionEditor.value?.commands.setContent(form.description)
     }
   } else if (route.query.works) {
-    // Работы переданы через query — например, кнопкой «Создать ссылку» на UserPictures
+    // Работы переданы через query — например, кнопкой «Создать выставку» на UserPictures
     form.works = String(route.query.works).split(',').filter(Boolean)
   }
 
@@ -600,12 +679,29 @@ function getLocationName(locationId) {
   return location ? location.name : locationId
 }
 
-// === Обложка ссылки ===
+// === Обложка выставки ===
 function openFilesModal() {
+  fileSelectMode.value = 'avatar'
   isFilesModalOpen.value = true
 }
 
-function handleFileSelect(file) {
+// === Галерея фото события ===
+function openPhotoFilesModal() {
+  fileSelectMode.value = 'photo'
+  isFilesModalOpen.value = true
+}
+
+async function handleFileSelect(file) {
+  if (fileSelectMode.value === 'photo') {
+    isFilesModalOpen.value = false
+    const updated = await exhibitionStore.addPhoto(route.params.id, { fileId: file.id })
+    if (updated) {
+      form.photos = updated
+      message.success('Фото добавлено в галерею')
+    }
+    return
+  }
+
   const fileUrl = `https://dev.myoffer.life/files/${file.id}.${file.ext}`
 
   form.avatar = {
@@ -628,6 +724,64 @@ function removeAvatar() {
   form.avatar = null
 }
 
+async function savePhotoCaption(photo) {
+  const updated = await exhibitionStore.updatePhotoCaption(route.params.id, photo.id, photo.caption || null)
+  if (updated) form.photos = updated
+}
+
+async function handleDeletePhoto(photoId) {
+  const updated = await exhibitionStore.deletePhoto(route.params.id, photoId)
+  if (updated) form.photos = updated
+}
+
+// Перетаскивание фото друг на друга — переставляет местами в галерее
+// (плоский список, без вложенности — в отличие от папок в файловом менеджере).
+const draggingPhotoId = ref(null)
+const reorderOverPhotoId = ref(null)
+
+function handlePhotoDragStart(event, photo) {
+  draggingPhotoId.value = photo.id
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', photo.id)
+}
+
+function handlePhotoDragEnd() {
+  draggingPhotoId.value = null
+  reorderOverPhotoId.value = null
+}
+
+function handlePhotoDragOver(photoId) {
+  if (!draggingPhotoId.value || draggingPhotoId.value === photoId) return
+  reorderOverPhotoId.value = photoId
+}
+
+function handlePhotoDragLeave(photoId) {
+  if (reorderOverPhotoId.value === photoId) reorderOverPhotoId.value = null
+}
+
+async function handlePhotoDrop(targetId) {
+  const sourceId = draggingPhotoId.value
+  reorderOverPhotoId.value = null
+  draggingPhotoId.value = null
+
+  if (!sourceId || sourceId === targetId) return
+
+  const ids = form.photos.map(p => p.id)
+  const from = ids.indexOf(sourceId)
+  const to = ids.indexOf(targetId)
+  if (from === -1 || to === -1) return
+
+  ids.splice(from, 1)
+  ids.splice(to, 0, sourceId)
+
+  // Переставляем локально сразу, не дожидаясь ответа сервера
+  const byId = new Map(form.photos.map(p => [p.id, p]))
+  form.photos = ids.map(id => byId.get(id))
+
+  const updated = await exhibitionStore.reorderPhotos(route.params.id, ids)
+  if (updated) form.photos = updated
+}
+
 // колонки для модалки — те же, что и в таблице на UserPictures (без "Действия")
 const columns = [
   { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: 70 },
@@ -643,9 +797,6 @@ const columns = [
   { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 100, sorter: (a, b) => a.price - b.price },
 ]
 
-// выбранные работы — колонки собираются из toggle'ов "Отображение полей"
-// выше, чтобы таблица показывала ровно те поля, что включены для карточек
-// на публичной странице коллекции
 const toggleableColumnDefs = {
   technique: { title: 'Техника', dataIndex: 'technique', key: 'technique', width: 140 },
   size: { title: 'Размер', dataIndex: 'size', key: 'size', width: 120 },
@@ -678,9 +829,6 @@ const selectedRowKeys = ref([])
 
 const rowSelection = computed(() => ({
   selectedRowKeys: selectedRowKeys.value,
-  // Без этого таблица сама снимает выбор со строк, пропавших из
-  // data-source при фильтрации (считая их "недоступными"), хотя
-  // работа должна оставаться выбранной, пока юзер сам не снимет галочку.
   preserveSelectedRowKeys: true,
   onChange: (keys) => {
     selectedRowKeys.value = keys
@@ -739,7 +887,7 @@ const addSelectedWorks = () => {
   isWorksModalOpen.value = false
 }
 
-// сохраняем ссылку
+// сохраняем выставку
 const saveChanges = async () => {
   try {
     await formRef.value.validate()
@@ -752,6 +900,9 @@ const saveChanges = async () => {
     name: form.name,
     subtitle: form.subtitle,
     artistOrGallery: form.artistOrGallery,
+    venue: form.venue,
+    startDate: form.startDate,
+    endDate: form.endDate,
     description: form.description,
     avatar: form.avatar,
     works: form.works,
@@ -761,17 +912,17 @@ const saveChanges = async () => {
     currencyRounding: form.currencyRounding || 1,
   }
 
-  const result = isNewCollection.value
-    ? await collectionStore.createCollection(payload)
-    : await collectionStore.updateCollection(route.params.id, payload)
+  const result = isNewExhibition.value
+    ? await exhibitionStore.createExhibition(payload)
+    : await exhibitionStore.updateExhibition(route.params.id, payload)
 
   if (!result) return
 
-  router.push('/home/collection')
+  router.push('/home/exhibition')
 }
 
 function goBack() {
-  router.push('/home/collection')
+  router.push('/home/exhibition')
 }
 </script>
 
@@ -833,6 +984,7 @@ function goBack() {
   flex: none;
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
 .right-column {
@@ -854,6 +1006,17 @@ function goBack() {
 .left-column .form-section {
   flex: none;
   height: auto;
+}
+
+.date-range-row {
+  display: flex;
+  gap: 12px;
+  max-width: 450px;
+}
+
+.date-range-row .ant-form-item {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Поле "Описание" — фиксированная высота, не растягивается на карточку */
@@ -1064,7 +1227,7 @@ function goBack() {
   color: var(--text-body);
 }
 
-/* === Обложка ссылки === */
+/* === Обложка выставки === */
 .images-item {
   display: block;
 }
@@ -1156,6 +1319,73 @@ function goBack() {
   border: 1px dashed var(--border);
   color: var(--text-faint);
   background: var(--card-bg);
+}
+
+/* === Галерея фото события === */
+.gallery-section {
+  margin-top: 12px;
+  padding-bottom: 12px;
+}
+
+.photo-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+  margin-bottom: 10px;
+}
+
+.photo-gallery-card {
+  position: relative;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--card-bg);
+  cursor: grab;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.photo-gallery-card.dragging {
+  opacity: 0.4;
+}
+
+.photo-gallery-card.reorder-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(138, 109, 47, 0.25);
+}
+
+.photo-gallery-img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-caption-input {
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--border-soft);
+  border-radius: 0;
+  font-size: 12px;
+}
+
+.photo-delete-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border: none;
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 8px;
+  z-index: 1;
+}
+
+.photo-delete-btn:hover {
+  background-color: #d9534f;
+  color: #fff;
 }
 
 /* === Работы === */

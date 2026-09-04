@@ -25,6 +25,8 @@
 
     <div v-if="isImportOpen && !isArtistRole" class="import-wrapper">
       <a-input
+        id="collectionImportLink"
+        name="collectionImportLink"
         v-model:value="importLink"
         placeholder="Вставьте ссылку"
         class="import-link-input"
@@ -80,6 +82,8 @@
 
     <div class="filters-panel">
       <a-input
+        id="collectionSearchQuery"
+        name="collectionSearchQuery"
         v-model:value="searchQuery"
         placeholder="Поиск по названию"
         allow-clear
@@ -92,6 +96,7 @@
       </a-input>
       <a-select
         v-if="!isArtistRole"
+        id="collectionListFilterArtist"
         v-model:value="filterArtist"
         placeholder="Художник"
         allow-clear
@@ -530,7 +535,6 @@ function pluralizeWorks(count) {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
 .collection-page {
   --bg: #f7f5f0;

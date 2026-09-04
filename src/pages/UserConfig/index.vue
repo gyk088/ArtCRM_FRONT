@@ -14,19 +14,20 @@
 
         <div class="form-row">
           <div class="form-item">
-            <label class="field-label">Имя</label>
-            <a-input v-model:value="form.name" placeholder="Введите имя" />
+            <label class="field-label" for="profileName">Имя</label>
+            <a-input id="profileName" v-model:value="form.name" placeholder="Введите имя" />
           </div>
           <div class="form-item">
-            <label class="field-label">Фамилия</label>
-            <a-input v-model:value="form.surname" placeholder="Введите фамилию" />
+            <label class="field-label" for="profileSurname">Фамилия</label>
+            <a-input id="profileSurname" v-model:value="form.surname" placeholder="Введите фамилию" />
           </div>
         </div>
 
         <div class="form-row">
           <div class="form-item">
-            <label class="field-label">Дата рождения</label>
+            <label class="field-label" for="profileBdate">Дата рождения</label>
             <a-date-picker
+              id="profileBdate"
               v-model:value="form.bdate"
               value-format="YYYY-MM-DD"
               format="DD.MM.YYYY"
@@ -35,19 +36,19 @@
             />
           </div>
           <div class="form-item">
-            <label class="field-label">Телефон</label>
-            <a-input v-model:value="form.phone" placeholder="+375 (__) ___-__-__" />
+            <label class="field-label" for="profilePhone">Телефон</label>
+            <a-input id="profilePhone" v-model:value="form.phone" placeholder="+375 (__) ___-__-__" />
           </div>
         </div>
 
         <div class="form-row">
           <div class="form-item">
-            <label class="field-label">Страна</label>
-            <a-input v-model:value="form.country" placeholder="Страна" />
+            <label class="field-label" for="profileCountry">Страна</label>
+            <a-input id="profileCountry" v-model:value="form.country" placeholder="Страна" />
           </div>
           <div class="form-item">
-            <label class="field-label">Город</label>
-            <a-input v-model:value="form.city" placeholder="Город" />
+            <label class="field-label" for="profileCity">Город</label>
+            <a-input id="profileCity" v-model:value="form.city" placeholder="Город" />
           </div>
         </div>
 
@@ -72,18 +73,18 @@
         <div class="section-heading">Сменить пароль</div>
 
         <div class="form-item">
-          <label class="field-label">Текущий пароль</label>
-          <a-input-password v-model:value="passwordForm.currentPassword" placeholder="Введите текущий пароль" class="fixed-input" />
+          <label class="field-label" for="profileCurrentPassword">Текущий пароль</label>
+          <a-input-password id="profileCurrentPassword" v-model:value="passwordForm.currentPassword" placeholder="Введите текущий пароль" class="fixed-input" />
         </div>
 
         <div class="form-row">
           <div class="form-item">
-            <label class="field-label">Новый пароль</label>
-            <a-input-password v-model:value="passwordForm.newPassword" placeholder="Не менее 6 символов" />
+            <label class="field-label" for="profileNewPassword">Новый пароль</label>
+            <a-input-password id="profileNewPassword" v-model:value="passwordForm.newPassword" placeholder="Не менее 6 символов" />
           </div>
           <div class="form-item">
-            <label class="field-label">Повторите новый пароль</label>
-            <a-input-password v-model:value="passwordForm.confirmPassword" placeholder="Повторите пароль" />
+            <label class="field-label" for="profileConfirmPassword">Повторите новый пароль</label>
+            <a-input-password id="profileConfirmPassword" v-model:value="passwordForm.confirmPassword" placeholder="Повторите пароль" />
           </div>
         </div>
 
@@ -146,8 +147,9 @@
         <p class="section-hint">Этот текст будет подставляться в шапку сертификата подлинности по умолчанию — его всё ещё можно будет изменить перед скачиванием конкретного сертификата</p>
 
         <div class="form-item">
-          <label class="field-label">Текст в шапке сертификата</label>
+          <label class="field-label" for="profileCertHeaderText">Текст в шапке сертификата</label>
           <a-textarea
+            id="profileCertHeaderText"
             v-model:value="form.certificateHeaderText"
             :rows="4"
             :placeholder="DEFAULT_CERTIFICATE_HEADER_TEXT"
@@ -319,7 +321,6 @@ function formatSessionDate(value) {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
 .profile-page {
   --bg: #f7f5f0;

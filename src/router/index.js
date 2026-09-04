@@ -84,6 +84,18 @@ const router = createRouter({
           component: () => import('@/pages/Collection/index.vue'),
           meta: { title: 'Редактировать ссылку' },
         }, {
+        path: 'exhibition',
+        name: 'exhibition',
+        component: () => import('@/pages/ExhibitionList/index.vue'),
+        meta: {
+            title: '<Мои выставки>',
+          },
+      }, {
+          path: '/home/exhibition/:id',
+          name: 'edit-exhibition',
+          component: () => import('@/pages/Exhibition/index.vue'),
+          meta: { title: 'Редактировать выставку' },
+        }, {
         path: 'reference',
         name: 'reference',
         component: () => import('@/pages/Reference/index.vue'),
