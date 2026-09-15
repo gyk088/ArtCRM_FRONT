@@ -2,7 +2,10 @@
   <div class="exhibition-page">
     <div class="exhibition-header">
       <div class="header-heading">
-        <h3 class="page-title">Мои Выставки</h3>
+        <div class="header-heading-top">
+          <MobileMenuButton />
+          <h3 class="page-title">Мои Выставки</h3>
+        </div>
         <p class="page-subtitle">
           {{ exhibitionList.length ? `Выставок: ${exhibitionList.length}` : 'Здесь появятся ваши выставки' }}
         </p>
@@ -110,6 +113,7 @@ import { message } from 'ant-design-vue'
 import { CopyOutlined, DeleteOutlined, PlusOutlined, FolderOpenOutlined, PictureOutlined, SearchOutlined, CalendarOutlined } from '@ant-design/icons-vue'
 import { htmlToPlainText } from '@/utils/richText.js'
 import { useExhibition } from '@/stores/exhibition.js'
+import MobileMenuButton from '@/components/MobileMenuButton.vue'
 
 const router = useRouter()
 const exhibitionStore = useExhibition()
@@ -239,6 +243,12 @@ function pluralizeWorks(count) {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.header-heading-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {
@@ -502,6 +512,14 @@ function pluralizeWorks(count) {
 
   .header-actions .ant-btn {
     flex: 1;
+  }
+
+  .filters-panel {
+    flex-direction: column;
+  }
+
+  .name-search {
+    width: 100% !important;
   }
 }
 </style>

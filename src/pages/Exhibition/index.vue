@@ -1,7 +1,10 @@
 <template>
   <div class="edit-page">
     <div class="page-header">
-      <h2 class="page-title">{{ isNewExhibition ? "Создать выставку" : "Редактировать выставку" }}</h2>
+      <div class="page-header-top">
+        <MobileMenuButton />
+        <h2 class="page-title">{{ isNewExhibition ? "Создать выставку" : "Редактировать выставку" }}</h2>
+      </div>
       <p class="page-subtitle">{{ form.name || "Без названия" }}</p>
     </div>
 
@@ -315,6 +318,7 @@
         :columns="selectedWorksColumns"
         row-key="id"
         size="small"
+        :scroll="{ x: 'max-content' }"
       >
         <template #bodyCell="{ column, record }">
           <!-- Колонка аватара -->
@@ -385,7 +389,7 @@
     <a-modal
       v-model:open="isWorksModalOpen"
       title="Выберите работы"
-      width="1300px"
+      :width="isMobile ? '96vw' : '1300px'"
       centered
       ok-text="Добавить"
       cancel-text="Отмена"
@@ -446,7 +450,7 @@
     </a-modal>
 
     <!-- Файлы — выбор обложки или фото галереи (режим переключается fileSelectMode) -->
-    <a-drawer v-model:open="isFilesModalOpen" title="Файлы" placement="right" width="700px" destroyOnClose>
+    <a-drawer v-model:open="isFilesModalOpen" title="Файлы" placement="right" :width="isMobile ? '100%' : '700px'" destroyOnClose>
       <FileUploader :remove="true" :select="true" @select="handleFileSelect" />
     </a-drawer>
 
@@ -495,6 +499,8 @@ import { useLocations } from '@/stores/locations.js'
 import { useExhibition } from '@/stores/exhibition.js'
 import { downloadCatalogPdf } from '@/utils/catalogPdf.js'
 import FileUploader from "@/components/FileUploader.vue"
+import { useIsMobile } from '@/composables/useIsMobile.js'
+import MobileMenuButton from '@/components/MobileMenuButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -511,6 +517,7 @@ const isWorksModalOpen = ref(false)
 const worksTable = ref([])
 const worksLoading = ref(false)
 const isFilesModalOpen = ref(false)
+const { isMobile } = useIsMobile()
 const fileSelectMode = ref('avatar') // 'avatar' | 'photo' — что делать с выбранным файлом
 const formRef = ref(null)
 const isNewExhibition = computed(() => route.params.id === 'new')
@@ -950,6 +957,12 @@ function goBack() {
 
 .page-header {
   margin-bottom: 20px;
+}
+
+.page-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {

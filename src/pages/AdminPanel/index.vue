@@ -2,7 +2,10 @@
   <div class="admin-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">Админ-панель</h2>
+        <div class="page-header-top">
+          <MobileMenuButton />
+          <h2 class="page-title">Админ-панель</h2>
+        </div>
         <p class="page-subtitle">Пользователи и галереи системы</p>
       </div>
       <a-input
@@ -31,6 +34,7 @@
           :loading="adminStore.loading"
           row-key="id"
           size="middle"
+          :scroll="{ x: 'max-content' }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'fullName'">
@@ -106,6 +110,7 @@
           :loading="adminStore.loading"
           row-key="id"
           size="middle"
+          :scroll="{ x: 'max-content' }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'fullName'">
@@ -252,6 +257,7 @@ import { PlusOutlined, SearchOutlined, LoginOutlined, ExclamationCircleOutlined 
 import { useAdmin } from '@/stores/admin.js'
 import { ROLES, TEXT_ROLES } from '@/services/const.js'
 import { getUser } from '@/services/auth.js'
+import MobileMenuButton from '@/components/MobileMenuButton.vue'
 
 const adminStore = useAdmin()
 const activeTab = ref('users')
@@ -493,6 +499,12 @@ async function handleSaveEmail() {
   margin-bottom: 20px;
 }
 
+.page-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .search-input {
   width: 320px;
   max-width: 100%;
@@ -566,5 +578,22 @@ async function handleSaveEmail() {
   background: var(--card-bg);
   color: var(--accent);
   font-weight: 600;
+}
+
+@media (max-width: 700px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .tab-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
 }
 </style>

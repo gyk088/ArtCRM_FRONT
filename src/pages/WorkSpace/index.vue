@@ -2,7 +2,10 @@
   <div class="workSpace-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">Рабочее пространство</h2>
+        <div class="page-header-top">
+          <MobileMenuButton />
+          <h2 class="page-title">Рабочее пространство</h2>
+        </div>
         <p class="page-subtitle">Заметки, таблицы и ссылки под рукой — держите нужное на виду</p>
       </div>
 
@@ -85,6 +88,7 @@ import {
   LinkOutlined
 } from '@ant-design/icons-vue'
 import WorkspacePanel from './WorkspacePanel.vue'
+import MobileMenuButton from '@/components/MobileMenuButton.vue'
 
 const router = useRouter()
 const isSplitMode = ref(false)
@@ -289,6 +293,12 @@ const addTable = () => {
   margin-bottom: 16px;
 }
 
+.page-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .page-title {
   font-family: 'Cormorant Garamond', serif;
   font-size: 26px;
@@ -377,5 +387,31 @@ const addTable = () => {
 
 .add-menu-modal :deep(.ant-modal-content) {
   border-radius: 12px;
+}
+
+@media (max-width: 768px) {
+  .workSpace-page {
+    height: auto;
+    min-height: calc(100vh - 32px);
+    padding: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .split-btn {
+    align-self: flex-start;
+  }
+
+  .workspace-body,
+  .workspace-body.split {
+    flex-direction: column;
+  }
+
+  .workspace-body.split > :deep(.ws-panel) {
+    min-height: 320px;
+  }
 }
 </style>

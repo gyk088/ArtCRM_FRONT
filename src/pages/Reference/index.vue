@@ -1,7 +1,10 @@
 <template>
   <div class="reference-page">
     <div class="page-header">
-      <h2 class="page-title">Справочник</h2>
+      <div class="page-header-top">
+        <MobileMenuButton />
+        <h2 class="page-title">Справочник</h2>
+      </div>
       <p class="page-subtitle">Художники, серии, медиа, локации и статусы — общие списки для ваших работ</p>
     </div>
 
@@ -73,6 +76,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import ReferenceEntityPanel from '@/components/ReferenceEntityPanel.vue'
+import MobileMenuButton from '@/components/MobileMenuButton.vue'
 import { useArtist } from '@/stores/artist.js'
 import { useSerias } from '@/stores/seria.js'
 import { useMedia } from '@/stores/media.js'
@@ -116,6 +120,12 @@ const activeTab = ref(isArtist.value ? 'serias' : 'artists')
 
 .page-header {
   margin-bottom: 20px;
+}
+
+.page-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {

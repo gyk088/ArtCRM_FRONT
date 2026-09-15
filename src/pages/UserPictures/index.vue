@@ -1,6 +1,7 @@
 <template>
   <div class="pictures-page">
     <div class="header-content">
+      <MobileMenuButton />
       <h3>Мои работы</h3>
     </div>
 
@@ -30,8 +31,49 @@
 
     <div class="selected-count">Выбрано работ: {{ selectedRowKeys.length }}</div>
 
-    <!-- Таблица -->
-    <a-table class="custom-table" :columns="columns" :data-source="filteredData" row-key="id"
+    <!-- Мобильная сетка карточек вместо таблицы -->
+    <a-spin v-if="isMobile" :spinning="loading">
+      <div class="cards-grid">
+        <div v-for="record in filteredData" :key="record.id" class="work-card" @click="openPreview(record)">
+          <label class="work-card-select" @click.stop>
+            <a-checkbox
+              :checked="selectedRowKeys.includes(record.id)"
+              @change="(e) => toggleCardSelect(record.id, e.target.checked)"
+            />
+          </label>
+
+          <div class="work-card-image">
+            <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" />
+            <div v-else class="img-placeholder">
+              <PictureOutlined />
+            </div>
+          </div>
+
+          <div class="work-card-body">
+            <div class="work-card-name">{{ record.name || 'Без названия' }}</div>
+            <div class="work-card-artist">{{ getArtistName(record.artist) || 'Не указан' }}</div>
+            <div v-if="record.price" class="work-card-price">{{ record.price }} {{ getCurrencySymbol(record.currency) }}</div>
+          </div>
+
+          <div class="work-card-actions" @click.stop>
+            <button class="icon-btn icon-btn-edit" title="Редактировать" @click="openEditPage(record)">
+              <EditOutlined />
+            </button>
+            <button class="icon-btn icon-btn-certificate" title="Сгенерировать сертификат" @click="openCertificatePreview(record)">
+              <SafetyCertificateOutlined />
+            </button>
+            <button class="icon-btn icon-btn-danger" title="Удалить" @click="deleteRow(record.id)">
+              <DeleteOutlined />
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!loading && filteredData.length === 0" class="cards-empty">Работы не найдены</div>
+      </div>
+    </a-spin>
+
+    <!-- Таблица (десктоп) -->
+    <a-table v-else class="custom-table" :columns="columns" :data-source="filteredData" row-key="id"
       :row-selection="rowSelection" :loading="loading" table-layout="fixed" :custom-row="customRow">
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'avatar'">
@@ -163,7 +205,7 @@
     </a-table>
 
     <!-- Быстрый просмотр работы (без редактирования) -->
-    <a-drawer v-model:open="isPreviewOpen" placement="right" width="700px" destroyOnClose root-class-name="preview-drawer">
+    <a-drawer v-model:open="isPreviewOpen" placement="right" :width="isMobile ? '100%' : '700px'" destroyOnClose root-class-name="preview-drawer">
       <div v-if="previewWork" class="work-preview">
         <div class="preview-cover">
           <img v-if="previewWork.avatar && previewWork.avatar.url" :src="previewWork.avatar.url" />
@@ -234,6 +276,8 @@ import { useFile } from "@/stores/file.js"
 import { useUserPicturesFilters } from '@/stores/userPicturesFilters.js'
 import { getUser } from '@/services/auth.js'
 import { ROLES } from '@/services/const'
+import { useIsMobile } from '@/composables/useIsMobile.js'
+import MobileMenuButton from '@/components/MobileMenuButton.vue'
 
 const fileStore = useFile()
 if (!fileStore.files.length) {
@@ -624,6 +668,16 @@ const rowSelection = computed(() => ({
   },
 }))
 
+const { isMobile } = useIsMobile()
+
+function toggleCardSelect(id, checked) {
+  if (checked) {
+    if (!selectedRowKeys.value.includes(id)) selectedRowKeys.value = [...selectedRowKeys.value, id]
+  } else {
+    selectedRowKeys.value = selectedRowKeys.value.filter(key => key !== id)
+  }
+}
+
 const createCollection = () => {
   router.push({
     name: 'edit-collection',
@@ -667,7 +721,7 @@ onMounted(async () => {
   background: var(--bg);
   color: var(--text-body);
   border-radius: 14px;
-  padding: 24px 12px 8px;
+  padding: 24px 20px 8px;
   margin-left: -16px;
   margin-right: -16px;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -675,6 +729,8 @@ onMounted(async () => {
 
 .header-content {
   display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 20px;
 }
 
@@ -1211,6 +1267,135 @@ onMounted(async () => {
   box-shadow: none !important;
 }
 
+/* === Мобильная сетка карточек (вместо таблицы) === */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.work-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.work-card-select {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: flex;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.work-card-image {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--card-bg);
+  overflow: hidden;
+}
+
+.work-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.work-card-image .img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  color: var(--text-dim);
+}
+
+.work-card-body {
+  padding: 8px 10px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.work-card-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--text-title);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-card-artist {
+  font-size: 11px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-card-price {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.work-card-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px 10px;
+  border-top: 1px solid var(--border-soft);
+  margin-top: 4px;
+}
+
+.cards-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 0;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+/* === Мобильная адаптация === */
+@media (max-width: 768px) {
+  .header-content h3 {
+    font-size: 22px;
+  }
+
+  .filters-panel {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters-left {
+    flex-direction: column;
+  }
+
+  .filters-left :deep(.ant-select),
+  .filters-left :deep(.ant-input-number) {
+    width: 100% !important;
+  }
+
+  .filters-right {
+    flex-direction: column;
+  }
+
+  .filters-right .buttons {
+    width: 100%;
+  }
+}
 </style>
 
 <style>

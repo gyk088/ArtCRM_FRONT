@@ -209,4 +209,15 @@ async function handleDelete(record) {
   color: var(--text-faint, #7c7669);
   font-size: 13px;
 }
+
+@media (max-width: 600px) {
+  .ref-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .ref-input {
+    max-width: none;
+    flex: 1 1 160px;
+  }
+}
 </style>

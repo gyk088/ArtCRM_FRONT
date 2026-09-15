@@ -2,7 +2,10 @@
   <div class="edit-cv-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">{{ isNew ? 'Новое резюме' : 'Редактировать резюме' }}</h2>
+        <div class="page-header-top">
+          <MobileMenuButton />
+          <h2 class="page-title">{{ isNew ? 'Новое резюме' : 'Редактировать резюме' }}</h2>
+        </div>
         <p class="page-subtitle">{{ form.title || 'Без названия' }}</p>
       </div>
       <div v-if="!isNew && cvRecord" class="header-meta">
@@ -191,6 +194,7 @@
 import { reactive, ref, computed, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import MobileMenuButton from '@/components/MobileMenuButton.vue'
 import {
   IdcardOutlined,
   DownloadOutlined,
@@ -327,6 +331,12 @@ async function handleDownloadPdf() {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.page-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {

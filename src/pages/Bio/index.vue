@@ -2,7 +2,10 @@
   <div class="bio-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">Мои биографии</h2>
+        <div class="page-header-top">
+          <MobileMenuButton />
+          <h2 class="page-title">Мои биографии</h2>
+        </div>
         <p class="page-subtitle">
           {{ bioList.length ? `${bioList.length} ${pluralize(bioList.length)}` : 'Пока нет ни одной биографии' }}
         </p>
@@ -107,6 +110,7 @@ import {
 import { useBio } from '@/stores/bio.js';
 import { downloadBioPdf } from '@/utils/bioPdf.js';
 import { htmlToPlainText } from '@/utils/richText.js';
+import MobileMenuButton from '@/components/MobileMenuButton.vue';
 
 const router = useRouter();
 const bioStore = useBio();
@@ -193,6 +197,12 @@ async function handleDownloadPdf(bio) {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.page-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {

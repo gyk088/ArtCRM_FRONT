@@ -103,6 +103,13 @@ const router = createRouter({
             title: 'Справочник',
           },
       }, {
+        path: 'contacts',
+        name: 'contacts',
+        component: () => import('@/pages/Contacts/index.vue'),
+        meta: {
+            title: 'Контакты',
+          },
+      }, {
         path: 'profile',
         name: 'profile',
         component: () => import('@/pages/UserConfig/index.vue'),

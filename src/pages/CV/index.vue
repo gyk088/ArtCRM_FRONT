@@ -2,7 +2,10 @@
   <div class="cv-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">Мои резюме</h2>
+        <div class="page-header-top">
+          <MobileMenuButton />
+          <h2 class="page-title">Мои резюме</h2>
+        </div>
         <p class="page-subtitle">
           {{ cvList.length ? `${cvList.length} ${pluralize(cvList.length)}` : 'Пока нет ни одного резюме' }}
         </p>
@@ -107,6 +110,7 @@ import {
 import { useCv } from '@/stores/cv.js';
 import { downloadCvPdf } from '@/utils/cvPdf.js';
 import { htmlToPlainText } from '@/utils/richText.js';
+import MobileMenuButton from '@/components/MobileMenuButton.vue';
 
 const router = useRouter();
 const cvStore = useCv();
@@ -190,6 +194,12 @@ async function handleDownloadPdf(cv) {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.page-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {

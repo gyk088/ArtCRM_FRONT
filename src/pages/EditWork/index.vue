@@ -1,7 +1,10 @@
 <template>
   <div class="edit-page">
     <div class="page-header">
-      <h2 class="page-title">{{ isNewWork ? "Новая работа" : "Редактировать работу" }}</h2>
+      <div class="page-header-top">
+        <MobileMenuButton />
+        <h2 class="page-title">{{ isNewWork ? "Новая работа" : "Редактировать работу" }}</h2>
+      </div>
       <p class="page-subtitle">{{ form.name || "Без названия" }}</p>
     </div>
 
@@ -247,7 +250,7 @@
       <button class="close-btn" @click="closeViewer">×</button>
     </div>
 
-    <a-drawer v-model:open="isFilesModalOpen" title="Файлы" placement="right" width="700px" destroyOnClose>
+    <a-drawer v-model:open="isFilesModalOpen" title="Файлы" placement="right" :width="isMobile ? '100%' : '700px'" destroyOnClose>
       <FileUploader :remove="true" :select="true" @select="handleFileSelect" />
     </a-drawer>
 
@@ -270,6 +273,8 @@ import FileUploader from "@/components/FileUploader.vue"
 import { downloadFile } from '@/utils/downloadFile.js'
 import { getUser } from '@/services/auth.js'
 import { ROLES } from '@/services/const'
+import { useIsMobile } from '@/composables/useIsMobile.js'
+import MobileMenuButton from '@/components/MobileMenuButton.vue'
 
 const seriasStore = useSerias();
 const locationsStore = useLocations()
@@ -296,6 +301,7 @@ const newArtist = ref('')
 const artistInputRef = ref(null)
 const loading = ref(false)
 const isFilesModalOpen = ref(false)
+const { isMobile } = useIsMobile()
 const uploadTarget = ref('avatar')
 const formRef = ref(null)
 const isNewWork = computed(() => route.params.id === 'new')
@@ -931,6 +937,12 @@ function goBack() {
 .page-header {
   flex-shrink: 0;
   padding: 10px 24px 8px;
+}
+
+.page-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {

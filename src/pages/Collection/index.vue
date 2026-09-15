@@ -1,7 +1,10 @@
 <template>
   <div class="edit-page">
     <div class="page-header">
-      <h2 class="page-title">{{ isNewCollection ? "Создать ссылку" : "Редактировать ссылку" }}</h2>
+      <div class="page-header-top">
+        <MobileMenuButton />
+        <h2 class="page-title">{{ isNewCollection ? "Создать ссылку" : "Редактировать ссылку" }}</h2>
+      </div>
       <p class="page-subtitle">{{ form.name || "Без названия" }}</p>
     </div>
 
@@ -303,7 +306,7 @@
     <a-modal
       v-model:open="isWorksModalOpen"
       title="Выберите работы"
-      width="1300px"
+      :width="isMobile ? '96vw' : '1300px'"
       centered
       ok-text="Добавить"
       cancel-text="Отмена"
@@ -364,7 +367,7 @@
     </a-modal>
 
     <!-- Файлы — выбор обложки -->
-    <a-drawer v-model:open="isFilesModalOpen" title="Файлы" placement="right" width="700px" destroyOnClose>
+    <a-drawer v-model:open="isFilesModalOpen" title="Файлы" placement="right" :width="isMobile ? '100%' : '700px'" destroyOnClose>
       <FileUploader :remove="true" :select="true" @select="handleFileSelect" />
     </a-drawer>
 
@@ -413,6 +416,8 @@ import { useLocations } from '@/stores/locations.js'
 import { useCollection } from '@/stores/collection.js'
 import { downloadCatalogPdf } from '@/utils/catalogPdf.js'
 import FileUploader from "@/components/FileUploader.vue"
+import { useIsMobile } from '@/composables/useIsMobile.js'
+import MobileMenuButton from '@/components/MobileMenuButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -431,6 +436,7 @@ const worksLoading = ref(false)
 const isFilesModalOpen = ref(false)
 const formRef = ref(null)
 const isNewCollection = computed(() => route.params.id === 'new')
+const { isMobile } = useIsMobile()
 
 // Фильтры в модалке выбора работ — как на UserPictures
 const filterArtist = ref(null)
@@ -799,6 +805,12 @@ function goBack() {
 
 .page-header {
   margin-bottom: 20px;
+}
+
+.page-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {

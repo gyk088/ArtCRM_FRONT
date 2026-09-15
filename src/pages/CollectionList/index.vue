@@ -2,7 +2,10 @@
   <div class="collection-page">
     <div class="collection-header">
       <div class="header-heading">
-        <h3 class="page-title">Мои Ссылки</h3>
+        <div class="header-heading-top">
+          <MobileMenuButton />
+          <h3 class="page-title">Мои Ссылки</h3>
+        </div>
         <p class="page-subtitle">
           {{ collectionList.length ? `Ссылок: ${collectionList.length}` : 'Здесь появятся ваши ссылки' }}
         </p>
@@ -40,7 +43,7 @@
     <a-modal
       v-model:open="isImportModalOpen"
       title="Выберите работы для импорта"
-      width="720px"
+      :width="isMobile ? '94%' : '720px'"
       ok-text="Импортировать выбранное"
       cancel-text="Отмена"
       :confirm-loading="importing"
@@ -191,6 +194,8 @@ import { useStatuses } from '@/stores/statuses.js'
 import { useCollection } from '@/stores/collection.js'
 import { getUser } from '@/services/auth.js'
 import { ROLES } from '@/services/const'
+import { useIsMobile } from '@/composables/useIsMobile.js'
+import MobileMenuButton from '@/components/MobileMenuButton.vue'
 
 const router = useRouter()
 const importLink = ref('')
@@ -219,6 +224,7 @@ const importRowSelection = computed(() => ({
 // Для роли "художник" импорт ссылки и фильтр по художнику убраны — у
 // художника все работы и так только свои.
 const isArtistRole = computed(() => getUser()?.role === ROLES.ARTIST)
+const { isMobile } = useIsMobile()
 
 const artWorkStore = useArtWork()
 const artistStore = useArtist()
@@ -568,6 +574,12 @@ function pluralizeWorks(count) {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.header-heading-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {
@@ -953,6 +965,24 @@ function pluralizeWorks(count) {
 
   .import-link-input {
     width: 100%;
+  }
+
+  .import-wrapper {
+    flex-wrap: wrap;
+  }
+
+  .import-link-btn,
+  .import-cancel-btn {
+    flex: 1;
+  }
+
+  .filters-panel {
+    flex-direction: column;
+  }
+
+  .name-search,
+  .artist-filter {
+    width: 100% !important;
   }
 }
 </style>

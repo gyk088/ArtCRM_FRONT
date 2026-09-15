@@ -2,7 +2,10 @@
   <div class="profile-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">Профиль</h2>
+        <div class="page-header-top">
+          <MobileMenuButton />
+          <h2 class="page-title">Профиль</h2>
+        </div>
         <p class="page-subtitle">Ваши личные данные</p>
       </div>
     </div>
@@ -174,6 +177,7 @@ import { message } from 'ant-design-vue'
 import { useUser } from '@/stores/user.js'
 import { useAuth } from '@/stores/auth.js'
 import { getUser } from '@/services/auth.js'
+import MobileMenuButton from '@/components/MobileMenuButton.vue'
 import { DEFAULT_CERTIFICATE_HEADER_TEXT } from '@/utils/certificatePdf.js'
 
 const userStore = useUser()
@@ -345,6 +349,12 @@ function formatSessionDate(value) {
 
 .page-header {
   margin-bottom: 20px;
+}
+
+.page-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {
