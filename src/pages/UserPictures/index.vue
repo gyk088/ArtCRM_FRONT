@@ -580,7 +580,7 @@ const isArtistRole = computed(() => getUser()?.role === ROLES.ARTIST)
 // по ширине контейнера без горизонтальной прокрутки (table-layout: fixed).
 const columns = computed(() => [
   { title: ' ', dataIndex: 'avatar', key: 'avatar', width: '6%' },
-  { title: 'Название', dataIndex: 'name', key: 'name', width: isArtistRole.value ? '25%' : '16%', sorter: (a, b) => (a.name || '').localeCompare(b.name || '', 'ru') },
+  { title: 'Название', dataIndex: 'name', key: 'name', width: isArtistRole.value ? '24%' : '16%', sorter: (a, b) => (a.name || '').localeCompare(b.name || '', 'ru') },
   ...(isArtistRole.value ? [] : [
     { title: 'Художник', dataIndex: 'artist', key: 'artist', width: '9%', sorter: (a, b) => getArtistName(a.artist).localeCompare(getArtistName(b.artist), 'ru') },
   ]),
@@ -590,7 +590,7 @@ const columns = computed(() => [
   { title: 'Медиа', dataIndex: 'media', key: 'media', width: '8%', sorter: (a, b) => getMediaName(a.media).localeCompare(getMediaName(b.media), 'ru') },
   { title: 'Серия', dataIndex: 'seria', key: 'seria', width: '7%', sorter: (a, b) => getSeriaName(a.seria).localeCompare(getSeriaName(b.seria), 'ru') },
   { title: 'Локация', dataIndex: 'location', key: 'location', width: '8%', sorter: (a, b) => getLocationName(a.location).localeCompare(getLocationName(b.location), 'ru') },
-  { title: 'Статус', dataIndex: 'status', key: 'status', width: '7%', sorter: (a, b) => getStatusName(a.status).localeCompare(getStatusName(b.status), 'ru') },
+  { title: 'Статус', dataIndex: 'status', key: 'status', width: '9%', sorter: (a, b) => getStatusName(a.status).localeCompare(getStatusName(b.status), 'ru') },
   { title: 'Стоимость', dataIndex: 'price', key: 'price', width: '9%', sorter: (a, b) => a.price - b.price },
   { title: 'Действия', dataIndex: 'actions', key: 'actions', width: '8%' },
 ])
