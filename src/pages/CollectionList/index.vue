@@ -603,31 +603,6 @@ function pluralizeWorks(count) {
   margin-bottom: 16px;
 }
 
-.name-search :deep(.ant-input) {
-  background: var(--bg-elevated) !important;
-  color: var(--text-body) !important;
-}
-
-.name-search :deep(.ant-input-affix-wrapper) {
-  background: var(--bg-elevated) !important;
-  border-color: var(--border) !important;
-  border-radius: 20px !important;
-}
-
-.name-search :deep(.ant-input-affix-wrapper):hover,
-.name-search :deep(.ant-input-affix-wrapper):focus-within {
-  border-color: var(--accent) !important;
-}
-
-.name-search :deep(.ant-input-prefix) {
-  color: var(--text-faint) !important;
-  margin-right: 6px;
-}
-
-.name-search :deep(.ant-input-clear-icon) {
-  color: var(--text-faint) !important;
-}
-
 .artist-filter :deep(.ant-select-selector) {
   background: var(--bg-elevated) !important;
   border-color: var(--border) !important;
@@ -984,5 +959,39 @@ function pluralizeWorks(count) {
   .artist-filter {
     width: 100% !important;
   }
+}
+</style>
+
+<!--
+  Не scoped: ant-design-vue вешает наш класс "name-search" прямо на сам
+  .ant-input-affix-wrapper (это один и тот же элемент, а не предок и
+  потомок), поэтому scoped-селектор ".name-search :deep(.ant-input-affix-wrapper)"
+  (с пробелом) никогда ни с чем не совпадал — отсюда синяя рамка вместо
+  акцентной при наведении/фокусе и отсутствие скругления.
+-->
+<style>
+.name-search.ant-input-affix-wrapper {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  border-radius: 20px !important;
+}
+
+.name-search.ant-input-affix-wrapper:hover,
+.name-search.ant-input-affix-wrapper:focus-within {
+  border-color: var(--accent) !important;
+}
+
+.name-search .ant-input {
+  background: var(--bg-elevated) !important;
+  color: var(--text-body) !important;
+}
+
+.name-search .ant-input-prefix {
+  color: var(--text-faint) !important;
+  margin-right: 6px;
+}
+
+.name-search .ant-input-clear-icon {
+  color: var(--text-faint) !important;
 }
 </style>

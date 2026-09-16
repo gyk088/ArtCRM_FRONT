@@ -7,6 +7,10 @@
 
     <div class="filters-panel">
       <div class="filters-left">
+        <a-input v-model:value="filterNameSearch" placeholder="Поиск по названию" allowClear class="name-search"
+          style="width: 220px">
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
         <a-select v-model:value="filterArtist" placeholder="Художник" allowClear style="width: 200px"
           :options="artistOptions" />
         <a-select v-model:value="filterLocation" placeholder="Локация" allowClear style="width: 200px"
@@ -262,7 +266,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue'
+import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import CertificatePreviewModal from '@/components/CertificatePreviewModal.vue'
@@ -315,6 +319,7 @@ const {
   status: filterStatus,
   priceFrom: filterPriceFrom,
   priceTo: filterPriceTo,
+  nameSearch: filterNameSearch,
 } = storeToRefs(filtersStore)
 
 
@@ -529,6 +534,11 @@ const statusOptions = computed(() => {
 const filteredData = computed(() => {
   let result = [...artWorkStore.listArtWorks]
 
+  if (filterNameSearch.value.trim()) {
+    const query = filterNameSearch.value.trim().toLowerCase()
+    result = result.filter(item => (item.name || '').toLowerCase().includes(query))
+  }
+
   if (filterArtist.value) {
     result = result.filter(item => item.artist === filterArtist.value)
   }
@@ -570,7 +580,7 @@ const isArtistRole = computed(() => getUser()?.role === ROLES.ARTIST)
 // по ширине контейнера без горизонтальной прокрутки (table-layout: fixed).
 const columns = computed(() => [
   { title: ' ', dataIndex: 'avatar', key: 'avatar', width: '6%' },
-  { title: 'Название', dataIndex: 'name', key: 'name', width: isArtistRole.value ? '21%' : '12%', sorter: (a, b) => (a.name || '').localeCompare(b.name || '', 'ru') },
+  { title: 'Название', dataIndex: 'name', key: 'name', width: isArtistRole.value ? '25%' : '16%', sorter: (a, b) => (a.name || '').localeCompare(b.name || '', 'ru') },
   ...(isArtistRole.value ? [] : [
     { title: 'Художник', dataIndex: 'artist', key: 'artist', width: '9%', sorter: (a, b) => getArtistName(a.artist).localeCompare(getArtistName(b.artist), 'ru') },
   ]),
@@ -580,9 +590,9 @@ const columns = computed(() => [
   { title: 'Медиа', dataIndex: 'media', key: 'media', width: '8%', sorter: (a, b) => getMediaName(a.media).localeCompare(getMediaName(b.media), 'ru') },
   { title: 'Серия', dataIndex: 'seria', key: 'seria', width: '7%', sorter: (a, b) => getSeriaName(a.seria).localeCompare(getSeriaName(b.seria), 'ru') },
   { title: 'Локация', dataIndex: 'location', key: 'location', width: '8%', sorter: (a, b) => getLocationName(a.location).localeCompare(getLocationName(b.location), 'ru') },
-  { title: 'Статус', dataIndex: 'status', key: 'status', width: '10%', sorter: (a, b) => getStatusName(a.status).localeCompare(getStatusName(b.status), 'ru') },
+  { title: 'Статус', dataIndex: 'status', key: 'status', width: '7%', sorter: (a, b) => getStatusName(a.status).localeCompare(getStatusName(b.status), 'ru') },
   { title: 'Стоимость', dataIndex: 'price', key: 'price', width: '9%', sorter: (a, b) => a.price - b.price },
-  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: '11%' },
+  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: '8%' },
 ])
 
 // Открытие страницы редактирования
@@ -1103,7 +1113,7 @@ onMounted(async () => {
 }
 
 .icon-btn + .icon-btn {
-  margin-left: 4px;
+  margin-left: 2px;
 }
 
 .icon-btn:hover {
@@ -1384,7 +1394,8 @@ onMounted(async () => {
   }
 
   .filters-left :deep(.ant-select),
-  .filters-left :deep(.ant-input-number) {
+  .filters-left :deep(.ant-input-number),
+  .name-search {
     width: 100% !important;
   }
 
@@ -1414,5 +1425,35 @@ onMounted(async () => {
 
 .preview-drawer .ant-drawer-body {
   padding-top: 4px;
+}
+
+/* .name-search: тоже не scoped — ant-design-vue вешает наш класс прямо
+   на сам .ant-input-affix-wrapper (это один и тот же элемент, не предок и
+   потомок), так что "scoped .name-search :deep(.ant-input-affix-wrapper)"
+   (с пробелом) никогда не совпадал ни с чем — отсюда синяя рамка при
+   наведении/фокусе и отсутствие скругления. */
+.name-search.ant-input-affix-wrapper {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  border-radius: 20px !important;
+}
+
+.name-search.ant-input-affix-wrapper:hover,
+.name-search.ant-input-affix-wrapper:focus-within {
+  border-color: var(--accent) !important;
+}
+
+.name-search .ant-input {
+  background: var(--bg-elevated) !important;
+  color: var(--text-body) !important;
+}
+
+.name-search .ant-input-prefix {
+  color: var(--text-faint) !important;
+  margin-right: 6px;
+}
+
+.name-search .ant-input-clear-icon {
+  color: var(--text-faint) !important;
 }
 </style>

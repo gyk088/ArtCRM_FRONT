@@ -12,5 +12,6 @@ export const useUserPicturesFilters = defineStore('user-pictures-filters', {
     status: null,
     priceFrom: null,
     priceTo: null,
+    nameSearch: '',
   }),
 })
