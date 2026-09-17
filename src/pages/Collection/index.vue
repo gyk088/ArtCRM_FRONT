@@ -226,7 +226,7 @@
             <FilePdfOutlined /> {{ exportingPdf && exportProgress ? `Выгрузка ${exportProgress}` : 'Выгрузить в PDF' }}
           </a-button>
           <a-button type="dashed" @click="openWorksModal" class="add-more-btn">
-            <PlusOutlined /> Добавить ещё
+            <PlusOutlined /> Выберите работы
           </a-button>
         </div>
       </div>
@@ -308,10 +308,11 @@
       title="Выберите работы"
       :width="isMobile ? '96vw' : '1300px'"
       centered
-      ok-text="Добавить"
+      ok-text="Сохранить"
       cancel-text="Отмена"
       class="works-modal"
       :get-container="false"
+      :confirm-loading="savingWorks"
       @ok="addSelectedWorks"
     >
       <div class="modal-filters-panel">
@@ -740,9 +741,31 @@ function openCertificatePreview(record) {
   isCertPreviewOpen.value = true
 }
 
-const addSelectedWorks = () => {
-  form.works = [...selectedRowKeys.value]
-  isWorksModalOpen.value = false
+// Состав работ сохраняется сразу по кнопке "Сохранить" в модалке, не
+// дожидаясь общего сохранения страницы — для новой (ещё не созданной)
+// ссылки сохранить работы отдельно невозможно (нет id), там это по-прежнему
+// применяется только локально и уйдёт вместе с первым созданием ссылки.
+const savingWorks = ref(false)
+
+const addSelectedWorks = async () => {
+  const newWorks = [...selectedRowKeys.value]
+
+  if (isNewCollection.value) {
+    form.works = newWorks
+    isWorksModalOpen.value = false
+    return
+  }
+
+  savingWorks.value = true
+  try {
+    const result = await collectionStore.updateCollection(route.params.id, { works: newWorks })
+    if (!result) return // ошибка уже показана в сторе — модалку оставляем открытой для повтора
+
+    form.works = newWorks
+    isWorksModalOpen.value = false
+  } finally {
+    savingWorks.value = false
+  }
 }
 
 // сохраняем ссылку
