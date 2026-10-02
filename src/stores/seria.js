@@ -39,8 +39,8 @@ export const useSerias = defineStore('seria', {
                 console.log('Serias loaded:', this.listSerias)
             } catch (e) {
                 console.error('Error fetching serias:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to load serias')
-                this.error = e?.response?.data?.message || 'Failed to load serias'
+                notifyServerError(e?.response?.data?.error || 'Failed to load serias')
+                this.error = e?.response?.data?.error || 'Failed to load serias'
                 success = false
             } finally {
                 this.loading = false
@@ -63,8 +63,8 @@ export const useSerias = defineStore('seria', {
                 console.log('Seria by ID:', result)
             } catch (e) {
                 console.error('Error fetching seria by id:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to load seria details')
-                this.error = e?.response?.data?.message || 'Failed to load seria details'
+                notifyServerError(e?.response?.data?.error || 'Failed to load seria details')
+                this.error = e?.response?.data?.error || 'Failed to load seria details'
                 result = null
             } finally {
                 this.loading = false
@@ -86,8 +86,8 @@ export const useSerias = defineStore('seria', {
                 console.log('Seria by user:', result)
             } catch (e) {
                 console.error('Error fetching seria by user:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to load user seria')
-                this.error = e?.response?.data?.message || 'Failed to load user seria'
+                notifyServerError(e?.response?.data?.error || 'Failed to load user seria')
+                this.error = e?.response?.data?.error || 'Failed to load user seria'
                 result = []
             } finally {
                 this.loading = false
@@ -116,8 +116,8 @@ export const useSerias = defineStore('seria', {
                 }
             } catch (e) {
                 console.error('Error creating seria:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to create seria')
-                this.error = e?.response?.data?.message || 'Failed to create seria'
+                notifyServerError(e?.response?.data?.error || 'Failed to create seria')
+                this.error = e?.response?.data?.error || 'Failed to create seria'
                 result = null
             } finally {
                 this.loading = false
@@ -152,8 +152,8 @@ export const useSerias = defineStore('seria', {
                 }
             } catch (e) {
                 console.error('Error updating seria:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to update seria')
-                this.error = e?.response?.data?.message || 'Failed to update seria'
+                notifyServerError(e?.response?.data?.error || 'Failed to update seria')
+                this.error = e?.response?.data?.error || 'Failed to update seria'
                 result = null
             } finally {
                 this.loading = false
@@ -188,8 +188,8 @@ export const useSerias = defineStore('seria', {
                 console.log('Seria deleted:', id)
             } catch (e) {
                 console.error('Error deleting seria:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to delete seria')
-                this.error = e?.response?.data?.message || 'Failed to delete seria'
+                notifyServerError(e?.response?.data?.error || 'Failed to delete seria')
+                this.error = e?.response?.data?.error || 'Failed to delete seria'
                 success = false
             } finally {
                 this.loading = false

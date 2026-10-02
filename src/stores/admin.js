@@ -98,6 +98,28 @@ export const useAdmin = defineStore('admin', {
     },
 
     /**
+     * PATCH /api/v1/admin/users/:id/gallery - Переместить менеджера/художника
+     * в другую галерею (galleryId = null — убрать из галереи)
+     */
+    async assignUserToGallery(id, galleryId) {
+      let result = null
+      try {
+        const resp = await apiClient.patch(`/api/v1/admin/users/${id}/gallery`, { galleryId })
+        result = resp.data
+        if (result) {
+          const index = this.listUsers.findIndex(u => u.id === id)
+          if (index !== -1) this.listUsers[index] = result
+          notifyServerSuccess('Галерея изменена')
+        }
+      } catch (e) {
+        console.error('Error assigning user to gallery:', e)
+        notifyServerError(e?.response?.data?.error || 'Не удалось изменить галерею')
+        result = null
+      }
+      return result
+    },
+
+    /**
      * PATCH /api/v1/admin/users/:id/block
      */
     async toggleBlock(id, active) {
@@ -153,6 +175,91 @@ export const useAdmin = defineStore('admin', {
         result = null
       }
       return result
+    },
+
+    /**
+     * PATCH /api/v1/admin/users/:id/storage-limit
+     * @param {string} id
+     * @param {number} limitBytes
+     */
+    async changeStorageLimit(id, limitBytes) {
+      let result = null
+      try {
+        const resp = await apiClient.patch(`/api/v1/admin/users/${id}/storage-limit`, { limit_bytes: limitBytes })
+        result = resp.data
+        if (result) {
+          const index = this.listUsers.findIndex(u => u.id === id)
+          if (index !== -1) this.listUsers[index] = result
+          notifyServerSuccess('Лимит места на диске изменён')
+        }
+      } catch (e) {
+        console.error('Error changing storage limit:', e)
+        notifyServerError(e?.response?.data?.error || 'Не удалось изменить лимит места на диске')
+        result = null
+      }
+      return result
+    },
+
+    /**
+     * GET /api/v1/admin/galleries/:id/quotas - Квоты галереи + использование
+     */
+    async getQuotaUsage(galleryId) {
+      try {
+        const resp = await apiClient.get(`/api/v1/admin/galleries/${galleryId}/quotas`)
+        return resp.data
+      } catch (e) {
+        console.error('Error fetching quota usage:', e)
+        notifyServerError(e?.response?.data?.error || 'Не удалось загрузить квоты')
+        return null
+      }
+    },
+
+    /**
+     * PATCH /api/v1/admin/galleries/:id/quotas - Изменить квоты (только Super Admin)
+     * @param {string} galleryId
+     * @param {{quota_managers?, quota_artist_cabinets?, quota_catalog_artists?}} quotas
+     */
+    async updateQuotas(galleryId, quotas) {
+      try {
+        const resp = await apiClient.patch(`/api/v1/admin/galleries/${galleryId}/quotas`, quotas)
+        notifyServerSuccess('Квоты обновлены')
+        return resp.data
+      } catch (e) {
+        console.error('Error updating quotas:', e)
+        notifyServerError(e?.response?.data?.error || 'Не удалось изменить квоты')
+        return null
+      }
+    },
+
+    /**
+     * GET /api/v1/admin/galleries/:id/invites - Пригласительные ссылки (лениво создаются на бэкенде)
+     */
+    async getInviteLinks(galleryId) {
+      try {
+        const resp = await apiClient.get(`/api/v1/admin/galleries/${galleryId}/invites`)
+        return resp.data
+      } catch (e) {
+        console.error('Error fetching invite links:', e)
+        notifyServerError(e?.response?.data?.error || 'Не удалось загрузить пригласительные ссылки')
+        return null
+      }
+    },
+
+    /**
+     * PATCH /api/v1/admin/galleries/:id/invites/regenerate - Перевыпустить ссылку (старая перестаёт работать)
+     * @param {string} galleryId
+     * @param {'manager'|'artist'} role
+     */
+    async regenerateInviteLink(galleryId, role) {
+      try {
+        const resp = await apiClient.patch(`/api/v1/admin/galleries/${galleryId}/invites/regenerate`, { role })
+        notifyServerSuccess('Ссылка перевыпущена, старая больше не действует')
+        return resp.data
+      } catch (e) {
+        console.error('Error regenerating invite link:', e)
+        notifyServerError(e?.response?.data?.error || 'Не удалось перевыпустить ссылку')
+        return null
+      }
     },
 
     /**

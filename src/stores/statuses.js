@@ -39,8 +39,8 @@ export const useStatuses = defineStore('statuses', {
         console.log('Statuses loaded:', this.listStatuses)
       } catch (e) {
         console.error('Error fetching statuses:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load statuses')
-        this.error = e?.response?.data?.message || 'Failed to load statuses'
+        notifyServerError(e?.response?.data?.error || 'Failed to load statuses')
+        this.error = e?.response?.data?.error || 'Failed to load statuses'
         success = false
       } finally {
         this.loading = false
@@ -63,8 +63,8 @@ export const useStatuses = defineStore('statuses', {
         console.log('Status by ID:', result)
       } catch (e) {
         console.error('Error fetching status by id:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load status details')
-        this.error = e?.response?.data?.message || 'Failed to load status details'
+        notifyServerError(e?.response?.data?.error || 'Failed to load status details')
+        this.error = e?.response?.data?.error || 'Failed to load status details'
         result = null
       } finally {
         this.loading = false
@@ -86,8 +86,8 @@ export const useStatuses = defineStore('statuses', {
         console.log('Statuses by user:', result)
       } catch (e) {
         console.error('Error fetching statuses by user:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load user statuses')
-        this.error = e?.response?.data?.message || 'Failed to load user statuses'
+        notifyServerError(e?.response?.data?.error || 'Failed to load user statuses')
+        this.error = e?.response?.data?.error || 'Failed to load user statuses'
         result = []
       } finally {
         this.loading = false
@@ -116,8 +116,8 @@ export const useStatuses = defineStore('statuses', {
         }
       } catch (e) {
         console.error('Error creating status:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to create status')
-        this.error = e?.response?.data?.message || 'Failed to create status'
+        notifyServerError(e?.response?.data?.error || 'Failed to create status')
+        this.error = e?.response?.data?.error || 'Failed to create status'
         result = null
       } finally {
         this.loading = false
@@ -152,8 +152,8 @@ export const useStatuses = defineStore('statuses', {
         }
       } catch (e) {
         console.error('Error updating status:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to update status')
-        this.error = e?.response?.data?.message || 'Failed to update status'
+        notifyServerError(e?.response?.data?.error || 'Failed to update status')
+        this.error = e?.response?.data?.error || 'Failed to update status'
         result = null
       } finally {
         this.loading = false
@@ -185,8 +185,8 @@ export const useStatuses = defineStore('statuses', {
         console.log('Status deleted:', id)
       } catch (e) {
         console.error('Error deleting status:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to delete status')
-        this.error = e?.response?.data?.message || 'Failed to delete status'
+        notifyServerError(e?.response?.data?.error || 'Failed to delete status')
+        this.error = e?.response?.data?.error || 'Failed to delete status'
         success = false
       } finally {
         this.loading = false

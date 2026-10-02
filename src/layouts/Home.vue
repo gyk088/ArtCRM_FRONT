@@ -29,11 +29,6 @@
               <span>Мои Выставки</span>
             </a-menu-item>
 
-            <a-menu-item v-if="!isArtist" key="workspace">
-              <AppstoreOutlined />
-              <span>Рабочее Пространство</span>
-            </a-menu-item>
-
             <a-menu-item key="bio">
               <UserOutlined />
               <span>Биография</span>
@@ -64,7 +59,7 @@
               <span>Профиль</span>
             </a-menu-item>
 
-            <a-menu-item v-if="isSuperAdmin" key="admin-panel">
+            <a-menu-item v-if="canSeeAdminPanel" key="admin-panel">
               <TeamOutlined />
               <span>Админ-панель</span>
             </a-menu-item>
@@ -115,11 +110,6 @@
               <span>Мои Выставки</span>
             </a-menu-item>
 
-            <a-menu-item v-if="!isArtist" key="workspace">
-              <AppstoreOutlined />
-              <span>Рабочее Пространство</span>
-            </a-menu-item>
-
             <a-menu-item key="bio">
               <UserOutlined />
               <span>Биография</span>
@@ -150,7 +140,7 @@
               <span>Профиль</span>
             </a-menu-item>
 
-            <a-menu-item v-if="isSuperAdmin" key="admin-panel">
+            <a-menu-item v-if="canSeeAdminPanel" key="admin-panel">
               <TeamOutlined />
               <span>Админ-панель</span>
             </a-menu-item>
@@ -230,7 +220,6 @@ import {
   UserOutlined,
   FileTextOutlined,
   LinkOutlined,
-  AppstoreOutlined,
   InboxOutlined,
   LogoutOutlined,
   IdcardOutlined,
@@ -252,6 +241,8 @@ const router = useRouter();
 const logoutLoading = ref(false);
 const isArtist = computed(() => getUser()?.role === ROLES.ARTIST);
 const isSuperAdmin = computed(() => getUser()?.role === ROLES.SUPER_ADMIN);
+const isGallery = computed(() => getUser()?.role === ROLES.GALLERY);
+const canSeeAdminPanel = computed(() => isSuperAdmin.value || isGallery.value);
 
 // === Баннер имперсонации (вход под пользователем из админ-панели) ===
 const adminStore = useAdmin();

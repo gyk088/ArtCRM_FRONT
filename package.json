@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@ant-design/icons-vue": "^7.0.1",
+    "@tanstack/vue-virtual": "^3.13.39",
     "@tiptap/extension-placeholder": "^3.29.1",
     "@tiptap/extension-underline": "^3.29.1",
     "@tiptap/starter-kit": "^3.29.1",

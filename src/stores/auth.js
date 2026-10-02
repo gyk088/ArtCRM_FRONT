@@ -62,6 +62,43 @@ export const useAuth = defineStore('auth', {
     },
 
     /**
+     * GET /api/v1/auth/invite/:token - Предпросмотр пригласительной ссылки
+     * (роль + название галереи), без авторизации
+     */
+    async getInvitePreview(token) {
+      try {
+        const resp = await apiClient.get(`/api/v1/auth/invite/${token}`)
+        return resp.data
+      } catch (e) {
+        console.error('Error fetching invite preview:', e)
+        return null
+      }
+    },
+
+    /**
+     * POST /api/v1/auth/register-invite - Регистрация по пригласительной
+     * ссылке галереи (роль определяется самим токеном)
+     */
+    async registerViaInvite(token, userData) {
+      let success = true
+      try {
+        const resp = await apiClient.post('/api/v1/auth/register-invite', { token, ...userData })
+        this.user = resp.data?.user || null
+        this.session = resp.data?.session || null
+        setUser(this.user)
+        setSession(this.session)
+      } catch (e) {
+        console.error('Error registering via invite:', e)
+        notifyServerError(e?.response?.data?.message || 'Не удалось зарегистрироваться')
+        this.error = e?.response?.data?.message || 'Не удалось зарегистрироваться'
+        success = false
+      } finally {
+        this.loading = false
+      }
+      return success
+    },
+
+    /**
      * POST /api/v1/auth/forgot-password - Запросить восстановление пароля
      */
     async requestPasswordReset(email) {

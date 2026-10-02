@@ -8,21 +8,27 @@
         </div>
         <p class="page-subtitle">Пользователи и галереи системы</p>
       </div>
-      <a-input
-        v-model:value="searchQuery"
-        placeholder="Поиск по имени, фамилии или email"
-        allow-clear
-        class="search-input"
-      >
-        <template #prefix><SearchOutlined /></template>
-      </a-input>
+      <div class="page-header-actions">
+        <a-button v-if="isGalleryViewer" @click="openQuotaModal(currentUserId, 'gallery')">
+          <template #icon><CrownOutlined /></template>
+          Квоты и приглашения
+        </a-button>
+        <a-input
+          v-model:value="searchQuery"
+          placeholder="Поиск по имени, фамилии или email"
+          allow-clear
+          class="search-input"
+        >
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
+      </div>
     </div>
 
     <a-tabs v-model:activeKey="activeTab" class="admin-tabs">
       <a-tab-pane key="users" tab="Пользователи">
         <div class="tab-toolbar">
           <span class="tab-hint">Менеджеры, художники и супер-админы</span>
-          <a-button type="primary" @click="openCreateUser">
+          <a-button type="primary" @click="openCreateUser()">
             <template #icon><PlusOutlined /></template>
             Создать пользователя
           </a-button>
@@ -34,7 +40,7 @@
           :loading="adminStore.loading"
           row-key="id"
           size="middle"
-          :scroll="{ x: 'max-content' }"
+          :scroll="{ x: 950 }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'fullName'">
@@ -44,7 +50,7 @@
             <template v-else-if="column.dataIndex === 'role'">
               <a-select
                 :value="record.role"
-                :options="roleOptions"
+                :options="isSuperAdminViewer ? roleOptions : managedRoleOptions"
                 size="small"
                 style="width: 160px"
                 :loading="rolePendingId === record.id"
@@ -53,7 +59,28 @@
             </template>
 
             <template v-else-if="column.dataIndex === 'gallery'">
-              {{ getGalleryName(record.managed_by_gallery_id) }}
+              <div v-if="isSuperAdminViewer && (record.role === 'manager' || record.role === 'artist')" class="gallery-cell">
+                <a-select
+                  :value="galleryDraftFor(record)"
+                  :options="galleryOptions"
+                  allow-clear
+                  placeholder="Без галереи"
+                  size="small"
+                  style="width: 150px"
+                  :disabled="galleryPendingId === record.id"
+                  @change="(value) => setGalleryDraft(record, value)"
+                />
+                <a-button
+                  v-if="hasGalleryDraftChange(record)"
+                  type="link"
+                  size="small"
+                  :loading="galleryPendingId === record.id"
+                  @click="handleAssignGallery(record)"
+                >
+                  Сохранить
+                </a-button>
+              </div>
+              <span v-else>{{ getGalleryName(record.managed_by_gallery_id) }}</span>
             </template>
 
             <template v-else-if="column.dataIndex === 'active'">
@@ -67,25 +94,50 @@
               </span>
             </template>
 
+            <template v-else-if="column.dataIndex === 'storage'">
+              <div class="storage-cell">
+                <a-progress
+                  :percent="storagePercent(record)"
+                  :status="storagePercent(record) >= 100 ? 'exception' : 'normal'"
+                  size="small"
+                  class="storage-cell-bar"
+                />
+                <span class="storage-cell-text">
+                  {{ formatStorageSize(record.storage_used_bytes) }} / {{ formatStorageSize(record.storage_limit_bytes) }}
+                </span>
+                <a-button type="link" size="small" @click="openChangeStorage(record)">Изменить</a-button>
+              </div>
+            </template>
+
             <template v-else-if="column.dataIndex === 'actions'">
-              <a-tooltip v-if="record.id === currentUserId" title="Это ваш аккаунт">
-                <a-button type="text" size="small" disabled>
-                  <LoginOutlined />
-                </a-button>
-              </a-tooltip>
-              <a-tooltip v-else :title="record.active === false ? 'Пользователь заблокирован' : 'Войти под пользователем'">
+              <div class="actions-cell">
+                <a-tooltip v-if="record.id === currentUserId" title="Это ваш аккаунт">
+                  <a-button type="text" size="small" disabled>
+                    <LoginOutlined />
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip v-else :title="record.active === false ? 'Пользователь заблокирован' : 'Войти под пользователем'">
+                  <a-button
+                    type="text"
+                    size="small"
+                    :disabled="record.active === false"
+                    :loading="impersonatingId === record.id"
+                    @click="handleImpersonate(record)"
+                  >
+                    <LoginOutlined />
+                  </a-button>
+                </a-tooltip>
+                <a-button type="text" size="small" @click="openChangePassword(record)">Пароль</a-button>
+                <a-button type="text" size="small" @click="openChangeEmail(record)">Email</a-button>
                 <a-button
+                  v-if="isSuperAdminViewer && record.role === 'manager' && !record.managed_by_gallery_id"
                   type="text"
                   size="small"
-                  :disabled="record.active === false"
-                  :loading="impersonatingId === record.id"
-                  @click="handleImpersonate(record)"
+                  @click="openQuotaModal(record.id, 'manager')"
                 >
-                  <LoginOutlined />
+                  Квоты
                 </a-button>
-              </a-tooltip>
-              <a-button type="text" size="small" @click="openChangePassword(record)">Пароль</a-button>
-              <a-button type="text" size="small" @click="openChangeEmail(record)">Email</a-button>
+              </div>
             </template>
 
             <template v-else>
@@ -95,7 +147,7 @@
         </a-table>
       </a-tab-pane>
 
-      <a-tab-pane key="galleries" tab="Галереи">
+      <a-tab-pane v-if="isSuperAdminViewer" key="galleries" tab="Галереи">
         <div class="tab-toolbar">
           <span class="tab-hint">Управляющие пользователи — каждая видит только своих менеджеров/художников</span>
           <a-button type="primary" @click="openCreateGallery">
@@ -110,7 +162,7 @@
           :loading="adminStore.loading"
           row-key="id"
           size="middle"
-          :scroll="{ x: 'max-content' }"
+          :scroll="{ x: 700 }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'fullName'">
@@ -133,24 +185,31 @@
             </template>
 
             <template v-else-if="column.dataIndex === 'actions'">
-              <a-tooltip v-if="record.id === currentUserId" title="Это ваш аккаунт">
-                <a-button type="text" size="small" disabled>
-                  <LoginOutlined />
+              <div class="actions-cell">
+                <a-tooltip v-if="record.id === currentUserId" title="Это ваш аккаунт">
+                  <a-button type="text" size="small" disabled>
+                    <LoginOutlined />
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip v-else :title="record.active === false ? 'Пользователь заблокирован' : 'Войти под пользователем'">
+                  <a-button
+                    type="text"
+                    size="small"
+                    :disabled="record.active === false"
+                    :loading="impersonatingId === record.id"
+                    @click="handleImpersonate(record)"
+                  >
+                    <LoginOutlined />
+                  </a-button>
+                </a-tooltip>
+                <a-button type="text" size="small" @click="openChangePassword(record)">Пароль</a-button>
+                <a-button type="text" size="small" @click="openChangeEmail(record)">Email</a-button>
+                <a-button type="text" size="small" @click="openQuotaModal(record.id, 'gallery')">Квоты</a-button>
+                <a-button type="text" size="small" @click="openCreateUser(record.id)">
+                  <template #icon><UserAddOutlined /></template>
+                  Добавить
                 </a-button>
-              </a-tooltip>
-              <a-tooltip v-else :title="record.active === false ? 'Пользователь заблокирован' : 'Войти под пользователем'">
-                <a-button
-                  type="text"
-                  size="small"
-                  :disabled="record.active === false"
-                  :loading="impersonatingId === record.id"
-                  @click="handleImpersonate(record)"
-                >
-                  <LoginOutlined />
-                </a-button>
-              </a-tooltip>
-              <a-button type="text" size="small" @click="openChangePassword(record)">Пароль</a-button>
-              <a-button type="text" size="small" @click="openChangeEmail(record)">Email</a-button>
+              </div>
             </template>
 
             <template v-else>
@@ -186,7 +245,7 @@
         <a-form-item label="Роль">
           <a-select v-model:value="createUserForm.role" :options="managedRoleOptions" />
         </a-form-item>
-        <a-form-item label="Галерея (необязательно)">
+        <a-form-item v-if="isSuperAdminViewer" label="Галерея (необязательно)">
           <a-select
             v-model:value="createUserForm.managed_by_gallery_id"
             :options="galleryOptions"
@@ -247,14 +306,132 @@
       <p class="modal-target">{{ targetLabel }}</p>
       <a-input v-model:value="newEmail" placeholder="Новый email" />
     </a-modal>
+
+    <!-- Изменение лимита места на диске -->
+    <a-modal
+      v-model:open="isStorageModalOpen"
+      title="Лимит места на диске"
+      ok-text="Сохранить"
+      cancel-text="Отмена"
+      :confirm-loading="savingStorage"
+      @ok="handleSaveStorage"
+    >
+      <p class="modal-target">{{ targetLabel }}</p>
+      <p v-if="targetUser" class="modal-hint">
+        Использовано: {{ formatStorageSize(targetUser.storage_used_bytes) }}
+      </p>
+      <a-input-number
+        id="storageLimitGb"
+        v-model:value="newStorageLimitGb"
+        :min="0"
+        :step="1"
+        addon-after="ГБ"
+        style="width: 100%"
+      />
+    </a-modal>
+
+    <!-- Квоты "проданных мест" + пригласительные ссылки -->
+    <a-modal
+      v-model:open="isQuotaModalOpen"
+      title="Квоты и приглашения"
+      :ok-text="isSuperAdminViewer ? 'Сохранить' : undefined"
+      cancel-text="Закрыть"
+      :confirm-loading="savingQuotas"
+      :footer="isSuperAdminViewer ? undefined : null"
+      @ok="handleSaveQuotas"
+    >
+      <a-spin :spinning="loadingQuota">
+        <template v-if="quotaUsage">
+          <template v-if="quotaTargetRole === 'gallery'">
+            <div class="quota-row">
+              <span class="quota-label">Менеджеры</span>
+              <a-input-number
+                v-if="isSuperAdminViewer"
+                v-model:value="quotaForm.quota_managers"
+                :min="0"
+                size="small"
+                style="width: 90px"
+              />
+              <span v-else class="quota-value">{{ quotaUsage.managers.quota }}</span>
+              <span class="quota-used">использовано: {{ quotaUsage.managers.used }}</span>
+            </div>
+
+            <div class="quota-row">
+              <span class="quota-label">Художники с кабинетом</span>
+              <a-input-number
+                v-if="isSuperAdminViewer"
+                v-model:value="quotaForm.quota_artist_cabinets"
+                :min="0"
+                size="small"
+                style="width: 90px"
+              />
+              <span v-else class="quota-value">{{ quotaUsage.artistCabinets.quota }}</span>
+              <span class="quota-used">использовано: {{ quotaUsage.artistCabinets.used }}</span>
+            </div>
+          </template>
+
+          <div class="quota-row">
+            <span class="quota-label">Художники в справочнике</span>
+            <a-input-number
+              v-if="isSuperAdminViewer"
+              v-model:value="quotaForm.quota_catalog_artists"
+              :min="0"
+              size="small"
+              style="width: 90px"
+            />
+            <span v-else class="quota-value">{{ quotaUsage.catalogArtists.quota }}</span>
+            <span class="quota-used">использовано: {{ quotaUsage.catalogArtists.used }}</span>
+          </div>
+
+          <template v-if="quotaTargetRole === 'gallery'">
+            <a-divider />
+
+            <div class="invite-row">
+              <div class="invite-row-label">Ссылка для менеджеров</div>
+              <div class="invite-row-controls">
+                <a-input :value="managerInviteUrl" readonly size="small" />
+                <a-button size="small" @click="copyInviteLink(managerInviteUrl)">
+                  <template #icon><CopyOutlined /></template>
+                </a-button>
+                <a-button
+                  size="small"
+                  :loading="regeneratingRole === 'manager'"
+                  @click="handleRegenerateInvite('manager')"
+                >
+                  Перевыпустить
+                </a-button>
+              </div>
+            </div>
+
+            <div class="invite-row">
+              <div class="invite-row-label">Ссылка для художников</div>
+              <div class="invite-row-controls">
+                <a-input :value="artistInviteUrl" readonly size="small" />
+                <a-button size="small" @click="copyInviteLink(artistInviteUrl)">
+                  <template #icon><CopyOutlined /></template>
+                </a-button>
+                <a-button
+                  size="small"
+                  :loading="regeneratingRole === 'artist'"
+                  @click="handleRegenerateInvite('artist')"
+                >
+                  Перевыпустить
+                </a-button>
+              </div>
+            </div>
+          </template>
+        </template>
+      </a-spin>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, h } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { PlusOutlined, SearchOutlined, LoginOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, SearchOutlined, LoginOutlined, ExclamationCircleOutlined, CrownOutlined, CopyOutlined, UserAddOutlined } from '@ant-design/icons-vue'
 import { useAdmin } from '@/stores/admin.js'
+import { formatStorageSize } from '@/stores/file.js'
 import { ROLES, TEXT_ROLES } from '@/services/const.js'
 import { getUser } from '@/services/auth.js'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
@@ -262,6 +439,8 @@ import MobileMenuButton from '@/components/MobileMenuButton.vue'
 const adminStore = useAdmin()
 const activeTab = ref('users')
 const currentUserId = getUser()?.id
+const isSuperAdminViewer = computed(() => getUser()?.role === ROLES.SUPER_ADMIN)
+const isGalleryViewer = computed(() => getUser()?.role === ROLES.GALLERY)
 
 onMounted(() => {
   adminStore.getAllUsers()
@@ -306,18 +485,19 @@ const galleryOptions = computed(() => adminStore.listUsers
 const userColumns = [
   { title: 'Имя', dataIndex: 'fullName', key: 'fullName' },
   { title: 'Email', dataIndex: 'email', key: 'email' },
-  { title: 'Роль', dataIndex: 'role', key: 'role', width: 180 },
-  { title: 'Галерея', dataIndex: 'gallery', key: 'gallery' },
-  { title: 'Статус', dataIndex: 'active', key: 'active', width: 200 },
-  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 210 },
+  { title: 'Роль', dataIndex: 'role', key: 'role', width: 160 },
+  { title: 'Галерея', dataIndex: 'gallery', key: 'gallery', width: 170 },
+  { title: 'Место на диске', dataIndex: 'storage', key: 'storage', width: 220 },
+  { title: 'Статус', dataIndex: 'active', key: 'active', width: 150 },
+  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 170 },
 ]
 
 const galleryColumns = [
   { title: 'Имя', dataIndex: 'fullName', key: 'fullName' },
   { title: 'Email', dataIndex: 'email', key: 'email' },
-  { title: 'Управляемых', dataIndex: 'managedCount', key: 'managedCount', width: 140 },
-  { title: 'Статус', dataIndex: 'active', key: 'active', width: 200 },
-  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 210 },
+  { title: 'Управляемых', dataIndex: 'managedCount', key: 'managedCount', width: 120 },
+  { title: 'Статус', dataIndex: 'active', key: 'active', width: 150 },
+  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 170 },
 ]
 
 // === Роль ===
@@ -327,6 +507,40 @@ const handleChangeRole = async (record, role) => {
   rolePendingId.value = record.id
   await adminStore.changeRole(record.id, role)
   rolePendingId.value = null
+}
+
+// === Перемещение в другую галерею — работы переезжают вместе с
+// пользователем автоматически (они остаются за тем же user_id, см.
+// AuthorizationService.gallerySharingScope), если квота новой галереи
+// позволяет. Выбор в select — черновик, применяется только по кнопке
+// "Сохранить", чтобы случайный клик не перемещал пользователя сразу ===
+const galleryPendingId = ref(null)
+const galleryDrafts = ref({})
+
+function galleryDraftFor(record) {
+  if (record.id in galleryDrafts.value) return galleryDrafts.value[record.id] || undefined
+  return record.managed_by_gallery_id || undefined
+}
+
+function setGalleryDraft(record, value) {
+  galleryDrafts.value = { ...galleryDrafts.value, [record.id]: value || null }
+}
+
+function hasGalleryDraftChange(record) {
+  if (!(record.id in galleryDrafts.value)) return false
+  return galleryDrafts.value[record.id] !== (record.managed_by_gallery_id || null)
+}
+
+const handleAssignGallery = async (record) => {
+  const nextGalleryId = record.id in galleryDrafts.value ? galleryDrafts.value[record.id] : null
+  galleryPendingId.value = record.id
+  const result = await adminStore.assignUserToGallery(record.id, nextGalleryId)
+  galleryPendingId.value = null
+  if (result) {
+    const drafts = { ...galleryDrafts.value }
+    delete drafts[record.id]
+    galleryDrafts.value = drafts
+  }
 }
 
 // === Блокировка ===
@@ -368,8 +582,8 @@ const isCreateUserOpen = ref(false)
 const creating = ref(false)
 const createUserForm = ref({ name: '', surname: '', email: '', password: '', role: ROLES.ARTIST, managed_by_gallery_id: null })
 
-function openCreateUser() {
-  createUserForm.value = { name: '', surname: '', email: '', password: '', role: ROLES.ARTIST, managed_by_gallery_id: null }
+function openCreateUser(galleryId = null) {
+  createUserForm.value = { name: '', surname: '', email: '', password: '', role: ROLES.ARTIST, managed_by_gallery_id: galleryId }
   isCreateUserOpen.value = true
 }
 
@@ -465,6 +679,125 @@ async function handleSaveEmail() {
     savingEmail.value = false
   }
 }
+
+// === Лимит места на диске ===
+const GB = 1024 * 1024 * 1024
+const isStorageModalOpen = ref(false)
+const newStorageLimitGb = ref(5)
+const savingStorage = ref(false)
+
+function storagePercent(record) {
+  const limit = Number(record.storage_limit_bytes)
+  if (!limit) return 0
+  return Math.min(100, Math.round((Number(record.storage_used_bytes) / limit) * 100))
+}
+
+function openChangeStorage(record) {
+  targetUser.value = record
+  newStorageLimitGb.value = Math.round((Number(record.storage_limit_bytes) / GB) * 10) / 10
+  isStorageModalOpen.value = true
+}
+
+async function handleSaveStorage() {
+  if (newStorageLimitGb.value == null || newStorageLimitGb.value < 0) {
+    message.warning('Укажите лимит в ГБ')
+    return
+  }
+  savingStorage.value = true
+  try {
+    const limitBytes = Math.round(newStorageLimitGb.value * GB)
+    const result = await adminStore.changeStorageLimit(targetUser.value.id, limitBytes)
+    if (result) isStorageModalOpen.value = false
+  } finally {
+    savingStorage.value = false
+  }
+}
+
+// === Квоты "проданных мест" + пригласительные ссылки ===
+const isQuotaModalOpen = ref(false)
+const loadingQuota = ref(false)
+const savingQuotas = ref(false)
+const quotaTargetGalleryId = ref(null)
+// 'gallery' — показывать квоты менеджеров/художников-кабинетов и ссылки-
+// приглашения; 'manager' — менеджер без галереи, только свой справочник
+// художников, без приглашений (они только у галереи).
+const quotaTargetRole = ref('gallery')
+const quotaUsage = ref(null)
+const quotaForm = ref({ quota_managers: 0, quota_artist_cabinets: 0, quota_catalog_artists: 0 })
+const invites = ref({ managerToken: '', artistToken: '' })
+const regeneratingRole = ref(null)
+
+const managerInviteUrl = computed(() => invites.value.managerToken
+  ? `${window.location.origin}/auth?invite=${invites.value.managerToken}`
+  : '')
+const artistInviteUrl = computed(() => invites.value.artistToken
+  ? `${window.location.origin}/auth?invite=${invites.value.artistToken}`
+  : '')
+
+async function openQuotaModal(holderId, role = 'gallery') {
+  quotaTargetGalleryId.value = holderId
+  quotaTargetRole.value = role
+  isQuotaModalOpen.value = true
+  loadingQuota.value = true
+  quotaUsage.value = null
+  invites.value = { managerToken: '', artistToken: '' }
+  try {
+    const usage = await adminStore.getQuotaUsage(holderId)
+    const links = role === 'gallery' ? await adminStore.getInviteLinks(holderId) : null
+    if (usage) {
+      quotaUsage.value = usage
+      quotaForm.value = {
+        quota_managers: usage.managers.quota,
+        quota_artist_cabinets: usage.artistCabinets.quota,
+        quota_catalog_artists: usage.catalogArtists.quota,
+      }
+    }
+    if (links) invites.value = links
+  } finally {
+    loadingQuota.value = false
+  }
+}
+
+async function handleSaveQuotas() {
+  if (!isSuperAdminViewer.value) {
+    isQuotaModalOpen.value = false
+    return
+  }
+  savingQuotas.value = true
+  try {
+    const payload = quotaTargetRole.value === 'gallery'
+      ? quotaForm.value
+      : { quota_catalog_artists: quotaForm.value.quota_catalog_artists }
+    const result = await adminStore.updateQuotas(quotaTargetGalleryId.value, payload)
+    if (result) {
+      quotaUsage.value = result
+      isQuotaModalOpen.value = false
+    }
+  } finally {
+    savingQuotas.value = false
+  }
+}
+
+async function copyInviteLink(url) {
+  if (!url) return
+  try {
+    await navigator.clipboard.writeText(url)
+    message.success('Ссылка скопирована')
+  } catch (e) {
+    console.error('Clipboard error:', e)
+    message.error('Не удалось скопировать')
+  }
+}
+
+async function handleRegenerateInvite(role) {
+  regeneratingRole.value = role
+  try {
+    const result = await adminStore.regenerateInviteLink(quotaTargetGalleryId.value, role)
+    if (result) invites.value = result
+  } finally {
+    regeneratingRole.value = null
+  }
+}
 </script>
 
 <style scoped>
@@ -510,6 +843,60 @@ async function handleSaveEmail() {
   max-width: 100%;
 }
 
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.quota-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.quota-label {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-body);
+}
+
+.quota-value {
+  min-width: 30px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-title);
+}
+
+.quota-used {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.invite-row {
+  margin-bottom: 12px;
+}
+
+.invite-row-label {
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.invite-row-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.invite-row-controls :deep(.ant-input-affix-wrapper),
+.invite-row-controls :deep(.ant-input) {
+  flex: 1;
+  min-width: 0;
+}
+
 .page-title {
   font-family: 'Cormorant Garamond', serif;
   font-size: 26px;
@@ -550,6 +937,44 @@ async function handleSaveEmail() {
   margin: 0 0 12px;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+.modal-hint {
+  margin: -6px 0 12px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.storage-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gallery-cell {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.actions-cell {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.storage-cell-bar {
+  flex: 1;
+  min-width: 80px;
+}
+
+.storage-cell-text {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
 }
 
 .admin-page :deep(.ant-btn-primary) {

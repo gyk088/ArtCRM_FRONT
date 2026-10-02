@@ -399,55 +399,50 @@
       @ok="addSelectedWorks"
     >
       <div class="modal-filters-panel">
-        <a-select id="exhibitionFilterArtist" v-model:value="filterArtist" placeholder="Художник" allowClear style="width: 180px" :options="artistOptions" />
-        <a-select id="exhibitionFilterLocation" v-model:value="filterLocation" placeholder="Локация" allowClear style="width: 180px" :options="locationOptions" />
-        <a-select id="exhibitionFilterSeria" v-model:value="filterSeria" placeholder="Серия" allowClear style="width: 180px" :options="seriaOptions" />
-        <a-select id="exhibitionFilterMedia" v-model:value="filterMedia" placeholder="Медиа" allowClear style="width: 180px" :options="mediaFilterOptions" />
-        <a-select id="exhibitionFilterStatus" v-model:value="filterStatus" placeholder="Статус" allowClear style="width: 180px" :options="statusFilterOptions" />
+        <a-select id="exhibitionFilterArtist" v-model:value="filterArtist" mode="multiple" placeholder="Художник" allowClear style="width: 180px" max-tag-count="responsive" :options="artistOptions" />
+        <a-select id="exhibitionFilterLocation" v-model:value="filterLocation" mode="multiple" placeholder="Локация" allowClear style="width: 180px" max-tag-count="responsive" :options="locationOptions" />
+        <a-select id="exhibitionFilterSeria" v-model:value="filterSeria" mode="multiple" placeholder="Серия" allowClear style="width: 180px" max-tag-count="responsive" :options="seriaOptions" />
+        <a-select id="exhibitionFilterMedia" v-model:value="filterMedia" mode="multiple" placeholder="Медиа" allowClear style="width: 180px" max-tag-count="responsive" :options="mediaFilterOptions" />
+        <a-select id="exhibitionFilterStatus" v-model:value="filterStatus" mode="multiple" placeholder="Статус" allowClear style="width: 180px" max-tag-count="responsive" :options="statusFilterOptions" />
         <a-input-number id="exhibitionFilterPriceFrom" name="exhibitionFilterPriceFrom" v-model:value="filterPriceFrom" placeholder="Цена от" :min="0" style="width: 120px" />
         <a-input-number id="exhibitionFilterPriceTo" name="exhibitionFilterPriceTo" v-model:value="filterPriceTo" placeholder="Цена до" :min="0" style="width: 120px" />
       </div>
 
       <div class="modal-selected-count">Выбрано работ: {{ selectedRowKeys.length }}</div>
 
-      <a-table
-        :data-source="filteredWorksTable"
+      <WorksPickerTable
+        :data="filteredWorksTable"
         :columns="columns"
-        row-key="id"
+        v-model:selected-row-keys="selectedRowKeys"
         :loading="worksLoading"
-        :row-selection="rowSelection"
-        :scroll="{ x: 1100 }">
-
-         <template #bodyCell="{ column, record }">
-        <!-- Колонка аватара -->
-        <template v-if="column.dataIndex === 'avatar'">
-          <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="preview-img" />
-          <div v-else class="img-placeholder">
-            <PictureOutlined />
-          </div>
+      >
+        <template #cell="{ column, record }">
+          <template v-if="column.dataIndex === 'avatar'">
+            <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="preview-img" />
+            <div v-else class="img-placeholder">
+              <PictureOutlined />
+            </div>
+          </template>
+          <template v-else-if="column.dataIndex === 'artist'">
+            {{ getArtistName(record.artist) }}
+          </template>
+          <template v-else-if="column.dataIndex === 'media'">
+            {{ getMediaName(record.media) }}
+          </template>
+          <template v-else-if="column.dataIndex === 'seria'">
+            {{ getSeriaName(record.seria) }}
+          </template>
+          <template v-else-if="column.dataIndex === 'location'">
+            {{ getLocationName(record.location) }}
+          </template>
+          <template v-else-if="column.dataIndex === 'status'">
+            {{ getStatusName(record.status) }}
+          </template>
+          <template v-else>
+            {{ record[column.dataIndex] }}
+          </template>
         </template>
-        <template v-else-if="column.dataIndex === 'artist'">
-          {{ getArtistName(record.artist) }}
-        </template>
-        <template v-else-if="column.dataIndex === 'media'">
-          {{ getMediaName(record.media) }}
-        </template>
-        <template v-else-if="column.dataIndex === 'seria'">
-          {{ getSeriaName(record.seria) }}
-        </template>
-        <template v-else-if="column.dataIndex === 'location'">
-          {{ getLocationName(record.location) }}
-        </template>
-        <template v-else-if="column.dataIndex === 'status'">
-          {{ getStatusName(record.status) }}
-        </template>
-        <!-- Остальные колонки -->
-        <template v-else>
-          {{ record[column.dataIndex] }}
-        </template>
-       </template>
-       </a-table>
-
+      </WorksPickerTable>
     </a-modal>
 
     <!-- Файлы — выбор обложки или фото галереи (режим переключается fileSelectMode) -->
@@ -500,6 +495,7 @@ import { useLocations } from '@/stores/locations.js'
 import { useExhibition } from '@/stores/exhibition.js'
 import { downloadCatalogPdf } from '@/utils/catalogPdf.js'
 import FileUploader from "@/components/FileUploader.vue"
+import WorksPickerTable from "@/components/WorksPickerTable.vue"
 import { useIsMobile } from '@/composables/useIsMobile.js'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
 
@@ -524,11 +520,11 @@ const formRef = ref(null)
 const isNewExhibition = computed(() => route.params.id === 'new')
 
 // Фильтры в модалке выбора работ — как в ссылках/UserPictures
-const filterArtist = ref(null)
-const filterLocation = ref(null)
-const filterSeria = ref(null)
-const filterMedia = ref(null)
-const filterStatus = ref(null)
+const filterArtist = ref([])
+const filterLocation = ref([])
+const filterSeria = ref([])
+const filterMedia = ref([])
+const filterStatus = ref([])
 const filterPriceFrom = ref(null)
 const filterPriceTo = ref(null)
 
@@ -541,11 +537,11 @@ const statusFilterOptions = computed(() => statusesStore.listStatuses.map(s => (
 const filteredWorksTable = computed(() => {
   let result = worksTable.value
 
-  if (filterArtist.value) result = result.filter(w => w.artist === filterArtist.value)
-  if (filterLocation.value) result = result.filter(w => w.location === filterLocation.value)
-  if (filterSeria.value) result = result.filter(w => w.seria === filterSeria.value)
-  if (filterMedia.value) result = result.filter(w => w.media === filterMedia.value)
-  if (filterStatus.value) result = result.filter(w => w.status === filterStatus.value)
+  if (filterArtist.value?.length) result = result.filter(w => filterArtist.value.includes(w.artist))
+  if (filterLocation.value?.length) result = result.filter(w => filterLocation.value.includes(w.location))
+  if (filterSeria.value?.length) result = result.filter(w => filterSeria.value.includes(w.seria))
+  if (filterMedia.value?.length) result = result.filter(w => filterMedia.value.includes(w.media))
+  if (filterStatus.value?.length) result = result.filter(w => filterStatus.value.includes(w.status))
   if (filterPriceFrom.value != null) result = result.filter(w => Number(w.price) >= filterPriceFrom.value)
   if (filterPriceTo.value != null) result = result.filter(w => Number(w.price) <= filterPriceTo.value)
 
@@ -648,6 +644,9 @@ onMounted(async () => {
 })
 
 async function loadWorks() {
+  // Мгновенно показываем то, что уже есть в кэше (см. stores/artWork.js —
+  // гидрируется из localStorage при создании стора), не дожидаясь сети.
+  worksTable.value = artWorkStore.listArtWorks
   worksLoading.value = true
   try {
     await artWorkStore.getListArtWorks()
@@ -832,16 +831,9 @@ function openWorksModal() {
   isWorksModalOpen.value = true
 }
 
-// выбранные ID в модалке
+// выбранные ID в модалке — WorksPickerTable сам хранит выбор по id, поэтому
+// он переживает фильтрацию/сортировку без отдельной preserveSelectedRowKeys
 const selectedRowKeys = ref([])
-
-const rowSelection = computed(() => ({
-  selectedRowKeys: selectedRowKeys.value,
-  preserveSelectedRowKeys: true,
-  onChange: (keys) => {
-    selectedRowKeys.value = keys
-  }
-}))
 
 const selectedWorksData = computed(() => {
   return worksTable.value.filter(work => form.works.includes(work.id))
@@ -1647,98 +1639,6 @@ function goBack() {
   font-size: 20px;
   font-weight: 600;
   color: var(--text-title);
-}
-
-.works-modal .ant-table {
-  background: transparent;
-  color: var(--text-body);
-}
-
-.works-modal .ant-table-container {
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.works-modal .ant-table-thead > tr > th {
-  background: var(--card-bg) !important;
-  color: var(--accent) !important;
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 14px;
-  font-weight: 600;
-  border-bottom: 1px solid var(--border) !important;
-}
-
-.works-modal .ant-table-thead > tr > th::before {
-  display: none;
-}
-
-.works-modal .ant-table-tbody > tr > td {
-  background: var(--bg-elevated);
-  color: var(--text-body);
-  border-bottom: 1px solid var(--border-soft) !important;
-}
-
-.works-modal .ant-table-tbody > tr:hover > td {
-  background: rgba(138, 109, 47, 0.06) !important;
-}
-
-.works-modal .ant-table-tbody > tr.ant-table-row-selected > td {
-  background: rgba(138, 109, 47, 0.1) !important;
-}
-
-.works-modal .ant-table-tbody > tr.ant-table-row-selected:hover > td {
-  background: rgba(138, 109, 47, 0.14) !important;
-}
-
-.works-modal .ant-checkbox-inner {
-  border-color: var(--border);
-}
-
-.works-modal .ant-checkbox-checked .ant-checkbox-inner {
-  background-color: var(--accent);
-  border-color: var(--accent);
-}
-
-.works-modal .ant-checkbox-indeterminate .ant-checkbox-inner {
-  background-color: var(--accent);
-  border-color: var(--accent);
-}
-
-.works-modal .ant-checkbox:hover .ant-checkbox-inner {
-  border-color: var(--accent) !important;
-}
-
-.works-modal .ant-pagination {
-  margin-top: 12px;
-}
-
-.works-modal .ant-pagination-item {
-  border-color: var(--border);
-}
-
-.works-modal .ant-pagination-item a {
-  color: var(--text-body);
-}
-
-.works-modal .ant-pagination-item-active {
-  border-color: var(--accent) !important;
-}
-
-.works-modal .ant-pagination-item-active a {
-  color: var(--accent) !important;
-}
-
-.works-modal .ant-pagination-item:hover {
-  border-color: var(--accent) !important;
-}
-
-.works-modal .ant-pagination-item:hover a {
-  color: var(--accent) !important;
-}
-
-.works-modal .ant-empty-description {
-  color: var(--text-faint);
 }
 
 .works-modal .ant-btn-primary {

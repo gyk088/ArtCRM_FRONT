@@ -3,6 +3,17 @@
     <div class="header-content">
       <MobileMenuButton />
       <h3>Мои работы</h3>
+      <span v-if="isBackgroundRefreshing" class="refreshing-badge">
+        <LoadingOutlined spin />
+        Обновление списка…
+      </span>
+
+      <div class="header-actions">
+        <a-button class="buttons" type="primary" v-if="selectedRowKeys.length > 0" @click="createCollection">
+          Создать ссылку
+        </a-button>
+        <a-button class="buttons" type="primary" @click="openEditPage()">Добавить</a-button>
+      </div>
     </div>
 
     <div class="filters-panel">
@@ -11,32 +22,33 @@
           style="width: 220px">
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <a-select v-model:value="filterArtist" placeholder="Художник" allowClear style="width: 200px"
-          :options="artistOptions" />
-        <a-select v-model:value="filterLocation" placeholder="Локация" allowClear style="width: 200px"
-          :options="locationOptions" />
-        <a-select v-model:value="filterSeria" placeholder="Серия" allowClear style="width: 200px"
-          :options="seriaOptions" />
-        <a-select v-model:value="filterMedia" placeholder="Медиа" allowClear style="width: 200px"
-          :options="mediaFilterOptions" />
-        <a-select v-model:value="filterStatus" placeholder="Статус" allowClear style="width: 200px"
-          :options="statusOptions" />
+        <a-select v-model:value="filterArtist" mode="multiple" placeholder="Художник" allowClear style="width: 200px"
+          max-tag-count="responsive" :options="artistOptions" />
+        <a-select v-model:value="filterLocation" mode="multiple" placeholder="Локация" allowClear style="width: 200px"
+          max-tag-count="responsive" :options="locationOptions" />
+        <a-select v-model:value="filterSeria" mode="multiple" placeholder="Серия" allowClear style="width: 200px"
+          max-tag-count="responsive" :options="seriaOptions" />
+        <a-select v-model:value="filterMedia" mode="multiple" placeholder="Медиа" allowClear style="width: 200px"
+          max-tag-count="responsive" :options="mediaFilterOptions" />
+        <a-select v-model:value="filterStatus" mode="multiple" placeholder="Статус" allowClear style="width: 200px"
+          max-tag-count="responsive" :options="statusOptions" />
         <a-input-number v-model:value="filterPriceFrom" placeholder="Цена от" :min="0" style="width: 120px" />
         <a-input-number v-model:value="filterPriceTo" placeholder="Цена до" :min="0" style="width: 120px" />
-      </div>
-
-      <div class="filters-right">
-        <a-button class="buttons" type="primary" v-if="selectedRowKeys.length > 0" @click="createCollection">
-          Создать ссылку
-        </a-button>
-        <a-button class="buttons" type="primary" @click="openEditPage()">Добавить</a-button>
       </div>
     </div>
 
     <div class="selected-count">Выбрано работ: {{ selectedRowKeys.length }}</div>
 
+    <!-- Первая загрузка (кэша ещё нет) — явный, понятный лоадер вместо
+         пустой таблицы/сетки, особенно заметно на больших каталогах. -->
+    <div v-if="isFirstLoad" class="first-load-state">
+      <LoadingOutlined class="first-load-spinner" spin />
+      <p class="first-load-text">Загружаем ваши работы…</p>
+      <p class="first-load-hint">Это может занять немного времени, если работ много</p>
+    </div>
+
     <!-- Мобильная сетка карточек вместо таблицы -->
-    <a-spin v-if="isMobile" :spinning="loading">
+    <a-spin v-else-if="isMobile" :spinning="loading">
       <div class="cards-grid">
         <div v-for="record in filteredData" :key="record.id" class="work-card" @click="openPreview(record)">
           <label class="work-card-select" @click.stop>
@@ -76,137 +88,185 @@
       </div>
     </a-spin>
 
-    <!-- Таблица (десктоп) -->
-    <a-table v-else class="custom-table" :columns="columns" :data-source="filteredData" row-key="id"
-      :row-selection="rowSelection" :loading="loading" table-layout="fixed" :custom-row="customRow">
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'avatar'">
-          <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="preview-img clickable-cell" @click.stop="openPreview(record)" />
-          <div v-else class="img-placeholder clickable-cell" @click.stop="openPreview(record)">
-            <PictureOutlined />
-          </div>
-        </template>
-        <template v-else-if="column.dataIndex === 'name'">
-          <span class="name-cell clickable-cell cell-clamp" @click.stop="openPreview(record)">{{ record.name }}</span>
-          <span v-if="record.imported" class="imported-pill" title="Добавлено из импортированной ссылки">
-            <ImportOutlined />
-            Импорт
+    <!-- Таблица (десктоп) — без пагинации и без a-table: своя вёрстка на CSS
+         Grid + виртуализация строк (@tanstack/vue-virtual), т.к. a-table в
+         ant-design-vue не умеет виртуальный скролл ни в одной версии —
+         при сотнях/тысячах работ рендерить все строки в DOM разом слишком
+         дорого. В DOM всегда только видимые строки + небольшой overscan. -->
+    <div v-else class="virtual-table-wrap">
+      <div class="vt-header" :style="{ gridTemplateColumns }">
+        <div class="vt-th vt-th-select">
+          <a-checkbox
+            :checked="allSelected"
+            :indeterminate="someSelected"
+            @change="e => toggleSelectAll(e.target.checked)"
+          />
+        </div>
+        <div
+          v-for="col in columns"
+          :key="col.key"
+          class="vt-th"
+          :class="{ 'vt-th-sortable': col.sorter }"
+          @click="col.sorter && toggleSort(col.key)"
+        >
+          {{ col.title }}
+          <span v-if="col.sorter" class="vt-sort-icons">
+            <CaretUpOutlined :class="{ 'vt-sort-icon-active': sortState.key === col.key && sortState.order === 'ascend' }" />
+            <CaretDownOutlined :class="{ 'vt-sort-icon-active': sortState.key === col.key && sortState.order === 'descend' }" />
           </span>
-        </template>
-        <template v-else-if="column.dataIndex === 'artist'">
-          <a-dropdown :trigger="['click']" @click.stop>
-            <span
-              class="editable-cell cell-clamp"
-              :class="{ 'editable-cell-updating': isCellUpdating(record, 'artist') }"
-              @click.stop
-            >
-              {{ getArtistName(record.artist) || 'Не указан' }}
-            </span>
-            <template #overlay>
-              <a-menu @click="({ key }) => handleFieldChange(record, 'artist', key)">
-                <a-menu-item v-for="artist in artistOptions" :key="artist.value">
-                  {{ artist.label }}
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-        </template>
-        <template v-else-if="column.dataIndex === 'seria'">
-          <a-dropdown :trigger="['click']" @click.stop>
-            <span
-              class="editable-cell cell-clamp"
-              :class="{ 'editable-cell-updating': isCellUpdating(record, 'seria') }"
-              @click.stop
-            >
-              {{ getSeriaName(record.seria) || 'Не указана' }}
-            </span>
-            <template #overlay>
-              <a-menu @click="({ key }) => handleFieldChange(record, 'seria', key)">
-                <a-menu-item v-for="seria in seriaOptions" :key="seria.value">
-                  {{ seria.label }}
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-        </template>
-        <template v-else-if="column.dataIndex === 'media'">
-          <a-dropdown :trigger="['click']" @click.stop>
-            <span
-              class="editable-cell cell-clamp"
-              :class="{ 'editable-cell-updating': isCellUpdating(record, 'media') }"
-              @click.stop
-            >
-              {{ getMediaName(record.media) || 'Не указано' }}
-            </span>
-            <template #overlay>
-              <a-menu @click="({ key }) => handleFieldChange(record, 'media', key)">
-                <a-menu-item v-for="media in mediaFilterOptions" :key="media.value">
-                  {{ media.label }}
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-        </template>
-        <template v-else-if="column.dataIndex === 'status'">
-          <a-dropdown :trigger="['click']" @click.stop>
-            <span
-              class="status-pill status-pill-editable"
-              :class="[statusPillClass(record.status), { 'status-pill-updating': isCellUpdating(record, 'status') }]"
-              :style="getStatusColorStyle(record.status)"
-              @click.stop
-            >
-              {{ getStatusName(record.status) || 'Не указан' }}
-            </span>
-            <template #overlay>
-              <a-menu @click="({ key }) => handleFieldChange(record, 'status', key)">
-                <a-menu-item v-for="status in statusOptions" :key="status.value">
-                  {{ status.label }}
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-        </template>
-        <template v-else-if="column.dataIndex === 'location'">
-          <a-dropdown :trigger="['click']" @click.stop>
-            <span
-              class="editable-cell cell-clamp"
-              :class="{ 'editable-cell-updating': isCellUpdating(record, 'location') }"
-              @click.stop
-            >
-              {{ getLocationName(record.location) || 'Не указана' }}
-            </span>
-            <template #overlay>
-              <a-menu @click="({ key }) => handleFieldChange(record, 'location', key)">
-                <a-menu-item v-for="location in locationOptions" :key="location.value">
-                  {{ location.label }}
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-        </template>
-        <template v-else-if="column.dataIndex === 'price'">
-          <span v-if="record.price" class="cell-clamp">{{ record.price }} {{ getCurrencySymbol(record.currency) }}</span>
-        </template>
-        <template v-else-if="column.dataIndex === 'actions'">
-          <button class="icon-btn icon-btn-edit" title="Редактировать" @click.stop="openEditPage(record)">
-            <EditOutlined />
-          </button>
-          <button
-            class="icon-btn icon-btn-certificate"
-            title="Сгенерировать сертификат"
-            @click.stop="openCertificatePreview(record)"
+        </div>
+      </div>
+
+      <div ref="scrollContainerRef" class="vt-body">
+        <div v-if="!loading && sortedData.length === 0" class="vt-empty">Работы не найдены</div>
+
+        <div v-else :style="{ height: totalSize + 'px', position: 'relative' }">
+          <div
+            v-for="virtualRow in virtualItems"
+            :key="sortedData[virtualRow.index].id"
+            class="vt-row clickable-row"
+            :class="{ 'vt-row-selected': selectedRowKeys.includes(sortedData[virtualRow.index].id) }"
+            :style="{ gridTemplateColumns, height: virtualRow.size + 'px', transform: `translateY(${virtualRow.start}px)` }"
+            @click="handleRowClick($event, sortedData[virtualRow.index])"
           >
-            <SafetyCertificateOutlined />
-          </button>
-          <button class="icon-btn icon-btn-danger" title="Удалить" @click.stop="deleteRow(record.id)">
-            <DeleteOutlined />
-          </button>
-        </template>
-        <template v-else>
-          <span class="cell-clamp">{{ record[column.dataIndex] }}</span>
-        </template>
-      </template>
-    </a-table>
+            <div class="vt-td vt-td-select" @click.stop>
+              <a-checkbox
+                :checked="selectedRowKeys.includes(sortedData[virtualRow.index].id)"
+                @change="e => toggleCardSelect(sortedData[virtualRow.index].id, e.target.checked)"
+              />
+            </div>
+
+            <div v-for="col in columns" :key="col.key" class="vt-td">
+              <template v-if="col.dataIndex === 'avatar'">
+                <img v-if="sortedData[virtualRow.index].avatar && sortedData[virtualRow.index].avatar.url" :src="sortedData[virtualRow.index].avatar.url" class="preview-img clickable-cell" @click.stop="openPreview(sortedData[virtualRow.index])" />
+                <div v-else class="img-placeholder clickable-cell" @click.stop="openPreview(sortedData[virtualRow.index])">
+                  <PictureOutlined />
+                </div>
+              </template>
+              <template v-else-if="col.dataIndex === 'name'">
+                <span class="name-cell clickable-cell cell-clamp" @click.stop="openPreview(sortedData[virtualRow.index])">{{ sortedData[virtualRow.index].name }}</span>
+                <span v-if="sortedData[virtualRow.index].imported" class="imported-pill" title="Добавлено из импортированной ссылки">
+                  <ImportOutlined />
+                  Импорт
+                </span>
+              </template>
+              <template v-else-if="col.dataIndex === 'artist'">
+                <a-dropdown :trigger="['click']" @click.stop>
+                  <span
+                    class="editable-cell cell-clamp"
+                    :class="{ 'editable-cell-updating': isCellUpdating(sortedData[virtualRow.index], 'artist') }"
+                    @click.stop
+                  >
+                    {{ getArtistName(sortedData[virtualRow.index].artist) || 'Не указан' }}
+                  </span>
+                  <template #overlay>
+                    <a-menu @click="({ key }) => handleFieldChange(sortedData[virtualRow.index], 'artist', key)">
+                      <a-menu-item v-for="artist in artistOptions" :key="artist.value">
+                        {{ artist.label }}
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+              </template>
+              <template v-else-if="col.dataIndex === 'seria'">
+                <a-dropdown :trigger="['click']" @click.stop>
+                  <span
+                    class="editable-cell cell-clamp"
+                    :class="{ 'editable-cell-updating': isCellUpdating(sortedData[virtualRow.index], 'seria') }"
+                    @click.stop
+                  >
+                    {{ getSeriaName(sortedData[virtualRow.index].seria) || 'Не указана' }}
+                  </span>
+                  <template #overlay>
+                    <a-menu @click="({ key }) => handleFieldChange(sortedData[virtualRow.index], 'seria', key)">
+                      <a-menu-item v-for="seria in seriaOptions" :key="seria.value">
+                        {{ seria.label }}
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+              </template>
+              <template v-else-if="col.dataIndex === 'media'">
+                <a-dropdown :trigger="['click']" @click.stop>
+                  <span
+                    class="editable-cell cell-clamp"
+                    :class="{ 'editable-cell-updating': isCellUpdating(sortedData[virtualRow.index], 'media') }"
+                    @click.stop
+                  >
+                    {{ getMediaName(sortedData[virtualRow.index].media) || 'Не указано' }}
+                  </span>
+                  <template #overlay>
+                    <a-menu @click="({ key }) => handleFieldChange(sortedData[virtualRow.index], 'media', key)">
+                      <a-menu-item v-for="media in mediaFilterOptions" :key="media.value">
+                        {{ media.label }}
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+              </template>
+              <template v-else-if="col.dataIndex === 'status'">
+                <a-dropdown :trigger="['click']" @click.stop>
+                  <span
+                    class="status-pill status-pill-editable"
+                    :class="[statusPillClass(sortedData[virtualRow.index].status), { 'status-pill-updating': isCellUpdating(sortedData[virtualRow.index], 'status') }]"
+                    :style="getStatusColorStyle(sortedData[virtualRow.index].status)"
+                    @click.stop
+                  >
+                    {{ getStatusName(sortedData[virtualRow.index].status) || 'Не указан' }}
+                  </span>
+                  <template #overlay>
+                    <a-menu @click="({ key }) => handleFieldChange(sortedData[virtualRow.index], 'status', key)">
+                      <a-menu-item v-for="status in statusOptions" :key="status.value">
+                        {{ status.label }}
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+              </template>
+              <template v-else-if="col.dataIndex === 'location'">
+                <a-dropdown :trigger="['click']" @click.stop>
+                  <span
+                    class="editable-cell cell-clamp"
+                    :class="{ 'editable-cell-updating': isCellUpdating(sortedData[virtualRow.index], 'location') }"
+                    @click.stop
+                  >
+                    {{ getLocationName(sortedData[virtualRow.index].location) || 'Не указана' }}
+                  </span>
+                  <template #overlay>
+                    <a-menu @click="({ key }) => handleFieldChange(sortedData[virtualRow.index], 'location', key)">
+                      <a-menu-item v-for="location in locationOptions" :key="location.value">
+                        {{ location.label }}
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+              </template>
+              <template v-else-if="col.dataIndex === 'price'">
+                <span v-if="sortedData[virtualRow.index].price" class="cell-clamp">{{ sortedData[virtualRow.index].price }} {{ getCurrencySymbol(sortedData[virtualRow.index].currency) }}</span>
+              </template>
+              <template v-else-if="col.dataIndex === 'actions'">
+                <button class="icon-btn icon-btn-edit" title="Редактировать" @click.stop="openEditPage(sortedData[virtualRow.index])">
+                  <EditOutlined />
+                </button>
+                <button
+                  class="icon-btn icon-btn-certificate"
+                  title="Сгенерировать сертификат"
+                  @click.stop="openCertificatePreview(sortedData[virtualRow.index])"
+                >
+                  <SafetyCertificateOutlined />
+                </button>
+                <button class="icon-btn icon-btn-danger" title="Удалить" @click.stop="deleteRow(sortedData[virtualRow.index].id)">
+                  <DeleteOutlined />
+                </button>
+              </template>
+              <template v-else>
+                <span class="cell-clamp">{{ sortedData[virtualRow.index][col.dataIndex] }}</span>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Быстрый просмотр работы (без редактирования) -->
     <a-drawer v-model:open="isPreviewOpen" placement="right" :width="isMobile ? '100%' : '700px'" destroyOnClose root-class-name="preview-drawer">
@@ -245,6 +305,15 @@
           <div v-if="previewWork.price" class="preview-price">
             {{ formatPrice(previewWork.price) }} {{ getCurrencySymbol(previewWork.currency) }}
           </div>
+
+          <div v-if="showAuthorInfo" class="preview-authors">
+            <div v-if="previewWork.createdBy" class="preview-meta-line">
+              Создал: {{ formatPersonName(previewWork.createdBy) }}
+            </div>
+            <div v-if="previewWork.updatedBy && previewWork.updatedBy.id !== previewWork.createdBy?.id" class="preview-meta-line">
+              Изменил: {{ formatPersonName(previewWork.updatedBy) }}
+            </div>
+          </div>
         </div>
 
         <a-button type="primary" block class="preview-edit-btn" @click="openEditPage(previewWork)">
@@ -266,7 +335,8 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { useVirtualizer } from '@tanstack/vue-virtual'
+import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined, SearchOutlined, LoadingOutlined, CaretUpOutlined, CaretDownOutlined } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import CertificatePreviewModal from '@/components/CertificatePreviewModal.vue'
@@ -307,6 +377,24 @@ const openPreview = (record) => {
   previewWork.value = record
   isPreviewOpen.value = true
 }
+
+function formatPersonName(person) {
+  if (!person) return ''
+  return [person.name, person.surname].filter(Boolean).join(' ') || 'Пользователь'
+}
+
+// Показываем "Создал/Изменил" только там, где это действительно полезно —
+// у своих собственных работ создатель и редактор всегда совпадают с самим
+// собой, лишняя строка была бы просто шумом. Видно, когда работа пришла из
+// общей галереи (см. AuthorizationService.gallerySharingScope на бэкенде)
+// или когда её редактировал кто-то другой.
+const showAuthorInfo = computed(() => {
+  const w = previewWork.value
+  if (!w) return false
+  const viewerIsCreator = w.createdBy?.id === getUser()?.id
+  const editedBySomeoneElse = w.updatedBy && w.createdBy && w.updatedBy.id !== w.createdBy.id
+  return !viewerIsCreator || editedBySomeoneElse
+})
 // Фильтры хранятся в Pinia-сторе, а не в локальных ref, чтобы их значения
 // сохранялись при уходе со страницы и возврате обратно (компонент
 // пересоздаётся при каждой навигации, а стор — нет).
@@ -531,6 +619,12 @@ const statusOptions = computed(() => {
 })
 
 // Фильтрация данных
+// Показываем крупный лоадер только когда данных ещё нет вообще (кэш пуст,
+// т.е. самый первый визит) — если что-то уже есть (из localStorage-кэша),
+// пока идёт фоновое обновление, достаточно небольшого индикатора в шапке.
+const isFirstLoad = computed(() => loading.value && artWorkStore.listArtWorks.length === 0)
+const isBackgroundRefreshing = computed(() => loading.value && artWorkStore.listArtWorks.length > 0)
+
 const filteredData = computed(() => {
   let result = [...artWorkStore.listArtWorks]
 
@@ -539,24 +633,24 @@ const filteredData = computed(() => {
     result = result.filter(item => (item.name || '').toLowerCase().includes(query))
   }
 
-  if (filterArtist.value) {
-    result = result.filter(item => item.artist === filterArtist.value)
+  if (filterArtist.value?.length) {
+    result = result.filter(item => filterArtist.value.includes(item.artist))
   }
 
-  if (filterLocation.value) {
-    result = result.filter(item => item.location === filterLocation.value)
+  if (filterLocation.value?.length) {
+    result = result.filter(item => filterLocation.value.includes(item.location))
   }
 
-  if (filterSeria.value) {
-    result = result.filter(item => item.seria === filterSeria.value)
+  if (filterSeria.value?.length) {
+    result = result.filter(item => filterSeria.value.includes(item.seria))
   }
 
-  if (filterMedia.value) {
-    result = result.filter(item => item.media === filterMedia.value)
+  if (filterMedia.value?.length) {
+    result = result.filter(item => filterMedia.value.includes(item.media))
   }
 
-  if (filterStatus.value) {
-    result = result.filter(item => item.status === filterStatus.value)
+  if (filterStatus.value?.length) {
+    result = result.filter(item => filterStatus.value.includes(item.status))
   }
 
   if (filterPriceFrom.value != null) {
@@ -606,14 +700,9 @@ const openEditPage = (record) => {
 
 // Клик по строке таблицы целиком — открывает боковую панель просмотра,
 // кроме кликов по чекбоксу выбора и кнопкам действий
-const customRow = (record) => {
-  return {
-    class: 'clickable-row',
-    onClick: (event) => {
-      if (event.target.closest('.ant-checkbox-wrapper') || event.target.closest('button') || event.target.closest('.ant-dropdown-trigger')) return
-      openPreview(record)
-    }
-  }
+const handleRowClick = (event, record) => {
+  if (event.target.closest('.ant-checkbox-wrapper') || event.target.closest('button') || event.target.closest('.ant-dropdown-trigger')) return
+  openPreview(record)
 }
 
 // Удаление записи через API
@@ -666,19 +755,74 @@ const handleFieldChange = async (record, field, value) => {
   }
 }
 
-// Выбранные строки
-const rowSelection = computed(() => ({
-  selectedRowKeys: selectedRowKeys.value,
-  // Без этого таблица сама снимает выбор со строк, пропавших из
-  // data-source при фильтрации, хотя работа должна оставаться
-  // выбранной, пока юзер сам не снимет галочку.
-  preserveSelectedRowKeys: true,
-  onChange: (selectedKeys) => {
-    selectedRowKeys.value = selectedKeys
-  },
-}))
+// Выбранные строки — выбор всегда хранится по id (а не по индексу/ссылке),
+// поэтому переживает фильтрацию/сортировку, пока пользователь сам не снимет
+// галочку (аналог preserveSelectedRowKeys у прежнего a-table).
+const allSelected = computed(() => sortedData.value.length > 0 && sortedData.value.every(r => selectedRowKeys.value.includes(r.id)))
+const someSelected = computed(() => !allSelected.value && sortedData.value.some(r => selectedRowKeys.value.includes(r.id)))
+
+function toggleSelectAll(checked) {
+  const idsInView = sortedData.value.map(r => r.id)
+  if (checked) {
+    selectedRowKeys.value = [...new Set([...selectedRowKeys.value, ...idsInView])]
+  } else {
+    selectedRowKeys.value = selectedRowKeys.value.filter(id => !idsInView.includes(id))
+  }
+}
 
 const { isMobile } = useIsMobile()
+
+// === Сортировка по клику на заголовок колонки (замена сортировки a-table) ===
+// 3 состояния по клику на одну и ту же колонку: ascend -> descend -> сброс.
+// Клик по другой колонке сразу выставляет ей ascend.
+const sortState = ref({ key: null, order: null })
+
+function toggleSort(key) {
+  if (sortState.value.key !== key) {
+    sortState.value = { key, order: 'ascend' }
+    return
+  }
+  if (sortState.value.order === 'ascend') {
+    sortState.value = { key, order: 'descend' }
+  } else if (sortState.value.order === 'descend') {
+    sortState.value = { key: null, order: null }
+  } else {
+    sortState.value = { key, order: 'ascend' }
+  }
+}
+
+const sortedData = computed(() => {
+  const { key, order } = sortState.value
+  if (!key || !order) return filteredData.value
+
+  const col = columns.value.find(c => c.key === key)
+  if (!col?.sorter) return filteredData.value
+
+  const sorted = [...filteredData.value].sort(col.sorter)
+  return order === 'descend' ? sorted.reverse() : sorted
+})
+
+// === Виртуализация строк таблицы (@tanstack/vue-virtual) ===
+// Ширины колонок в fr вместо % — так первая (фиксированная 40px) колонка
+// чекбокса не ломает раскладку остальных: они просто делят оставшееся
+// место пропорционально прежним процентным весам.
+const ROW_HEIGHT = 68
+const scrollContainerRef = ref(null)
+
+const gridTemplateColumns = computed(() => {
+  const fr = columns.value.map(c => `${parseFloat(c.width) || 1}fr`).join(' ')
+  return `40px ${fr}`
+})
+
+const rowVirtualizer = useVirtualizer(computed(() => ({
+  count: sortedData.value.length,
+  getScrollElement: () => scrollContainerRef.value,
+  estimateSize: () => ROW_HEIGHT,
+  overscan: 10,
+})))
+
+const virtualItems = computed(() => rowVirtualizer.value.getVirtualItems())
+const totalSize = computed(() => rowVirtualizer.value.getTotalSize())
 
 function toggleCardSelect(id, checked) {
   if (checked) {
@@ -753,6 +897,55 @@ onMounted(async () => {
   letter-spacing: 0.01em;
 }
 
+.refreshing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--accent-strong);
+  background: rgba(138, 109, 47, 0.1);
+  border-radius: 999px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.first-load-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 80px 20px;
+  text-align: center;
+}
+
+.first-load-spinner {
+  font-size: 36px;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.first-load-text {
+  margin: 0;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+
+.first-load-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
 .filters-panel {
   display: flex;
   justify-content: space-between;
@@ -774,12 +967,6 @@ onMounted(async () => {
   font-size: 13px;
   font-weight: 500;
   color: var(--accent);
-}
-
-.filters-right {
-  display: flex;
-  gap: 12px;
-  flex-shrink: 0;
 }
 
 /* === Селекты фильтров === */
@@ -844,33 +1031,103 @@ onMounted(async () => {
   color: #16151a;
 }
 
-/* === Таблица === */
-.custom-table :deep(.ant-table) {
-  background: transparent;
-  color: var(--text-body);
+/* === Таблица (собственная вёрстка на CSS Grid + виртуализация строк) === */
+.virtual-table-wrap {
+  background: var(--bg-elevated);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
 }
 
-.custom-table :deep(.ant-table-thead > tr > th) {
-  background: var(--bg-elevated) !important;
-  color: var(--accent) !important;
+.vt-header {
+  display: grid;
+  align-items: center;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.vt-th {
+  padding: 10px 8px;
   font-family: 'Cormorant Garamond', serif;
+  color: var(--accent);
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.03em;
-  border-bottom: 1px solid var(--border) !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
 }
 
-.custom-table :deep(.ant-table-thead > tr > th)::before {
-  display: none;
+.vt-th-select {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.custom-table :deep(.ant-table-tbody > tr > td) {
-  background: transparent;
-  color: var(--text-body);
-  border-bottom: 1px solid var(--border-soft) !important;
-  min-height: 68px !important;
-  padding: 4px 8px !important;
-  vertical-align: middle !important;
+.vt-th-sortable {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vt-sort-icons {
+  display: inline-flex;
+  flex-direction: column;
+  font-size: 9px;
+  line-height: 0.7;
+  color: var(--text-dim);
+}
+
+.vt-sort-icon-active {
+  color: var(--accent);
+}
+
+.vt-body {
+  height: 65vh;
+  min-height: 420px;
+  overflow-y: auto;
+}
+
+.vt-row {
+  display: grid;
+  align-items: center;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  border-bottom: 1px solid var(--border-soft);
+  cursor: pointer;
+}
+
+.vt-row:hover {
+  background: rgba(200, 183, 137, 0.06);
+}
+
+.vt-row-selected {
+  background: rgba(138, 109, 47, 0.1);
+}
+
+.vt-row-selected:hover {
+  background: rgba(138, 109, 47, 0.16);
+}
+
+.vt-td {
+  padding: 4px 8px;
+  overflow: hidden;
+}
+
+.vt-td-select {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vt-empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-faint);
 }
 
 /* Текст переносится максимум на 2 строки, дальше — многоточие */
@@ -881,14 +1138,6 @@ onMounted(async () => {
   overflow: hidden;
   word-break: break-word;
   line-height: 1.3;
-}
-
-.custom-table :deep(.ant-table-tbody > tr:hover > td) {
-  background: rgba(200, 183, 137, 0.06) !important;
-}
-
-.custom-table :deep(.clickable-row) {
-  cursor: pointer;
 }
 
 .imported-pill {
@@ -908,97 +1157,33 @@ onMounted(async () => {
   vertical-align: middle;
 }
 
-.custom-table :deep(.ant-table-placeholder .ant-table-cell) {
-  background: transparent;
-  color: var(--text-faint);
-}
-
-.custom-table :deep(.ant-empty-description) {
-  color: var(--text-faint);
-}
-
-.custom-table :deep(.ant-pagination-item) {
-  border-color: var(--border);
-  background: var(--bg-elevated);
-}
-
-.custom-table :deep(.ant-pagination-item a) {
-  color: var(--text-body);
-}
-
-.custom-table :deep(.ant-pagination-item-active) {
-  border-color: var(--accent) !important;
-  background: var(--bg-elevated);
-}
-
-.custom-table :deep(.ant-pagination-item-active a) {
-  color: var(--accent) !important;
-}
-
-.custom-table :deep(.ant-pagination-item:hover) {
-  border-color: var(--accent) !important;
-}
-
-.custom-table :deep(.ant-pagination-item:hover a) {
-  color: var(--accent) !important;
-}
-
-.custom-table :deep(.ant-pagination-prev .ant-pagination-item-link),
-.custom-table :deep(.ant-pagination-next .ant-pagination-item-link) {
-  color: var(--text-muted);
-  border-color: var(--border);
-  background: var(--bg-elevated);
-}
-
-.custom-table :deep(.ant-pagination-prev:hover .ant-pagination-item-link),
-.custom-table :deep(.ant-pagination-next:hover .ant-pagination-item-link) {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.custom-table :deep(.ant-checkbox-inner) {
+.virtual-table-wrap :deep(.ant-checkbox-inner) {
   background: var(--bg-elevated);
   border-color: var(--text-faint);
 }
 
-.custom-table :deep(.ant-checkbox-checked .ant-checkbox-inner) {
+.virtual-table-wrap :deep(.ant-checkbox-checked .ant-checkbox-inner) {
   background: var(--accent);
   border-color: var(--accent);
 }
 
-.custom-table :deep(.ant-checkbox-wrapper:hover .ant-checkbox-inner),
-.custom-table :deep(.ant-checkbox:hover .ant-checkbox-inner),
-.custom-table :deep(.ant-checkbox-input:focus + .ant-checkbox-inner) {
+.virtual-table-wrap :deep(.ant-checkbox-wrapper:hover .ant-checkbox-inner),
+.virtual-table-wrap :deep(.ant-checkbox:hover .ant-checkbox-inner),
+.virtual-table-wrap :deep(.ant-checkbox-input:focus + .ant-checkbox-inner) {
   border-color: var(--accent);
 }
 
-.custom-table :deep(.ant-checkbox-checked::after) {
+.virtual-table-wrap :deep(.ant-checkbox-checked::after) {
   border-color: var(--accent);
 }
 
-.custom-table :deep(.ant-checkbox-indeterminate .ant-checkbox-inner) {
+.virtual-table-wrap :deep(.ant-checkbox-indeterminate .ant-checkbox-inner) {
   background: var(--bg-elevated);
   border-color: var(--accent);
 }
 
-.custom-table :deep(.ant-checkbox-indeterminate .ant-checkbox-inner::after) {
+.virtual-table-wrap :deep(.ant-checkbox-indeterminate .ant-checkbox-inner::after) {
   background-color: var(--accent);
-}
-
-.custom-table :deep(.ant-table-tbody > tr.ant-table-row-selected > td) {
-  background: rgba(138, 109, 47, 0.1);
-}
-
-.custom-table :deep(.ant-table-tbody > tr.ant-table-row-selected:hover > td) {
-  background: rgba(138, 109, 47, 0.16);
-}
-
-.custom-table :deep(.ant-table-column-sorter) {
-  color: var(--text-faint);
-}
-
-.custom-table :deep(.ant-spin-dot-item) {
-  background: var(--accent);
 }
 
 .desc-col {
@@ -1264,6 +1449,21 @@ onMounted(async () => {
   border-bottom: 1px solid var(--border);
 }
 
+.preview-authors {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.preview-authors .preview-meta-line {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
 .preview-edit-btn {
   background: var(--accent);
   border-color: var(--accent);
@@ -1380,8 +1580,22 @@ onMounted(async () => {
 
 /* === Мобильная адаптация === */
 @media (max-width: 768px) {
+  .header-content {
+    flex-wrap: wrap;
+  }
+
   .header-content h3 {
     font-size: 22px;
+  }
+
+  .header-actions {
+    margin-left: 0;
+    flex-basis: 100%;
+    flex-direction: column;
+  }
+
+  .header-actions .buttons {
+    width: 100%;
   }
 
   .filters-panel {
@@ -1397,14 +1611,6 @@ onMounted(async () => {
   .filters-left :deep(.ant-input-number),
   .name-search {
     width: 100% !important;
-  }
-
-  .filters-right {
-    flex-direction: column;
-  }
-
-  .filters-right .buttons {
-    width: 100%;
   }
 }
 </style>

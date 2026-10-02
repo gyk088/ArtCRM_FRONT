@@ -136,6 +136,87 @@
             </div>
           </template>
 
+          <template v-else-if="mode === 'register-invite'">
+            <!-- РЕГИСТРАЦИЯ ПО ПРИГЛАСИТЕЛЬНОЙ ССЫЛКЕ ГАЛЕРЕИ -->
+            <div v-if="invitePreview" class="invite-banner">
+              Вы регистрируетесь как <strong>{{ invitePreview.role === 'manager' ? 'Менеджер' : 'Художник' }}</strong>
+              галереи «{{ invitePreview.galleryName }}»
+            </div>
+            <div v-else-if="inviteChecked" class="invite-banner invite-banner--error">
+              Эта пригласительная ссылка недействительна или была перевыпущена — уточните новую ссылку у галереи.
+            </div>
+
+            <div class="field-row">
+              <a-form-item label="Имя" name="name" class="field-half">
+                <a-input v-model:value="form.name" placeholder="Иван" class="auth-input">
+                  <template #prefix><UserOutlined /></template>
+                </a-input>
+              </a-form-item>
+
+              <a-form-item label="Фамилия" name="surname" class="field-half">
+                <a-input v-model:value="form.surname" placeholder="Иванов" class="auth-input" />
+              </a-form-item>
+            </div>
+
+            <a-form-item
+              label="Email"
+              name="regEmail"
+              :rules="[
+                { required: true, message: 'Введите email' },
+                { type: 'email', message: 'Некорректный email' },
+              ]"
+            >
+              <a-input v-model:value="form.regEmail" placeholder="you@example.com" class="auth-input">
+                <template #prefix><MailOutlined /></template>
+              </a-input>
+            </a-form-item>
+
+            <a-form-item
+              label="Пароль"
+              name="regPassword"
+              :rules="[
+                { required: true, message: 'Введите пароль' },
+                { min: 6, message: 'Минимум 6 символов' },
+              ]"
+            >
+              <a-input-password
+                v-model:value="form.regPassword"
+                placeholder="Минимум 6 символов"
+                class="auth-input"
+              >
+                <template #prefix><LockOutlined /></template>
+              </a-input-password>
+            </a-form-item>
+
+            <a-form-item
+              label="Повторите пароль"
+              name="regPasswordConfirm"
+              :rules="[
+                { required: true, message: 'Повторите пароль' },
+                { validator: validatePasswordConfirm },
+              ]"
+            >
+              <a-input-password
+                v-model:value="form.regPasswordConfirm"
+                placeholder="Ещё раз пароль"
+                class="auth-input"
+              >
+                <template #prefix><LockOutlined /></template>
+              </a-input-password>
+            </a-form-item>
+
+            <a-button
+              type="primary" html-type="submit" block :loading="loading" class="auth-submit-btn"
+              :disabled="!invitePreview"
+            >
+              Зарегистрироваться
+            </a-button>
+
+            <div class="auth-footer">
+              <a @click="setMode('login')">Уже есть аккаунт? Войти</a>
+            </div>
+          </template>
+
           <template v-else-if="mode === 'forgot'">
             <!-- ВОССТАНОВЛЕНИЕ ПАРОЛЯ -->
             <a-form-item
@@ -211,7 +292,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from "vue";
+import { reactive, ref, onMounted } from "vue";
 import { message } from "ant-design-vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuth } from '@/stores/auth'
@@ -219,16 +300,29 @@ import { MailOutlined, LockOutlined, UserOutlined, FormatPainterOutlined } from 
 
 const route = useRoute();
 const router = useRouter();
-// 'login' | 'register' | 'forgot' | 'reset'
-// Если в ссылке есть ?token=... (переход из письма) — сразу открываем форму нового пароля
+// 'login' | 'register' | 'register-invite' | 'forgot' | 'reset'
+// Если в ссылке есть ?token=... (переход из письма) — сразу открываем форму
+// нового пароля; если ?invite=... (пригласительная ссылка галереи) —
+// форму регистрации по приглашению.
 const resetToken = typeof route.query.token === "string" ? route.query.token : null;
-const mode = ref(resetToken ? "reset" : "login");
+const inviteToken = typeof route.query.invite === "string" ? route.query.invite : null;
+const mode = ref(resetToken ? "reset" : inviteToken ? "register-invite" : "login");
 const loading = ref(false);
 const authStore = useAuth();
+
+const invitePreview = ref(null);
+const inviteChecked = ref(false);
+
+onMounted(async () => {
+  if (!inviteToken) return;
+  invitePreview.value = await authStore.getInvitePreview(inviteToken);
+  inviteChecked.value = true;
+});
 
 const titleByMode = {
   login: "Вход в систему",
   register: "Создать аккаунт",
+  "register-invite": "Регистрация по приглашению",
   forgot: "Восстановление пароля",
   reset: "Новый пароль",
 };
@@ -236,6 +330,7 @@ const titleByMode = {
 const subtitleByMode = {
   login: "Рады видеть вас снова",
   register: "Пара минут — и рабочее пространство готово",
+  "register-invite": "Вас пригласили присоединиться к галерее",
   forgot: "Укажите email — пришлём инструкцию для сброса пароля",
   reset: "Придумайте новый пароль для входа",
 };
@@ -284,6 +379,17 @@ const onSubmit = async () => {
     }
   } else if (mode.value === "register") {
     const success = await authStore.register({
+      name: form.name,
+      surname: form.surname,
+      email: form.regEmail,
+      password: form.regPassword,
+    });
+    if (success) {
+      message.success("Аккаунт создан!");
+      router.push("/home");
+    }
+  } else if (mode.value === "register-invite") {
+    const success = await authStore.registerViaInvite(inviteToken, {
       name: form.name,
       surname: form.surname,
       email: form.regEmail,
@@ -494,6 +600,27 @@ const onSubmit = async () => {
 .auth-submit-btn:hover {
   background: var(--accent-strong) !important;
   border-color: var(--accent-strong) !important;
+}
+
+.invite-banner {
+  margin-bottom: 20px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: var(--accent-tint);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.invite-banner strong {
+  color: var(--text-title);
+}
+
+.invite-banner--error {
+  color: #8a2f2f;
+  background: rgba(180, 60, 60, 0.08);
+  border-color: rgba(180, 60, 60, 0.25);
 }
 
 .auth-footer {

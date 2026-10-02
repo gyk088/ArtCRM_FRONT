@@ -5,6 +5,28 @@ import apiClient from '@/services/api.js'
 import { notifyServerError, notifyServerSuccess } from '@/services/notify.js'
 import { useArtWork } from '@/stores/artWork.js'
 import { useCollection } from '@/stores/collection.js'
+import { useExhibition } from '@/stores/exhibition.js'
+
+export function formatStorageSize(bytes) {
+  const value = Number(bytes) || 0
+  if (value < 1024) return `${value} Б`
+  const units = ['КБ', 'МБ', 'ГБ', 'ТБ']
+  let size = value / 1024
+  let unitIndex = 0
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex++
+  }
+  return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`
+}
+
+export function showStorageLimitModal(used, limit) {
+  Modal.warning({
+    title: 'Недостаточно места на диске',
+    content: `Использовано ${formatStorageSize(used)} из ${formatStorageSize(limit)}. Освободите место (удалите ненужные файлы) или обратитесь к администратору, чтобы увеличить лимит.`,
+    okText: 'Понятно'
+  })
+}
 
 export const useFile = defineStore('file', {
   state: () => {
@@ -12,6 +34,7 @@ export const useFile = defineStore('file', {
       files: [],
       currentFile: null,
       fileStats: null,
+      storageInfo: null, // { used, limit, remaining }
       loading: false,
       pagination: {
         page: 1,
@@ -57,9 +80,16 @@ export const useFile = defineStore('file', {
         this.files.unshift(uploaded) // Добавляем новый файл в начало списка
         notifyServerSuccess('Файл успешно загружен')
         console.log('Upload Response', uploaded)
+        this.getStorageInfo()
       } catch (e) {
         console.error('Error fetching data:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load user data')
+
+        if (e?.response?.data?.code === 'STORAGE_LIMIT_EXCEEDED') {
+          showStorageLimitModal(e.response.data.used, e.response.data.limit)
+        } else {
+          notifyServerError(e?.response?.data?.message || 'Failed to load user data')
+        }
+
         this.error = e?.response?.data?.message || 'Failed to load user data'
         success = false
       }
@@ -67,20 +97,70 @@ export const useFile = defineStore('file', {
     },
 
     /**
-     * Проверить, используется ли файл в работах или ссылках (коллекциях),
-     * чтобы предупредить пользователя перед безвозвратным удалением.
-     * Работа ссылается на файл через avatar_id/avatar.id и images[].id,
-     * ссылка (коллекция) — через avatar.id.
+     * POST /api/v1/file/:id/copy - скопировать чужой файл (по id) в свои
+     * файлы. Нужно при импорте ссылки/выставки: работы копируются целиком,
+     * включая обложку и доп. изображения, а не просто ссылаются на чужой
+     * файл (тот может позже удалиться у исходного владельца).
+     *
+     * Бросает ошибку с полем quotaExceeded=true, если не хватает места —
+     * вызывающий код (импорт) должен остановиться и показать пользователю
+     * предупреждение, а не тихо продолжать без картинок.
+     */
+    async copyFile(fileId) {
+      try {
+        const resp = await apiClient.post(`/api/v1/file/${fileId}/copy`)
+        const copied = resp.data
+        this.files.unshift(copied)
+        return copied
+      } catch (e) {
+        if (e?.response?.data?.code === 'STORAGE_LIMIT_EXCEEDED') {
+          const err = new Error(e.response.data.error)
+          err.quotaExceeded = true
+          err.used = e.response.data.used
+          err.limit = e.response.data.limit
+          throw err
+        }
+        console.error('Error copying file:', fileId, e)
+        throw e
+      }
+    },
+
+    /**
+     * GET /api/v1/file/storage - использовано/доступно места на диске
+     */
+    async getStorageInfo() {
+      try {
+        const resp = await apiClient.get('/api/v1/file/storage')
+        this.storageInfo = resp.data
+      } catch (e) {
+        console.error('Error fetching storage info:', e)
+      }
+      return this.storageInfo
+    },
+
+    /**
+     * Проверить, используется ли файл в работах, ссылках или выставках —
+     * чтобы предупредить пользователя, откуда файл пропадёт при удалении
+     * (само удаление теперь разрешено всегда, бэкенд отвязывает файл везде
+     * сам — см. FileService.deleteFile). Работа ссылается на файл через
+     * avatar_id/avatar.id и images[].id, ссылка (коллекция) и выставка —
+     * через avatar.id. Фото в галерее выставки в этой проверке не
+     * учитываются (список выставок не тянет их без отдельного запроса на
+     * каждую) — при удалении они всё равно корректно отвяжутся на бэкенде.
      */
     async checkFileUsage(fileId) {
       const artWorkStore = useArtWork()
       const collectionStore = useCollection()
+      const exhibitionStore = useExhibition()
 
       if (!artWorkStore.listArtWorks.length) {
         await artWorkStore.getListArtWorks()
       }
       if (!collectionStore.listCollections.length) {
         await collectionStore.getAllCollections()
+      }
+      if (!exhibitionStore.listExhibitions.length) {
+        await exhibitionStore.getAllExhibitions()
       }
 
       const works = artWorkStore.listArtWorks.filter(w =>
@@ -93,33 +173,31 @@ export const useFile = defineStore('file', {
         c.avatar?.id === fileId
       )
 
-      return { works, collections }
+      const exhibitions = exhibitionStore.listExhibitions.filter(e =>
+        e.avatar?.id === fileId
+      )
+
+      return { works, collections, exhibitions }
     },
 
+    // Удаление файла всегда разрешено, даже если он где-то используется —
+    // бэкенд сам отвязывает файл от всех работ/ссылок/выставок перед
+    // удалением (см. FileService.deleteFile). Возвращает { unlinkedFrom }
+    // при успехе или null при ошибке.
     async deleteFile(fileId) {
-      let success = true
       try {
-        await apiClient.delete(`/api/v1/file/${fileId}`)
+        const resp = await apiClient.delete(`/api/v1/file/${fileId}`)
         this.files = this.files.filter(f => f.id !== fileId) // Удаляем файл из списка
         notifyServerSuccess('Файл успешно удален')
+        this.getStorageInfo()
+        return resp.data
       } catch (e) {
         console.error('Error deleting file:', e)
-        const rawMessage = e?.response?.data?.message || ''
-
-        if (rawMessage.includes('foreign key constraint')) {
-          Modal.warning({
-            title: 'Нельзя удалить файл',
-            content: 'Файл используется в работе или ссылке и не может быть удалён.',
-            okText: 'Понятно'
-          })
-        } else {
-          notifyServerError(rawMessage || 'Failed to delete file')
-        }
-
+        const rawMessage = e?.response?.data?.error || e?.response?.data?.message || ''
+        notifyServerError(rawMessage || 'Failed to delete file')
         this.error = rawMessage || 'Failed to delete file'
-        success = false
+        return null
       }
-      return success
     },
 
     // ==================== ПАПКИ ====================
@@ -223,6 +301,23 @@ export const useFile = defineStore('file', {
         console.error('Error renaming folder:', e)
         notifyServerError(e?.response?.data?.error || 'Failed to rename folder')
         this.error = e?.response?.data?.error || 'Failed to rename folder'
+        throw e
+      }
+    },
+
+    /**
+     * Установить (fileId) или снять (null) обложку папки — картинка вместо
+     * стандартной иконки папки в файловом менеджере.
+     */
+    async setFolderCover(folderId, fileId) {
+      try {
+        const resp = await apiClient.put(`/api/v1/file/folder/${folderId}`, { avatar_id: fileId })
+        this.folders = this.folders.map(f => f.id === folderId ? resp.data : f)
+        return resp.data
+      } catch (e) {
+        console.error('Error setting folder cover:', e)
+        notifyServerError(e?.response?.data?.error || 'Failed to set folder cover')
+        this.error = e?.response?.data?.error || 'Failed to set folder cover'
         throw e
       }
     },

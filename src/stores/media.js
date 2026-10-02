@@ -38,8 +38,8 @@ export const useMedia = defineStore('media', {
         console.log('Media loaded:', this.listMedia)
       } catch (e) {
         console.error('Error fetching media:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load media')
-        this.error = e?.response?.data?.message || 'Failed to load media'
+        notifyServerError(e?.response?.data?.error || 'Failed to load media')
+        this.error = e?.response?.data?.error || 'Failed to load media'
         success = false
       } finally {
         this.loading = false
@@ -62,8 +62,8 @@ export const useMedia = defineStore('media', {
         console.log('Media by ID:', result)
       } catch (e) {
         console.error('Error fetching media by id:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load media details')
-        this.error = e?.response?.data?.message || 'Failed to load media details'
+        notifyServerError(e?.response?.data?.error || 'Failed to load media details')
+        this.error = e?.response?.data?.error || 'Failed to load media details'
         result = null
       } finally {
         this.loading = false
@@ -85,8 +85,8 @@ export const useMedia = defineStore('media', {
         console.log('Media by user:', result)
       } catch (e) {
         console.error('Error fetching media by user:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load user media')
-        this.error = e?.response?.data?.message || 'Failed to load user media'
+        notifyServerError(e?.response?.data?.error || 'Failed to load user media')
+        this.error = e?.response?.data?.error || 'Failed to load user media'
         result = []
       } finally {
         this.loading = false
@@ -115,8 +115,8 @@ export const useMedia = defineStore('media', {
         }
       } catch (e) {
         console.error('Error creating media:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to create media')
-        this.error = e?.response?.data?.message || 'Failed to create media'
+        notifyServerError(e?.response?.data?.error || 'Failed to create media')
+        this.error = e?.response?.data?.error || 'Failed to create media'
         result = null
       } finally {
         this.loading = false
@@ -151,8 +151,8 @@ export const useMedia = defineStore('media', {
         }
       } catch (e) {
         console.error('Error updating media:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to update media')
-        this.error = e?.response?.data?.message || 'Failed to update media'
+        notifyServerError(e?.response?.data?.error || 'Failed to update media')
+        this.error = e?.response?.data?.error || 'Failed to update media'
         result = null
       } finally {
         this.loading = false
@@ -184,8 +184,8 @@ export const useMedia = defineStore('media', {
         console.log('Media deleted:', id)
       } catch (e) {
         console.error('Error deleting media:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to delete media')
-        this.error = e?.response?.data?.message || 'Failed to delete media'
+        notifyServerError(e?.response?.data?.error || 'Failed to delete media')
+        this.error = e?.response?.data?.error || 'Failed to delete media'
         success = false
       } finally {
         this.loading = false

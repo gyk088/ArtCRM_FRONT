@@ -83,6 +83,98 @@
       </a-table>
     </a-modal>
 
+    <div class="folder-toolbar">
+      <div class="folder-path">
+        <a-button v-if="currentFolder" type="text" size="small" class="folder-back-btn" @click="openFolder(currentFolder.parent_id || null)">
+          <ArrowLeftOutlined />
+        </a-button>
+
+        <span
+          class="folder-crumb"
+          :class="{ 'drag-over': folderDragOverTarget === 'root' }"
+          @click="openFolder(null)"
+          @dragover.prevent="handleDragOverFolder('root')"
+          @dragleave="handleDragLeaveFolder('root')"
+          @drop="handleDropOnFolder('root')"
+        >Все ссылки</span>
+
+        <template v-for="(crumb, idx) in folderPath" :key="crumb.id">
+          <span class="folder-crumb-sep">/</span>
+          <span
+            v-if="idx < folderPath.length - 1"
+            class="folder-crumb"
+            :class="{ 'drag-over': folderDragOverTarget === crumb.id }"
+            @click="openFolder(crumb.id)"
+            @dragover.prevent="handleDragOverFolder(crumb.id)"
+            @dragleave="handleDragLeaveFolder(crumb.id)"
+            @drop="handleDropOnFolder(crumb.id)"
+          >{{ crumb.name }}</span>
+          <span v-else class="folder-crumb-current">{{ crumb.name }}</span>
+        </template>
+      </div>
+
+      <a-button type="dashed" class="new-folder-btn" @click="showNewFolderForm = true">
+        <FolderAddOutlined /> Новая папка
+      </a-button>
+    </div>
+
+    <div v-if="showNewFolderForm" class="new-folder-form">
+      <FolderAddOutlined class="new-folder-icon" />
+      <a-input
+        id="collectionNewFolderName"
+        name="collectionNewFolderName"
+        v-model:value="newFolderName"
+        placeholder="Название папки"
+        @keyup.enter="handleCreateFolder"
+      />
+      <a-button type="primary" @click="handleCreateFolder">Создать</a-button>
+      <a-button @click="cancelNewFolder">Отмена</a-button>
+    </div>
+
+    <div v-if="childFolders.length" class="folders-grid">
+      <div
+        v-for="folder in childFolders"
+        :key="folder.id"
+        class="folder-card"
+        :class="{ 'drag-over': folderDragOverTarget === folder.id, dragging: draggingFolderId === folder.id }"
+        draggable="true"
+        @click="openFolder(folder.id)"
+        @dragstart="handleFolderDragStart($event, folder)"
+        @dragend="handleFolderDragEnd"
+        @dragover.prevent="folderDragOverTarget = folder.id"
+        @dragleave="handleDragLeaveFolder(folder.id)"
+        @drop="handleDropOnFolder(folder.id)"
+      >
+        <div class="folder-card-actions">
+          <a-tooltip title="Переименовать">
+            <button class="folder-action-btn" @click.stop="startRenameFolder(folder)">
+              <EditOutlined />
+            </button>
+          </a-tooltip>
+          <a-tooltip title="Удалить папку">
+            <button class="folder-action-btn danger" @click.stop="handleDeleteFolder(folder)">
+              <DeleteOutlined />
+            </button>
+          </a-tooltip>
+        </div>
+
+        <FolderFilled class="folder-icon" />
+
+        <a-input
+          v-if="renamingFolderId === folder.id"
+          ref="folderRenameInputRef"
+          v-model:value="renameFolderValue"
+          size="small"
+          class="folder-rename-input"
+          @click.stop
+          @keyup.enter="confirmRenameFolder(folder)"
+          @keyup.esc="cancelRenameFolder"
+          @blur="confirmRenameFolder(folder)"
+        />
+        <div v-else class="folder-name" :title="folder.name">{{ folder.name }}</div>
+      </div>
+    </div>
+
     <div class="filters-panel">
       <a-input
         id="collectionSearchQuery"
@@ -111,8 +203,14 @@
 
     <div v-if="filteredCollectionList.length" class="collection-grid">
       <a-card v-for="collection in filteredCollectionList" :key="collection.id" class="collection-card"
-        :class="{ 'collection-card--imported': collection.imported }"
-        hoverable @click="openEditPage(collection)">
+        :class="{ 'collection-card--imported': collection.imported, dragging: draggingCollectionId === collection.id, 'reorder-over': reorderOverCollectionId === collection.id }"
+        hoverable draggable="true"
+        @click="openEditPage(collection)"
+        @dragstart="handleCollectionDragStart($event, collection)"
+        @dragend="handleCollectionDragEnd"
+        @dragover.prevent.stop="handleCollectionReorderDragOver(collection.id)"
+        @dragleave="handleCollectionReorderDragLeave(collection.id)"
+        @drop.stop="handleCollectionReorderDrop(collection.id)">
         <template #cover>
           <div class="card-cover">
             <img v-if="collection.avatar?.url" :src="collection.avatar.url" :alt="collection.name" class="cover-img" />
@@ -126,6 +224,11 @@
           </div>
         </template>
 
+        <div v-if="!isOwnCollection(collection)" class="shared-author-badge">
+          <UserOutlined />
+          {{ formatCreatorName(collection.createdBy) }}
+        </div>
+
         <h4 class="card-title">{{ collection.name || 'Без названия' }}</h4>
 
         <p class="collection-text" :class="{ 'collection-text--empty': !collection.description }">
@@ -133,8 +236,25 @@
         </p>
 
         <div class="card-meta">
-          <PictureOutlined />
-          {{ (collection.works || []).length }} {{ pluralizeWorks((collection.works || []).length) }}
+          <span class="meta-works">
+            <PictureOutlined />
+            {{ (collection.works || []).length }} {{ pluralizeWorks((collection.works || []).length) }}
+          </span>
+
+          <span class="meta-views">
+            <a-tooltip title="Сколько раз всего открывали публичную страницу этой ссылки — каждое открытие считается, даже повторное от одного человека">
+              <span class="meta-view-stat" @click.stop>
+                <EyeOutlined />
+                {{ collection.viewStats?.total || 0 }}
+              </span>
+            </a-tooltip>
+            <a-tooltip title="Сколько разных людей открывали публичную страницу этой ссылки — повторные открытия одним и тем же человеком считаются один раз">
+              <span class="meta-view-stat" @click.stop>
+                <TeamOutlined />
+                {{ collection.viewStats?.unique || 0 }}
+              </span>
+            </a-tooltip>
+          </span>
         </div>
 
         <div class="collection-actions">
@@ -144,7 +264,7 @@
             </template>
             Копировать ссылку
           </a-button>
-          <a-popconfirm title="Удалить ссылку?" ok-text="Да" cancel-text="Нет"
+          <a-popconfirm v-if="canDeleteCollection(collection)" title="Удалить ссылку?" ok-text="Да" cancel-text="Нет"
             @confirm.stop="deleteСollection(collection.id)">
             <a-tooltip title="Удалить">
               <a-button type="text" danger class="delete-btn" @click.stop>
@@ -158,11 +278,23 @@
       </a-card>
     </div>
 
-    <div v-else-if="collectionList.length" class="empty-state">
+    <div v-else-if="collectionsInCurrentFolder.length" class="empty-state">
       <FolderOpenOutlined class="empty-icon" />
       <p class="empty-title">Ничего не найдено</p>
       <p class="empty-hint">Попробуйте изменить поиск или фильтр по художнику</p>
       <a-button class="import-toggle-btn" @click="filterArtist = null; searchQuery = ''">Сбросить фильтр</a-button>
+    </div>
+
+    <div v-else-if="currentFolder" class="empty-state">
+      <FolderOpenOutlined class="empty-icon" />
+      <p class="empty-title">В папке «{{ currentFolder.name }}» пока нет ссылок</p>
+      <p class="empty-hint">Перетащите сюда ссылку из другой папки или создайте новую</p>
+      <a-button type="primary" class="create-btn" @click="openEditPage">
+        <template #icon>
+          <PlusOutlined />
+        </template>
+        Создать ссылку
+      </a-button>
     </div>
 
     <div v-else class="empty-state">
@@ -180,10 +312,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, nextTick, h } from 'vue';
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
-import { ImportOutlined, CopyOutlined, DeleteOutlined, PlusOutlined, FolderOpenOutlined, PictureOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
+import { ImportOutlined, CopyOutlined, DeleteOutlined, PlusOutlined, FolderOpenOutlined, FolderFilled, FolderAddOutlined, ArrowLeftOutlined, EditOutlined, ExclamationCircleOutlined, PictureOutlined, SearchOutlined, EyeOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons-vue'
 import { htmlToPlainText } from '@/utils/richText.js'
 import { useArtWork } from '@/stores/artWork.js'
 import { useArtist } from '@/stores/artist.js'
@@ -192,6 +324,7 @@ import { useMedia } from '@/stores/media.js'
 import { useLocations } from '@/stores/locations.js'
 import { useStatuses } from '@/stores/statuses.js'
 import { useCollection } from '@/stores/collection.js'
+import { useFile, showStorageLimitModal } from '@/stores/file.js'
 import { getUser } from '@/services/auth.js'
 import { ROLES } from '@/services/const'
 import { useIsMobile } from '@/composables/useIsMobile.js'
@@ -226,6 +359,18 @@ const importRowSelection = computed(() => ({
 const isArtistRole = computed(() => getUser()?.role === ROLES.ARTIST)
 const { isMobile } = useIsMobile()
 
+// Ссылки коллег по галерее (Gallery видит ссылки всех своих менеджеров, и
+// наоборот) — показываем бейдж с автором и прячем удаление у тех, кому оно
+// не положено (сам автор или сама галерея, см. AuthorizationService.
+// canDeleteWorkOwner на бэкенде — здесь только UX-подсказка, реальная
+// проверка всё равно на сервере).
+const isOwnCollection = (collection) => collection.user_id === getUser()?.id
+const canDeleteCollection = (collection) => isOwnCollection(collection) || getUser()?.role === ROLES.GALLERY
+function formatCreatorName(createdBy) {
+  if (!createdBy) return 'Коллега'
+  return [createdBy.name, createdBy.surname].filter(Boolean).join(' ') || 'Коллега'
+}
+
 const artWorkStore = useArtWork()
 const artistStore = useArtist()
 const seriaStore = useSerias()
@@ -233,6 +378,7 @@ const mediaStore = useMedia()
 const locationStore = useLocations()
 const statusStore = useStatuses()
 const collectionStore = useCollection()
+const fileStore = useFile()
 const filterArtist = ref(null)
 const searchQuery = ref('')
 
@@ -242,6 +388,7 @@ onMounted(async () => {
   try {
     await Promise.all([
       collectionStore.getAllCollections(),
+      collectionStore.getFolders(),
       artWorkStore.getListArtWorks(),
       artistStore.getListArtists(),
       seriaStore.getListSerias(),
@@ -254,6 +401,210 @@ onMounted(async () => {
   }
 });
 
+// ==================== ПАПКИ ====================
+const folders = computed(() => collectionStore.folders)
+const currentFolder = computed(() =>
+  folders.value.find(f => f.id === collectionStore.currentFolderId) || null
+)
+
+// Дочерние папки текущего уровня (null — корень)
+const childFolders = computed(() =>
+  folders.value.filter(f => (f.parent_id || null) === collectionStore.currentFolderId)
+)
+
+// Цепочка папок от корня до текущей — для хлебных крошек
+const folderPath = computed(() => {
+  const path = []
+  let node = currentFolder.value
+  while (node) {
+    path.unshift(node)
+    node = node.parent_id ? folders.value.find(f => f.id === node.parent_id) : null
+  }
+  return path
+})
+
+const openFolder = (folderId) => {
+  collectionStore.setCurrentFolder(folderId)
+}
+
+const showNewFolderForm = ref(false)
+const newFolderName = ref('')
+
+const handleCreateFolder = async () => {
+  const name = newFolderName.value.trim()
+  if (!name) {
+    message.warning('Введите название папки')
+    return
+  }
+
+  const folder = await collectionStore.createFolder(name, collectionStore.currentFolderId)
+  if (!folder) return
+
+  newFolderName.value = ''
+  showNewFolderForm.value = false
+  collectionStore.setCurrentFolder(folder.id)
+}
+
+const cancelNewFolder = () => {
+  newFolderName.value = ''
+  showNewFolderForm.value = false
+}
+
+const handleDeleteFolder = (folder) => {
+  Modal.confirm({
+    title: 'Удалить папку?',
+    icon: () => h(ExclamationCircleOutlined),
+    content: `Папка «${folder.name}» и все вложенные папки будут удалены. Ссылки внутри останутся, но окажутся вне папок.`,
+    okText: 'Удалить',
+    okType: 'danger',
+    cancelText: 'Отмена',
+    onOk: () => collectionStore.deleteFolder(folder.id)
+  })
+}
+
+// ✏️ Переименование папки
+const renamingFolderId = ref(null)
+const renameFolderValue = ref('')
+const folderRenameInputRef = ref(null)
+
+const startRenameFolder = (folder) => {
+  renamingFolderId.value = folder.id
+  renameFolderValue.value = folder.name
+  nextTick(() => folderRenameInputRef.value?.[0]?.focus?.())
+}
+
+const cancelRenameFolder = () => {
+  renamingFolderId.value = null
+  renameFolderValue.value = ''
+}
+
+const confirmRenameFolder = async (folder) => {
+  if (renamingFolderId.value !== folder.id) return
+
+  const name = renameFolderValue.value.trim()
+  if (!name || name === folder.name) {
+    cancelRenameFolder()
+    return
+  }
+
+  try {
+    await collectionStore.renameFolder(folder.id, name)
+    message.success('Папка переименована')
+  } catch {
+    // ошибка уже показана через notifyServerError в сторе
+  } finally {
+    cancelRenameFolder()
+  }
+}
+
+// 🖱 Перетаскивание ссылок в папки + пересортировка папок/ссылок между собой
+const draggingCollectionId = ref(null)
+const draggingFolderId = ref(null)
+const folderDragOverTarget = ref(null) // id папки или "root" — подсветка папки-цели
+const reorderOverCollectionId = ref(null)
+
+const handleCollectionDragStart = (event, collection) => {
+  draggingCollectionId.value = collection.id
+  draggingFolderId.value = null
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', collection.id)
+}
+
+const handleCollectionDragEnd = () => {
+  draggingCollectionId.value = null
+  folderDragOverTarget.value = null
+  reorderOverCollectionId.value = null
+}
+
+const handleFolderDragStart = (event, folder) => {
+  draggingFolderId.value = folder.id
+  draggingCollectionId.value = null
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', folder.id)
+}
+
+const handleFolderDragEnd = () => {
+  draggingFolderId.value = null
+  folderDragOverTarget.value = null
+}
+
+const handleDragOverFolder = (target) => {
+  folderDragOverTarget.value = target
+}
+
+const handleDragLeaveFolder = (target) => {
+  if (folderDragOverTarget.value === target) {
+    folderDragOverTarget.value = null
+  }
+}
+
+// Перетаскивание одной ссылки на другую — меняет их местами в общем
+// порядке (в пределах текущей папки/поиска, как они сейчас показаны).
+const handleCollectionReorderDragOver = (targetId) => {
+  if (!draggingCollectionId.value || draggingCollectionId.value === targetId) return
+  reorderOverCollectionId.value = targetId
+}
+
+const handleCollectionReorderDragLeave = (targetId) => {
+  if (reorderOverCollectionId.value === targetId) {
+    reorderOverCollectionId.value = null
+  }
+}
+
+const handleCollectionReorderDrop = async (targetId) => {
+  const sourceId = draggingCollectionId.value
+  reorderOverCollectionId.value = null
+  draggingCollectionId.value = null
+  folderDragOverTarget.value = null
+
+  if (!sourceId || sourceId === targetId) return
+
+  const ids = filteredCollectionList.value.map(c => c.id)
+  const from = ids.indexOf(sourceId)
+  const to = ids.indexOf(targetId)
+  if (from === -1 || to === -1) return
+
+  ids.splice(from, 1)
+  ids.splice(to, 0, sourceId)
+
+  await collectionStore.reorderCollections(ids)
+}
+
+// Бросили ссылку или папку на папку/хлебную крошку/«Все ссылки»
+const handleDropOnFolder = async (target) => {
+  const collectionId = draggingCollectionId.value
+  const folderId = draggingFolderId.value
+  draggingCollectionId.value = null
+  draggingFolderId.value = null
+  folderDragOverTarget.value = null
+
+  // Перетащили папку — переставляем местами среди папок одного уровня
+  // (вложение через drag&drop не поддерживаем — папки создаются вложенными
+  // явно, кнопкой «Новая папка» уже находясь внутри нужной папки).
+  if (folderId) {
+    if (folderId === target || target === 'root') return
+
+    const ids = childFolders.value.map(f => f.id)
+    const from = ids.indexOf(folderId)
+    const to = ids.indexOf(target)
+    if (from === -1 || to === -1) return
+
+    ids.splice(from, 1)
+    ids.splice(to, 0, folderId)
+    await collectionStore.reorderFolders(ids)
+    return
+  }
+
+  if (!collectionId) return
+
+  try {
+    await collectionStore.moveCollectionToFolder(collectionId, target === 'root' ? null : target)
+    message.success(target === 'root' ? 'Ссылка перемещена в «Все ссылки»' : 'Ссылка перемещена в папку')
+  } catch {
+    // ошибка уже показана через notifyServerError в сторе
+  }
+}
+
 // Опции фильтра — художники
 const artistOptions = computed(() => {
   return artistStore.listArtists.map(artist => ({
@@ -265,8 +616,14 @@ const artistOptions = computed(() => {
 // Ссылки, отфильтрованные по названию и художнику: у коллекции нет своего
 // поля «художник» — она группирует работы, поэтому смотрим, есть ли среди
 // её работ хотя бы одна принадлежащая выбранному художнику.
+// Ссылки текущей папки без учёта поиска/фильтра — нужно, чтобы отличать
+// "в папке пусто" от "ничего не найдено по текущему поиску/фильтру".
+const collectionsInCurrentFolder = computed(() =>
+  collectionList.value.filter(c => (c.folder_id || null) === collectionStore.currentFolderId)
+)
+
 const filteredCollectionList = computed(() => {
-  let result = collectionList.value
+  let result = collectionsInCurrentFolder.value
 
   const query = searchQuery.value.trim().toLowerCase()
   if (query) {
@@ -328,12 +685,32 @@ async function resolveReferenceId({ cache, ownList, createAction, name, extra })
   return id
 }
 
+// Копируем файл (по id) в свои файлы — используется для обложки и доп.
+// изображений импортируемой работы, чтобы у себя иметь настоящую копию
+// байтов, а не ссылку на чужой файл (тот может позже удалиться у исходного
+// владельца — см. историю с "битыми ссылками" в my_file). При нехватке
+// места бросаем исключение дальше, чтобы прервать весь импорт — для любых
+// других ошибок (например, файл уже отсутствует на диске у владельца)
+// просто пропускаем эту картинку и продолжаем.
+async function copyWorkImage(fileId) {
+  if (!fileId) return null
+  try {
+    return await fileStore.copyFile(fileId)
+  } catch (e) {
+    if (e.quotaExceeded) throw e
+    console.error('Не удалось скопировать изображение при импорте:', fileId, e)
+    return null
+  }
+}
+
 // Копируем работы из импортированной (чужой) публичной ссылки в собственный
 // каталог работ — публичная ссылка отдаёт работы уже полностью резолвленными
 // (включая доп. изображения и имена связанных справочников), поэтому лишних
-// запросов не требуется. Возвращает id только что созданных у нас копий —
-// из них соберётся works новой ссылки. Копии помечаются imported: true на
-// бэкенде — по этому полю UserPictures подсвечивает импортированные строки.
+// запросов не требуется. Обложка и доп. изображения при этом физически
+// копируются в свои файлы (см. copyWorkImage), а не просто ссылаются на
+// чужой file id. Возвращает { newWorkIds, stoppedByQuota } — из newWorkIds
+// соберётся works новой ссылки. Копии помечаются imported: true на бэкенде —
+// по этому полю UserPictures подсвечивает импортированные строки.
 async function importWorksFromCollection(sourceWorks) {
   const newWorkIds = []
 
@@ -358,6 +735,21 @@ async function importWorksFromCollection(sourceWorks) {
       }),
     ])
 
+    let copiedAvatar
+    let copiedImages
+    try {
+      [copiedAvatar, copiedImages] = await Promise.all([
+        copyWorkImage(sourceWork.avatar?.id),
+        Promise.all((sourceWork.images || []).map(img => copyWorkImage(typeof img === 'string' ? img : img?.id))),
+      ])
+    } catch (e) {
+      if (e.quotaExceeded) {
+        showStorageLimitModal(e.used, e.limit)
+        return { newWorkIds, stoppedByQuota: true }
+      }
+      throw e
+    }
+
     const created = await artWorkStore.createArtWork({
       user_id: getUser()?.id,
       name: sourceWork.name,
@@ -371,8 +763,8 @@ async function importWorksFromCollection(sourceWorks) {
       status: statusId,
       artist: artistId,
       price: sourceWork.price,
-      avatar_id: sourceWork.avatar?.id || null,
-      images: sourceWork.images || [],
+      avatar_id: copiedAvatar?.id || null,
+      images: copiedImages.filter(Boolean),
       imported: true,
     })
 
@@ -381,7 +773,7 @@ async function importWorksFromCollection(sourceWorks) {
     }
   }
 
-  return newWorkIds
+  return { newWorkIds, stoppedByQuota: false }
 }
 
 // Работа считается уже существующей у пользователя, если у него уже есть
@@ -476,7 +868,9 @@ const confirmImport = async () => {
   importing.value = true
   try {
     const selectedSourceWorks = importCandidates.value.filter(work => selectedImportKeys.value.includes(work.id))
-    const newWorkIds = await importWorksFromCollection(selectedSourceWorks)
+    const { newWorkIds, stoppedByQuota } = await importWorksFromCollection(selectedSourceWorks)
+
+    if (!newWorkIds.length) return
 
     const created = await collectionStore.createCollection({
       ...importedCollectionMeta.value,
@@ -490,7 +884,11 @@ const confirmImport = async () => {
     importLink.value = ''
     closeImportModal()
 
-    message.success(`Ссылка добавлена, работ добавлено в «Мои работы»: ${newWorkIds.length}`)
+    if (stoppedByQuota) {
+      message.warning(`Место на диске закончилось — импортировано только ${newWorkIds.length} из ${selectedSourceWorks.length} работ`)
+    } else {
+      message.success(`Ссылка добавлена, работ добавлено в «Мои работы»: ${newWorkIds.length}`)
+    }
   } finally {
     importing.value = false
   }
@@ -628,6 +1026,193 @@ function pluralizeWorks(count) {
   border-color: var(--accent) !important;
 }
 
+/* === Папки === */
+.folder-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.folder-path {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+
+.folder-back-btn {
+  padding: 0 4px;
+  color: var(--text-faint);
+}
+
+.folder-crumb {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.folder-crumb:hover {
+  text-decoration: underline;
+}
+
+.folder-crumb.drag-over {
+  background: rgba(138, 109, 47, 0.1);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.folder-crumb-sep {
+  color: var(--text-faint);
+}
+
+.folder-crumb-current {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--text-title);
+}
+
+.new-folder-btn {
+  flex-shrink: 0;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.new-folder-btn:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+
+.new-folder-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.new-folder-icon {
+  font-size: 18px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.folders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.folder-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 96px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.folder-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.folder-card.drag-over {
+  border-color: var(--accent);
+  background: rgba(138, 109, 47, 0.08);
+  box-shadow: 0 0 0 2px rgba(138, 109, 47, 0.25);
+}
+
+.folder-card.dragging {
+  opacity: 0.4;
+}
+
+.folder-icon {
+  font-size: 34px;
+  color: var(--accent);
+}
+
+.folder-name {
+  max-width: 100%;
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-title);
+}
+
+.folder-card-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.folder-card:hover .folder-card-actions {
+  opacity: 1;
+}
+
+.folder-action-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.folder-action-btn:hover {
+  color: var(--accent);
+  background: rgba(138, 109, 47, 0.1);
+}
+
+.folder-action-btn.danger:hover {
+  color: #b43c3c;
+  background: rgba(180, 60, 60, 0.1);
+}
+
+.folder-rename-input {
+  width: 100%;
+}
+
+.folder-rename-input :deep(.ant-input) {
+  text-align: center;
+}
+
+.collection-card.dragging {
+  opacity: 0.4;
+}
+
+.collection-card.reorder-over {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .collection-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -717,6 +1302,19 @@ function pluralizeWorks(count) {
   text-overflow: ellipsis;
 }
 
+.shared-author-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .collection-text {
   display: -webkit-box;
   -webkit-line-clamp: 2; /* stylelint-disable-line */
@@ -739,10 +1337,30 @@ function pluralizeWorks(count) {
 .card-meta {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   margin-bottom: 14px;
   font-size: 12px;
   color: var(--text-faint);
+}
+
+.meta-works {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.meta-views {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.meta-view-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
 }
 
 .collection-actions {

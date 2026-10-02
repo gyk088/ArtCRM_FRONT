@@ -10,12 +10,16 @@
           {{ contactList.length ? `${contactList.length} ${pluralize(contactList.length)}` : 'Пока нет ни одного контакта' }}
         </p>
       </div>
-      <a-button type="primary" class="add-btn" @click="openCreateModal">
-        <template #icon>
-          <PlusOutlined />
-        </template>
-        Добавить контакт
-      </a-button>
+      <div class="header-actions">
+        <a-button class="quick-add-btn" @click="openQuickAdd">
+          <template #icon><ThunderboltOutlined /></template>
+          Быстро добавить
+        </a-button>
+        <a-button type="primary" class="add-btn" @click="openCreatePage">
+          <template #icon><PlusOutlined /></template>
+          Добавить контакт
+        </a-button>
+      </div>
     </div>
 
     <div class="filters-panel">
@@ -36,13 +40,14 @@
       :loading="contactStore.loading"
       row-key="id"
       :scroll="{ x: 'max-content' }"
+      :custom-row="customRow"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'name'">
           {{ record.name || 'Без имени' }}
         </template>
         <template v-else-if="column.dataIndex === 'phone'">
-          <a v-if="record.phone" :href="`tel:${record.phone}`" class="contact-link">{{ record.phone }}</a>
+          <a v-if="record.phone" :href="`tel:${record.phone}`" class="contact-link" @click.stop>{{ record.phone }}</a>
           <span v-else class="contact-empty">—</span>
         </template>
         <template v-else-if="column.dataIndex === 'messenger'">
@@ -59,12 +64,27 @@
           <span v-else-if="record.messenger">{{ record.messenger }}</span>
           <span v-else class="contact-empty">—</span>
         </template>
+        <template v-else-if="column.dataIndex === 'source'">
+          <a-tag v-if="getSourceName(record.source)" class="source-tag">{{ getSourceName(record.source) }}</a-tag>
+          <span v-else class="contact-empty">—</span>
+        </template>
+        <template v-else-if="column.dataIndex === 'works'">
+          <div class="works-summary">
+            <span v-if="purchasedCount(record)" class="works-badge works-badge--purchased">
+              {{ purchasedCount(record) }} куплено
+            </span>
+            <span v-if="interestedCount(record)" class="works-badge works-badge--interested">
+              {{ interestedCount(record) }} в интересах
+            </span>
+            <span v-if="!purchasedCount(record) && !interestedCount(record)" class="contact-empty">—</span>
+          </div>
+        </template>
         <template v-else-if="column.dataIndex === 'notes'">
           <span class="notes-cell">{{ record.notes || '—' }}</span>
         </template>
         <template v-else-if="column.dataIndex === 'actions'">
           <a-tooltip title="Редактировать">
-            <a-button type="text" size="small" @click="openEditModal(record)">
+            <a-button type="text" size="small" @click.stop="openEditPage(record)">
               <EditOutlined />
             </a-button>
           </a-tooltip>
@@ -75,7 +95,7 @@
             @confirm="handleDelete(record)"
           >
             <a-tooltip title="Удалить">
-              <a-button type="text" danger size="small">
+              <a-button type="text" danger size="small" @click.stop>
                 <DeleteOutlined />
               </a-button>
             </a-tooltip>
@@ -88,20 +108,25 @@
       </template>
     </a-table>
 
+    <!-- Быстрое добавление — минимум полей, удобно на мобильном "на ходу" -->
     <a-modal
-      v-model:open="isModalOpen"
-      :title="editingContact ? 'Редактировать контакт' : 'Новый контакт'"
+      v-model:open="isQuickAddOpen"
+      title="Быстро добавить контакт"
       :get-container="false"
+      ok-text="Сохранить"
+      cancel-text="Отмена"
+      :confirm-loading="quickSaving"
+      @ok="handleQuickSave"
     >
-      <a-form layout="vertical" :model="form">
+      <a-form layout="vertical">
         <a-form-item label="ФИО" required>
-          <a-input v-model:value="form.name" placeholder="Иванов Иван Иванович" />
+          <a-input v-model:value="quickForm.name" placeholder="Иванов Иван Иванович" autofocus />
         </a-form-item>
         <a-form-item label="Телефон">
-          <a-input v-model:value="form.phone" placeholder="+375 (__) ___-__-__" />
+          <a-input v-model:value="quickForm.phone" placeholder="+375 (__) ___-__-__" />
         </a-form-item>
         <a-form-item label="Мессенджер">
-          <a-input v-model:value="form.messenger" placeholder="Telegram, WhatsApp и т.д.">
+          <a-input v-model:value="quickForm.messenger" placeholder="Telegram, WhatsApp и т.д.">
             <template #suffix>
               <button type="button" class="messenger-scan-btn" title="Сканировать QR код" @click="isMessengerScanOpen = true">
                 <QrcodeOutlined />
@@ -109,15 +134,8 @@
             </template>
           </a-input>
         </a-form-item>
-        <a-form-item label="Заметки">
-          <a-textarea v-model:value="form.notes" placeholder="Любая полезная информация" :rows="3" />
-        </a-form-item>
       </a-form>
-
-      <template #footer>
-        <a-button class="cancel-modal-btn" @click="isModalOpen = false">Отмена</a-button>
-        <a-button type="primary" class="save-modal-btn" :loading="saving" @click="handleSave">Сохранить</a-button>
-      </template>
+      <p class="quick-add-hint">Остальные поля (email, компания, источник, работы и т.д.) можно заполнить позже — откройте контакт и нажмите «Редактировать».</p>
     </a-modal>
 
     <QrScannerModal v-model:open="isMessengerScanOpen" pick-mode @scanned="handleMessengerScanned" />
@@ -126,19 +144,29 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, QrcodeOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, QrcodeOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
 import { useContact } from '@/stores/contact.js'
+import { useContactSource } from '@/stores/contactSource.js'
 import { getUser } from '@/services/auth.js'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
 import QrScannerModal from '@/components/QrScannerModal.vue'
 
+const router = useRouter()
 const contactStore = useContact()
+const contactSourceStore = useContactSource()
 const contactList = computed(() => contactStore.listContacts)
 
 onMounted(() => {
   contactStore.getListContacts()
+  contactSourceStore.getListSources()
 })
+
+function getSourceName(sourceId) {
+  if (!sourceId) return ''
+  return contactSourceStore.listSources.find(s => s.id === sourceId)?.name || ''
+}
 
 function isLink(value) {
   return /^https?:\/\//i.test(value || '')
@@ -167,66 +195,75 @@ const columns = [
   { title: 'ФИО', dataIndex: 'name', key: 'name' },
   { title: 'Телефон', dataIndex: 'phone', key: 'phone' },
   { title: 'Мессенджер', dataIndex: 'messenger', key: 'messenger' },
+  { title: 'Источник', dataIndex: 'source', key: 'source' },
+  { title: 'Работы', dataIndex: 'works', key: 'works' },
   { title: 'Заметки', dataIndex: 'notes', key: 'notes' },
   { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 100 },
 ]
 
-const isModalOpen = ref(false)
-const saving = ref(false)
-const editingContact = ref(null)
-const form = ref({ name: '', phone: '', messenger: '', notes: '' })
+function purchasedCount(record) {
+  return (record.works || []).filter(w => w.status === 'purchased').length
+}
 
+function interestedCount(record) {
+  return (record.works || []).filter(w => w.status === 'interested').length
+}
+
+// Клик по строке — тоже открывает редактирование (кроме кликов по
+// телефону/мессенджеру/кнопкам, у них свой @click.stop)
+function customRow(record) {
+  return { class: 'clickable-row', onClick: () => openEditPage(record) }
+}
+
+function openCreatePage() {
+  router.push({ name: 'edit-contact', params: { id: 'new' } })
+}
+
+function openEditPage(record) {
+  router.push({ name: 'edit-contact', params: { id: record.id } })
+}
+
+async function handleDelete(record) {
+  await contactStore.deleteContact(record.id)
+}
+
+// === Быстрое добавление — минимум полей, без перехода на страницу ===
+const isQuickAddOpen = ref(false)
+const quickSaving = ref(false)
+const quickForm = ref({ name: '', phone: '', messenger: '' })
 const isMessengerScanOpen = ref(false)
+
+function openQuickAdd() {
+  quickForm.value = { name: '', phone: '', messenger: '' }
+  isQuickAddOpen.value = true
+}
+
 function handleMessengerScanned(data) {
-  form.value.messenger = data
+  quickForm.value.messenger = data
   message.success('Ссылка из QR добавлена в поле «Мессенджер»')
 }
 
-function openCreateModal() {
-  editingContact.value = null
-  form.value = { name: '', phone: '', messenger: '', notes: '' }
-  isModalOpen.value = true
-}
-
-function openEditModal(record) {
-  editingContact.value = record
-  form.value = { name: record.name || '', phone: record.phone || '', messenger: record.messenger || '', notes: record.notes || '' }
-  isModalOpen.value = true
-}
-
-async function handleSave() {
-  const name = form.value.name.trim()
+async function handleQuickSave() {
+  const name = quickForm.value.name.trim()
   if (!name) {
     message.warning('Введите ФИО')
     return
   }
 
-  saving.value = true
+  quickSaving.value = true
   try {
-    const payload = {
+    const result = await contactStore.createContact({
+      user_id: getUser()?.id,
       name,
-      phone: form.value.phone.trim(),
-      messenger: form.value.messenger.trim(),
-      notes: form.value.notes.trim(),
-    }
-
-    let result
-    if (editingContact.value) {
-      result = await contactStore.updateContact({ id: editingContact.value.id, ...payload })
-    } else {
-      result = await contactStore.createContact({ user_id: getUser()?.id, ...payload })
-    }
-
+      phone: quickForm.value.phone.trim(),
+      messenger: quickForm.value.messenger.trim(),
+    })
     if (result) {
-      isModalOpen.value = false
+      isQuickAddOpen.value = false
     }
   } finally {
-    saving.value = false
+    quickSaving.value = false
   }
-}
-
-async function handleDelete(record) {
-  await contactStore.deleteContact(record.id)
 }
 </script>
 
@@ -278,12 +315,18 @@ async function handleDelete(record) {
   color: var(--text-faint);
 }
 
+.header-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
 .add-btn {
   background-color: var(--accent) !important;
   border-color: var(--accent) !important;
   border-radius: 20px !important;
   font-weight: 500;
-  flex-shrink: 0;
 }
 
 .add-btn:hover {
@@ -291,28 +334,22 @@ async function handleDelete(record) {
   border-color: var(--accent-strong) !important;
 }
 
-.save-modal-btn {
-  background-color: var(--accent) !important;
+.quick-add-btn {
+  border-radius: 20px !important;
   border-color: var(--accent) !important;
-  border-radius: 20px !important;
-  font-weight: 500;
-}
-
-.save-modal-btn:hover {
-  background-color: var(--accent-strong) !important;
-  border-color: var(--accent-strong) !important;
-}
-
-.cancel-modal-btn {
-  border-radius: 20px !important;
-  border-color: var(--border) !important;
-  color: var(--text-muted) !important;
+  color: var(--accent) !important;
   background: transparent !important;
 }
 
-.cancel-modal-btn:hover {
-  border-color: var(--accent) !important;
-  color: var(--accent) !important;
+.quick-add-btn:hover {
+  border-color: var(--accent-strong) !important;
+  color: var(--accent-strong) !important;
+}
+
+.quick-add-hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
 }
 
 .filters-panel {
@@ -363,6 +400,31 @@ async function handleDelete(record) {
   font-size: 13px;
 }
 
+.source-tag {
+  background: var(--card-bg);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.works-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.works-badge {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.works-badge--purchased {
+  color: #2f8a35;
+}
+
+.works-badge--interested {
+  color: var(--accent);
+}
+
 .contacts-empty {
   color: var(--text-faint);
   font-size: 13px;
@@ -378,7 +440,15 @@ async function handleDelete(record) {
   font-weight: 600;
 }
 
-/* Инпуты формы контакта — свой акцент вместо синего цвета antd по умолчанию.
+.contacts-page :deep(.clickable-row) {
+  cursor: pointer;
+}
+
+.contacts-page :deep(.ant-table-tbody > tr:hover > td) {
+  background: rgba(200, 183, 137, 0.06) !important;
+}
+
+/* Инпуты формы — свой акцент вместо синего цвета antd по умолчанию.
    Работает только благодаря :get-container="false" на a-modal: без него
    модалка телепортируется в body и перестаёт быть потомком .contacts-page,
    а значит переменные вроде var(--accent) там просто не резолвятся. */
@@ -406,9 +476,8 @@ async function handleDelete(record) {
     align-items: stretch;
   }
 
-  .add-btn {
-    width: 100%;
-    justify-content: center;
+  .header-actions {
+    flex-direction: column;
   }
 
   .search-input {

@@ -38,8 +38,8 @@ export const useArtist = defineStore('artist', {
                 console.log('Artists loaded:', this.listArtists)
             } catch (e) {
                 console.error('Error fetching artists:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to load artists')
-                this.error = e?.response?.data?.message || 'Failed to load artists'
+                notifyServerError(e?.response?.data?.error || 'Failed to load artists')
+                this.error = e?.response?.data?.error || 'Failed to load artists'
                 success = false
             } finally {
                 this.loading = false
@@ -62,8 +62,8 @@ export const useArtist = defineStore('artist', {
                 console.log('Artist by ID:', result)
             } catch (e) {
                 console.error('Error fetching artist by id:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to load artist details')
-                this.error = e?.response?.data?.message || 'Failed to load artist details'
+                notifyServerError(e?.response?.data?.error || 'Failed to load artist details')
+                this.error = e?.response?.data?.error || 'Failed to load artist details'
                 result = null
             } finally {
                 this.loading = false
@@ -85,8 +85,8 @@ export const useArtist = defineStore('artist', {
                 console.log('Artists by user:', result)
             } catch (e) {
                 console.error('Error fetching artists by user:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to load user artists')
-                this.error = e?.response?.data?.message || 'Failed to load user artists'
+                notifyServerError(e?.response?.data?.error || 'Failed to load user artists')
+                this.error = e?.response?.data?.error || 'Failed to load user artists'
                 result = []
             } finally {
                 this.loading = false
@@ -114,8 +114,8 @@ export const useArtist = defineStore('artist', {
                 }
             } catch (e) {
                 console.error('Error creating artist:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to create artist')
-                this.error = e?.response?.data?.message || 'Failed to create artist'
+                notifyServerError(e?.response?.data?.error || 'Failed to create artist')
+                this.error = e?.response?.data?.error || 'Failed to create artist'
                 result = null
             } finally {
                 this.loading = false
@@ -149,8 +149,8 @@ export const useArtist = defineStore('artist', {
                 }
             } catch (e) {
                 console.error('Error updating artist:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to update artist')
-                this.error = e?.response?.data?.message || 'Failed to update artist'
+                notifyServerError(e?.response?.data?.error || 'Failed to update artist')
+                this.error = e?.response?.data?.error || 'Failed to update artist'
                 result = null
             } finally {
                 this.loading = false
@@ -180,8 +180,8 @@ export const useArtist = defineStore('artist', {
                 console.log('Artist deleted:', id)
             } catch (e) {
                 console.error('Error deleting artist:', e)
-                notifyServerError(e?.response?.data?.message || 'Failed to delete artist')
-                this.error = e?.response?.data?.message || 'Failed to delete artist'
+                notifyServerError(e?.response?.data?.error || 'Failed to delete artist')
+                this.error = e?.response?.data?.error || 'Failed to delete artist'
                 success = false
             } finally {
                 this.loading = false

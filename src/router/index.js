@@ -52,14 +52,6 @@ const router = createRouter({
           component: () => import('@/pages/EditBio/index.vue'),
           meta: { title: 'Редактировать биографию' },
         },{
-          path: 'workspace',
-          name: 'workspace',
-          component: () => import('@/pages/WorkSpace/index.vue'),
-        meta: {
-            title: '<Рабочее пространство>',
-            hiddenRoles: [ROLES.ARTIST],
-          },
-      },{
         path: 'cv',
         name: 'cv',
         component: () => import('@/pages/CV/index.vue'),
@@ -110,6 +102,13 @@ const router = createRouter({
             title: 'Контакты',
           },
       }, {
+        path: 'contacts/:id',
+        name: 'edit-contact',
+        component: () => import('@/pages/EditContact/index.vue'),
+        meta: {
+            title: 'Редактировать контакт',
+          },
+      }, {
         path: 'profile',
         name: 'profile',
         component: () => import('@/pages/UserConfig/index.vue'),
@@ -122,7 +121,7 @@ const router = createRouter({
         component: () => import('@/pages/AdminPanel/index.vue'),
         meta: {
             title: 'Админ-панель',
-            hiddenRoles: [ROLES.GALLERY, ROLES.MANAGER, ROLES.ARTIST],
+            hiddenRoles: [ROLES.MANAGER, ROLES.ARTIST],
           },
       },
     ],

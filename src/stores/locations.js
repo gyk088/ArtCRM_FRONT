@@ -39,8 +39,8 @@ export const useLocations = defineStore('locations', {
         console.log('Locations loaded:', this.listLocations)
       } catch (e) {
         console.error('Error fetching locations:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load locations')
-        this.error = e?.response?.data?.message || 'Failed to load locations'
+        notifyServerError(e?.response?.data?.error || 'Failed to load locations')
+        this.error = e?.response?.data?.error || 'Failed to load locations'
         success = false
       } finally {
         this.loading = false
@@ -63,8 +63,8 @@ export const useLocations = defineStore('locations', {
         console.log('Location by ID:', result)
       } catch (e) {
         console.error('Error fetching location by id:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load location details')
-        this.error = e?.response?.data?.message || 'Failed to load location details'
+        notifyServerError(e?.response?.data?.error || 'Failed to load location details')
+        this.error = e?.response?.data?.error || 'Failed to load location details'
         result = null
       } finally {
         this.loading = false
@@ -86,8 +86,8 @@ export const useLocations = defineStore('locations', {
         console.log('Locations by user:', result)
       } catch (e) {
         console.error('Error fetching locations by user:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load user locations')
-        this.error = e?.response?.data?.message || 'Failed to load user locations'
+        notifyServerError(e?.response?.data?.error || 'Failed to load user locations')
+        this.error = e?.response?.data?.error || 'Failed to load user locations'
         result = []
       } finally {
         this.loading = false
@@ -116,8 +116,8 @@ export const useLocations = defineStore('locations', {
         }
       } catch (e) {
         console.error('Error creating location:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to create location')
-        this.error = e?.response?.data?.message || 'Failed to create location'
+        notifyServerError(e?.response?.data?.error || 'Failed to create location')
+        this.error = e?.response?.data?.error || 'Failed to create location'
         result = null
       } finally {
         this.loading = false
@@ -152,8 +152,8 @@ export const useLocations = defineStore('locations', {
         }
       } catch (e) {
         console.error('Error updating location:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to update location')
-        this.error = e?.response?.data?.message || 'Failed to update location'
+        notifyServerError(e?.response?.data?.error || 'Failed to update location')
+        this.error = e?.response?.data?.error || 'Failed to update location'
         result = null
       } finally {
         this.loading = false
@@ -185,8 +185,8 @@ export const useLocations = defineStore('locations', {
         console.log('Location deleted:', id)
       } catch (e) {
         console.error('Error deleting location:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to delete location')
-        this.error = e?.response?.data?.message || 'Failed to delete location'
+        notifyServerError(e?.response?.data?.error || 'Failed to delete location')
+        this.error = e?.response?.data?.error || 'Failed to delete location'
         success = false
       } finally {
         this.loading = false

@@ -144,6 +144,68 @@ export const useContact = defineStore('contact', {
       return success
     },
 
+    /**
+     * POST /api/v1/contacts/:id/works - Привязать работу к контакту
+     * @param {string} contactId
+     * @param {string} artId
+     * @param {'purchased'|'interested'} status
+     */
+    async addWorkToContact(contactId, artId, status) {
+      try {
+        const resp = await apiClient.post(`/api/v1/contacts/${contactId}/works`, { artId, status })
+        this.__setContactWorks(contactId, resp.data)
+        notifyServerSuccess(status === 'purchased' ? 'Отмечено как купленное' : 'Добавлено в интересы')
+        return resp.data
+      } catch (e) {
+        console.error('Error linking work to contact:', e)
+        notifyServerError(e?.response?.data?.error || 'Не удалось привязать работу')
+        return null
+      }
+    },
+
+    /**
+     * PATCH /api/v1/contacts/:id/works/:artId - Изменить статус связи
+     * (например, "интересуется" -> "купил")
+     */
+    async updateContactWorkStatus(contactId, artId, status) {
+      try {
+        const resp = await apiClient.patch(`/api/v1/contacts/${contactId}/works/${artId}`, { status })
+        this.__setContactWorks(contactId, resp.data)
+        notifyServerSuccess('Статус обновлён')
+        return resp.data
+      } catch (e) {
+        console.error('Error updating contact work status:', e)
+        notifyServerError(e?.response?.data?.error || 'Не удалось изменить статус')
+        return null
+      }
+    },
+
+    /**
+     * DELETE /api/v1/contacts/:id/works/:artId - Отвязать работу от контакта
+     */
+    async removeWorkFromContact(contactId, artId) {
+      try {
+        const resp = await apiClient.delete(`/api/v1/contacts/${contactId}/works/${artId}`)
+        this.__setContactWorks(contactId, resp.data)
+        notifyServerSuccess('Работа отвязана')
+        return resp.data
+      } catch (e) {
+        console.error('Error removing work from contact:', e)
+        notifyServerError(e?.response?.data?.error || 'Не удалось отвязать работу')
+        return null
+      }
+    },
+
+    // Обновляет works и в списке, и в currentContact (если это он) — сервер
+    // в ответ на изменение связи присылает уже полный актуальный список работ.
+    __setContactWorks(contactId, works) {
+      const index = this.listContacts.findIndex(c => c.id === contactId)
+      if (index !== -1) this.listContacts[index] = { ...this.listContacts[index], works }
+      if (this.currentContact?.id === contactId) {
+        this.currentContact = { ...this.currentContact, works }
+      }
+    },
+
     clearCurrentContact() {
       this.currentContact = null
     },

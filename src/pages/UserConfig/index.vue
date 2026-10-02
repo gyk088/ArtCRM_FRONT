@@ -101,6 +101,28 @@
 
     <div class="right-column">
       <section class="form-section">
+        <div class="section-heading">Настройки сертификата</div>
+        <p class="section-hint">Этот текст будет подставляться в шапку сертификата подлинности по умолчанию — его всё ещё можно будет изменить перед скачиванием конкретного сертификата</p>
+
+        <div class="form-item">
+          <label class="field-label" for="profileCertHeaderText">Текст в шапке сертификата</label>
+          <a-textarea
+            id="profileCertHeaderText"
+            v-model:value="form.certificateHeaderText"
+            :rows="4"
+            :placeholder="DEFAULT_CERTIFICATE_HEADER_TEXT"
+            class="fixed-input"
+          />
+        </div>
+
+        <div class="actions-row">
+          <a-button type="primary" :loading="savingCertificate" @click="handleSaveCertificate">
+            Сохранить
+          </a-button>
+        </div>
+      </section>
+
+      <section class="form-section">
         <div class="section-heading-row">
           <div class="section-heading">Активные сессии</div>
           <a-button
@@ -143,28 +165,6 @@
           </div>
           <p v-else-if="!sessionsLoading" class="section-hint">Сессии не найдены</p>
         </a-spin>
-      </section>
-
-      <section class="form-section">
-        <div class="section-heading">Настройки сертификата</div>
-        <p class="section-hint">Этот текст будет подставляться в шапку сертификата подлинности по умолчанию — его всё ещё можно будет изменить перед скачиванием конкретного сертификата</p>
-
-        <div class="form-item">
-          <label class="field-label" for="profileCertHeaderText">Текст в шапке сертификата</label>
-          <a-textarea
-            id="profileCertHeaderText"
-            v-model:value="form.certificateHeaderText"
-            :rows="4"
-            :placeholder="DEFAULT_CERTIFICATE_HEADER_TEXT"
-            class="fixed-input"
-          />
-        </div>
-
-        <div class="actions-row">
-          <a-button type="primary" :loading="savingCertificate" @click="handleSaveCertificate">
-            Сохранить
-          </a-button>
-        </div>
       </section>
     </div>
     </div>

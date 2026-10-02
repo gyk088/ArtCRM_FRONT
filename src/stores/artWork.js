@@ -2,13 +2,54 @@
 import { defineStore } from 'pinia'
 import apiClient from '@/services/api.js'
 import { notifyServerError, notifyServerSuccess } from '@/services/notify.js'
+import { getUser } from '@/services/auth.js'
+
+// Кэш списка работ в localStorage — раздел "Мои работы" отдаёт всё одним
+// запросом без серверной пагинации (см. ArtService.getAllArtObjects), но у
+// каталогов с сотнями работ первый рендер всё равно ждёт полный ответ сети.
+// Кэш даёт мгновенный первый рендер при повторных заходах, пока свежие
+// данные подгружаются в фоне. Ключ привязан к id пользователя, чтобы кэш
+// одного пользователя не "утёк" другому при входе на этом же браузере —
+// и logout(), и переключение через имперсонацию всегда делают полный
+// window.location.reload(), так что читать id один раз при создании стора
+// безопасно (см. services/auth.js).
+function artWorksCacheKey() {
+  const userId = getUser()?.id
+  return userId ? `artcrm_artworks_cache_${userId}` : null
+}
+
+function loadArtWorksFromCache() {
+  const key = artWorksCacheKey()
+  if (!key) return []
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : []
+  } catch (e) {
+    console.error('Error reading artworks cache:', e)
+    return []
+  }
+}
+
+function saveArtWorksToCache(list) {
+  const key = artWorksCacheKey()
+  if (!key) return
+  try {
+    localStorage.setItem(key, JSON.stringify(list))
+  } catch (e) {
+    // Скорее всего переполнение квоты localStorage на очень большом каталоге —
+    // некритично, кэш просто не обновится, но приложение продолжит работать
+    // от свежих данных из this.listArtWorks в памяти.
+    console.error('Error saving artworks cache:', e)
+  }
+}
 
 export const useArtWork = defineStore('art-objects', {
   state: () => {
     return {
-      // ArtWorks
-      listArtWorks: [],           // Список всех работ
-      currentArtWork: null,       // Текущая выбранная работа
+      // ArtWorks — сразу гидрируется из localStorage-кэша для мгновенного
+      // первого рендера; getListArtWorks() поверх этого подтянет свежие данные.
+      listArtWorks: loadArtWorksFromCache(),
+      currentArtWork: null,
       loading: false,
       error: null,
     }
@@ -70,11 +111,12 @@ export const useArtWork = defineStore('art-objects', {
       try {
         const resp = await apiClient.get('/api/v1/art/art-objects')
         this.listArtWorks = resp.data || []
+        saveArtWorksToCache(this.listArtWorks)
         console.log('ArtWorks loaded:', this.listArtWorks)
       } catch (e) {
         console.error('Error fetching artworks:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load artworks')
-        this.error = e?.response?.data?.message || 'Failed to load artworks'
+        notifyServerError(e?.response?.data?.error || 'Failed to load artworks')
+        this.error = e?.response?.data?.error || 'Failed to load artworks'
         success = false
       } finally {
         this.loading = false
@@ -98,8 +140,8 @@ export const useArtWork = defineStore('art-objects', {
         console.log('ArtWork by ID:', result)
       } catch (e) {
         console.error('Error fetching artwork by id:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load artwork details')
-        this.error = e?.response?.data?.message || 'Failed to load artwork details'
+        notifyServerError(e?.response?.data?.error || 'Failed to load artwork details')
+        this.error = e?.response?.data?.error || 'Failed to load artwork details'
         result = null
       } finally {
         this.loading = false
@@ -122,8 +164,8 @@ export const useArtWork = defineStore('art-objects', {
         console.log('ArtWorks by user:', result)
       } catch (e) {
         console.error('Error fetching artworks by user:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to load user artworks')
-        this.error = e?.response?.data?.message || 'Failed to load user artworks'
+        notifyServerError(e?.response?.data?.error || 'Failed to load user artworks')
+        this.error = e?.response?.data?.error || 'Failed to load user artworks'
         result = []
       } finally {
         this.loading = false
@@ -157,12 +199,13 @@ export const useArtWork = defineStore('art-objects', {
 
         if (result) {
           this.listArtWorks.push(result)
+          saveArtWorksToCache(this.listArtWorks)
           notifyServerSuccess('ArtWork created successfully')
           console.log('ArtWork created:', result)
         }
       } catch (e) {
         console.error('Error creating artwork:', e)
-        const reason = e?.response?.data?.message || e?.response?.data?.error || 'Failed to create artwork'
+        const reason = e?.response?.data?.error || 'Failed to create artwork'
         notifyServerError(reason)
         this.error = reason
         result = null
@@ -193,12 +236,13 @@ export const useArtWork = defineStore('art-objects', {
           if (this.currentArtWork?.id === workData.id) {
             this.currentArtWork = result
           }
+          saveArtWorksToCache(this.listArtWorks)
           notifyServerSuccess('ArtWork updated successfully')
           console.log('ArtWork updated:', result)
         }
       } catch (e) {
         console.error('Error updating artwork:', e)
-        const reason = e?.response?.data?.message || e?.response?.data?.error || 'Failed to update artwork'
+        const reason = e?.response?.data?.error || 'Failed to update artwork'
         notifyServerError(reason)
         this.error = reason
         result = null
@@ -231,13 +275,14 @@ export const useArtWork = defineStore('art-objects', {
           if (this.currentArtWork?.id === id) {
             this.currentArtWork = { ...this.currentArtWork, ...result }
           }
+          saveArtWorksToCache(this.listArtWorks)
           notifyServerSuccess('Работа обновлена')
           console.log('ArtWork patched:', result)
         }
       } catch (e) {
         console.error('Error patching artwork:', e)
-        notifyServerError(e?.response?.data?.message || 'Не удалось обновить работу')
-        this.error = e?.response?.data?.message || 'Не удалось обновить работу'
+        notifyServerError(e?.response?.data?.error || 'Не удалось обновить работу')
+        this.error = e?.response?.data?.error || 'Не удалось обновить работу'
         result = null
       } finally {
         this.loading = false
@@ -258,17 +303,18 @@ export const useArtWork = defineStore('art-objects', {
         await apiClient.delete(`/api/v1/art/art-objects/${id}`)
 
         this.listArtWorks = this.listArtWorks.filter(item => item.id !== id)
-        
+        saveArtWorksToCache(this.listArtWorks)
+
         if (this.currentArtWork?.id === id) {
           this.currentArtWork = null
         }
-        
+
         notifyServerSuccess('ArtWork deleted successfully')
         console.log('ArtWork deleted:', id)
       } catch (e) {
         console.error('Error deleting artwork:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to delete artwork')
-        this.error = e?.response?.data?.message || 'Failed to delete artwork'
+        notifyServerError(e?.response?.data?.error || 'Failed to delete artwork')
+        this.error = e?.response?.data?.error || 'Failed to delete artwork'
         success = false
       } finally {
         this.loading = false
@@ -289,17 +335,18 @@ export const useArtWork = defineStore('art-objects', {
         await apiClient.post('/api/v1/art/art-objects/bulk-delete', { ids })
 
         this.listArtWorks = this.listArtWorks.filter(item => !ids.includes(item.id))
-        
+        saveArtWorksToCache(this.listArtWorks)
+
         if (this.currentArtWork && ids.includes(this.currentArtWork.id)) {
           this.currentArtWork = null
         }
-        
+
         notifyServerSuccess('ArtWorks deleted successfully')
         console.log('ArtWorks deleted:', ids)
       } catch (e) {
         console.error('Error bulk deleting artworks:', e)
-        notifyServerError(e?.response?.data?.message || 'Failed to delete artworks')
-        this.error = e?.response?.data?.message || 'Failed to delete artworks'
+        notifyServerError(e?.response?.data?.error || 'Failed to delete artworks')
+        this.error = e?.response?.data?.error || 'Failed to delete artworks'
         success = false
       } finally {
         this.loading = false
@@ -329,6 +376,7 @@ export const useArtWork = defineStore('art-objects', {
       this.currentArtWork = null
       this.loading = false
       this.error = null
+      saveArtWorksToCache([])
     }
   }
 })

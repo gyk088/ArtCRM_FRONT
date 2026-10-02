@@ -69,6 +69,30 @@
           has-color
         />
       </a-tab-pane>
+
+      <a-tab-pane key="contact-sources" tab="Источники контактов">
+        <ReferenceEntityPanel
+          :store="contactSourceStore"
+          list-field="listSources"
+          load-action="getListSources"
+          create-action="createSource"
+          update-action="updateSource"
+          delete-action="deleteSource"
+          singular-label="источник"
+        />
+      </a-tab-pane>
+
+      <a-tab-pane key="contact-categories" tab="Категории контактов">
+        <ReferenceEntityPanel
+          :store="contactCategoryStore"
+          list-field="listCategories"
+          load-action="getListCategories"
+          create-action="createCategory"
+          update-action="updateCategory"
+          delete-action="deleteCategory"
+          singular-label="категорию"
+        />
+      </a-tab-pane>
     </a-tabs>
   </div>
 </template>
@@ -82,6 +106,8 @@ import { useSerias } from '@/stores/seria.js'
 import { useMedia } from '@/stores/media.js'
 import { useLocations } from '@/stores/locations.js'
 import { useStatuses } from '@/stores/statuses.js'
+import { useContactSource } from '@/stores/contactSource.js'
+import { useContactCategory } from '@/stores/contactCategory.js'
 import { getUser } from '@/services/auth.js'
 import { ROLES } from '@/services/const'
 
@@ -90,6 +116,8 @@ const seriaStore = useSerias()
 const mediaStore = useMedia()
 const locationsStore = useLocations()
 const statusesStore = useStatuses()
+const contactSourceStore = useContactSource()
+const contactCategoryStore = useContactCategory()
 
 const isArtist = computed(() => getUser()?.role === ROLES.ARTIST)
 

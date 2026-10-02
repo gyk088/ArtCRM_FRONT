@@ -58,6 +58,19 @@
       <a-button @click="cancelNewFolder">Отмена</a-button>
     </div>
 
+    <!-- 💾 Место на диске -->
+    <div v-if="storageInfo" class="storage-usage">
+      <a-progress
+        :percent="storagePercent"
+        :status="storagePercent >= 100 ? 'exception' : 'normal'"
+        :stroke-color="storageProgressColor"
+        size="small"
+      />
+      <span class="storage-usage-text">
+        {{ formatStorageSize(storageInfo.used) }} из {{ formatStorageSize(storageInfo.limit) }}
+      </span>
+    </div>
+
     <!-- Drag & Drop -->
     <a-upload-dragger
       :before-upload="handleBeforeUpload"
@@ -127,6 +140,16 @@
           @drop="handleDropOnFolder(folder.id)"
         >
           <div class="folder-card-actions">
+            <a-tooltip title="Обложка папки">
+              <button class="folder-action-btn" @click.stop="openCoverPicker(folder)">
+                <PictureOutlined />
+              </button>
+            </a-tooltip>
+            <a-tooltip v-if="folder.avatar" title="Убрать обложку">
+              <button class="folder-action-btn danger" @click.stop="removeFolderCover(folder)">
+                <CloseCircleOutlined />
+              </button>
+            </a-tooltip>
             <a-tooltip title="Переименовать">
               <button class="folder-action-btn" @click.stop="startRenameFolder(folder)">
                 <EditOutlined />
@@ -139,7 +162,8 @@
             </a-tooltip>
           </div>
 
-          <FolderFilled class="folder-icon" />
+          <img v-if="folder.avatar?.url" :src="folder.avatar.url" class="folder-cover-img" :alt="folder.name" />
+          <FolderFilled v-else class="folder-icon" />
 
           <a-input
             v-if="renamingFolderId === folder.id"
@@ -266,6 +290,18 @@
       </template>
     </a-drawer>
 
+    <!-- 🖼 Обложка папки — выбор картинки из своих файлов -->
+    <a-drawer
+      v-model:open="coverPickerOpen"
+      title="Обложка папки"
+      placement="right"
+      width="480"
+      destroyOnClose
+      @close="closeCoverPicker"
+    >
+      <FileUploader :select="true" @select="handleCoverSelected" />
+    </a-drawer>
+
   </div>
 </template>
 
@@ -284,9 +320,14 @@ import {
   RollbackOutlined,
   DownloadOutlined,
   EditOutlined,
-  LoadingOutlined
+  LoadingOutlined,
+  PictureOutlined,
+  CloseCircleOutlined
 } from "@ant-design/icons-vue"
-import { useFile } from "@/stores/file.js"
+import { useFile, formatStorageSize, showStorageLimitModal } from "@/stores/file.js"
+import { useArtWork } from "@/stores/artWork.js"
+import { useCollection } from "@/stores/collection.js"
+import { useExhibition } from "@/stores/exhibition.js"
 import FileView from "./FileView.vue"
 import { downloadFile } from "@/utils/downloadFile.js"
 
@@ -305,10 +346,25 @@ const props = defineProps({
 
 const search = ref("")
 const fileStore = useFile()
+const artWorkStore = useArtWork()
+const collectionStore = useCollection()
+const exhibitionStore = useExhibition()
 
 onMounted(() => {
   fileStore.getAllFiles()
   fileStore.getFolders()
+  fileStore.getStorageInfo()
+})
+
+const storageInfo = computed(() => fileStore.storageInfo)
+const storagePercent = computed(() => {
+  if (!storageInfo.value || !storageInfo.value.limit) return 0
+  return Math.min(100, Math.round((storageInfo.value.used / storageInfo.value.limit) * 100))
+})
+const storageProgressColor = computed(() => {
+  if (storagePercent.value >= 100) return '#b43c3c'
+  if (storagePercent.value >= 85) return '#c0894a'
+  return '#8a6d2f'
 })
 
 const pendingFiles = ref([])
@@ -433,6 +489,53 @@ const confirmRenameFolder = async (folder) => {
     // ошибка уже показана через notifyServerError в сторе
   } finally {
     cancelRenameFolder()
+  }
+}
+
+// 🖼 Обложка папки — картинка вместо стандартной иконки. Открываем ту же
+// FileUploader (рекурсивно, по имени файла — см. Vue "Recursive Components")
+// в режиме выбора файла — так же выбирается обложка ссылки/выставки.
+// Сохраняем/восстанавливаем currentFolderId, чтобы навигация внутри
+// пикера (открытие других папок в поисках картинки) не сдвигала папку,
+// открытую в основном окне — оба компонента используют один и тот же стор.
+const coverPickerOpen = ref(false)
+const coverPickerFolder = ref(null)
+const savedFolderIdBeforePicker = ref(null)
+
+const openCoverPicker = (folder) => {
+  coverPickerFolder.value = folder
+  savedFolderIdBeforePicker.value = fileStore.currentFolderId
+  coverPickerOpen.value = true
+}
+
+// @close у a-drawer срабатывает только при закрытии самим пользователем
+// (крестик/маска/Esc) — при программном v-model:open = false (после выбора
+// файла) событие НЕ эмитится, поэтому восстанавливаем папку в обоих местах.
+const closeCoverPicker = () => {
+  fileStore.setCurrentFolder(savedFolderIdBeforePicker.value)
+  coverPickerFolder.value = null
+}
+
+const handleCoverSelected = async (file) => {
+  if (!coverPickerFolder.value) return
+
+  try {
+    await fileStore.setFolderCover(coverPickerFolder.value.id, file.id)
+    message.success("Обложка папки обновлена")
+  } catch {
+    // ошибка уже показана через notifyServerError в сторе
+  } finally {
+    coverPickerOpen.value = false
+    closeCoverPicker()
+  }
+}
+
+const removeFolderCover = async (folder) => {
+  try {
+    await fileStore.setFolderCover(folder.id, null)
+    message.success("Обложка папки удалена")
+  } catch {
+    // ошибка уже показана через notifyServerError в сторе
   }
 }
 
@@ -678,6 +781,11 @@ const handleBeforeUpload = (file) => {
     return false
   }
 
+  if (storageInfo.value && storageInfo.value.remaining <= 0) {
+    showStorageLimitModal(storageInfo.value.used, storageInfo.value.limit)
+    return false
+  }
+
   pendingFiles.value.unshift({
     id: generateId(),
     originalName: file.name,
@@ -722,50 +830,68 @@ const removePending = (id) => {
   pendingFiles.value = pendingFiles.value.filter(f => f.id !== id)
 }
 
-// ❌ удалить сохранённый
+// ❌ удалить сохранённый — удаление разрешено всегда, даже если файл где-то
+// используется: бэкенд сам отвязывает его от всех работ/ссылок/выставок
+// (см. FileService.deleteFile). Если файл используется, сначала спрашиваем
+// подтверждение и показываем, откуда он пропадёт.
 const removeFile = async (item) => {
-  // Кнопка сразу показывает индикатор загрузки, чтобы клик не выглядел «зависшим»,
-  // пока идёт проверка использования файла.
   item.loading = true
 
   let works = []
   let collections = []
+  let exhibitions = []
   try {
     const usage = await fileStore.checkFileUsage(item.id)
     works = usage.works
     collections = usage.collections
+    exhibitions = usage.exhibitions
   } catch (e) {
     console.error("Ошибка проверки использования файла:", e)
   }
 
   const usageLines = [
     ...works.map(w => `Используется в работе «${w.name}»`),
-    ...collections.map(c => `Используется в ссылке «${c.name}»`)
+    ...collections.map(c => `Используется в ссылке «${c.name}»`),
+    ...exhibitions.map(ex => `Используется в выставке «${ex.name}»`)
   ]
+
+  const doDelete = async () => {
+    await fileStore.deleteFile(item.id)
+    item.loading = false
+
+    // Локальные списки могли закэшировать старую обложку/изображение —
+    // подтягиваем свежие данные там, где файл реально был привязан.
+    if (works.length) artWorkStore.getListArtWorks()
+    if (collections.length) collectionStore.getAllCollections()
+    if (exhibitions.length) exhibitionStore.getAllExhibitions()
+  }
 
   // Файл нигде не используется — удаляем сразу, без подтверждения
   if (!usageLines.length) {
-    await fileStore.deleteFile(item.id)
-    item.loading = false
+    await doDelete()
     return
   }
 
   item.loading = false
 
-  // Файл привязан к работе или ссылке — на сервере это защищено внешним ключом
-  // (my_art_object_image_file_id_fkey и т.п.), удаление всегда завершится ошибкой БД.
-  // Поэтому вместо подтверждения удаления показываем блокирующее предупреждение.
-  Modal.warning({
-    title: "Нельзя удалить файл",
+  Modal.confirm({
+    title: "Удалить файл?",
+    icon: () => h(ExclamationCircleOutlined),
     content: h("div", [
       h("p", { style: "margin-bottom: 8px;" },
-        `Файл «${item.title || item.name}» используется и не может быть удалён:`),
+        `Файл «${item.title || item.name}» сейчас используется:`),
       h("ul", { style: "margin: 0; padding-left: 20px;" },
         usageLines.map(line => h("li", line))),
       h("p", { style: "margin-top: 8px;" },
-        "Сначала отвяжите файл от работы или ссылки, затем повторите удаление.")
+        "При удалении он будет убран отовсюду и заменён плейсхолдером.")
     ]),
-    okText: "Понятно"
+    okText: "Удалить",
+    okType: "danger",
+    cancelText: "Отмена",
+    onOk: async () => {
+      item.loading = true
+      await doDelete()
+    }
   })
 }
 </script>
@@ -868,6 +994,26 @@ const removeFile = async (item) => {
   font-size: 18px;
   color: var(--accent);
   flex-shrink: 0;
+}
+
+/* Место на диске */
+.storage-usage {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.storage-usage :deep(.ant-progress) {
+  flex: 1;
+  margin: 0;
+}
+
+.storage-usage-text {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
 }
 
 /* Дропзона */
@@ -990,6 +1136,13 @@ const removeFile = async (item) => {
 .folder-icon {
   font-size: 34px;
   color: var(--accent);
+}
+
+.folder-cover-img {
+  width: 100%;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 6px;
 }
 
 .folder-name {
