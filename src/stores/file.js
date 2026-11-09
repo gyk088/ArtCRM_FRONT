@@ -84,13 +84,21 @@ export const useFile = defineStore('file', {
       } catch (e) {
         console.error('Error fetching data:', e)
 
-        if (e?.response?.data?.code === 'STORAGE_LIMIT_EXCEEDED') {
-          showStorageLimitModal(e.response.data.used, e.response.data.limit)
+        // 413 отдаёт либо nginx ({ detail }, лимит client_max_body_size),
+        // либо @fastify/multipart ({ message: 'request file too large' }) —
+        // в обоих случаях показываем понятный текст, а не сырой ответ.
+        const data = e?.response?.data
+        const errorMessage = e?.response?.status === 413
+          ? `Файл «${file?.name || ''}» слишком большой, максимум 5 МБ`
+          : data?.error || data?.message || data?.detail || 'Не удалось загрузить файл'
+
+        if (data?.code === 'STORAGE_LIMIT_EXCEEDED') {
+          showStorageLimitModal(data.used, data.limit)
         } else {
-          notifyServerError(e?.response?.data?.message || 'Failed to load user data')
+          notifyServerError(errorMessage)
         }
 
-        this.error = e?.response?.data?.message || 'Failed to load user data'
+        this.error = errorMessage
         success = false
       }
       return success

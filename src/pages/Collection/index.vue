@@ -392,6 +392,7 @@
 </template>
 
 <script setup>
+import { fileUrl as buildFileUrl } from '@/services/const.js'
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -630,7 +631,7 @@ function openFilesModal() {
 }
 
 function handleFileSelect(file) {
-  const fileUrl = `https://dev.myoffer.life/files/${file.id}.${file.ext}`
+  const fileUrl = buildFileUrl(file)
 
   form.avatar = {
     uid: file.id,

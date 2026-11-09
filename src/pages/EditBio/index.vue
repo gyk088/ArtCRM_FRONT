@@ -134,7 +134,7 @@
         </section>
 
         <div class="buttons-wrapper">
-          <a-button type="primary" class="save-btn" @click="save">
+          <a-button type="primary" class="save-btn" :loading="saving" @click="save">
             Сохранить
           </a-button>
           <a-button class="back-btn" @click="goBack">
@@ -191,7 +191,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed, onBeforeUnmount } from 'vue'
+import { reactive, ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
@@ -225,9 +225,13 @@ const bioRecord = computed(() => (isNew.value ? null : bioStore.getBioById(route
 
 const form = reactive({ title: '', text: '' })
 
+function fillForm(record) {
+  form.title = record.title
+  form.text = toEditableHtml(record.text)
+}
+
 if (!isNew.value && bioRecord.value) {
-  form.title = bioRecord.value.title
-  form.text = toEditableHtml(bioRecord.value.text)
+  fillForm(bioRecord.value)
 }
 
 const editor = useEditor({
@@ -244,6 +248,20 @@ const editor = useEditor({
 
 onBeforeUnmount(() => {
   editor.value?.destroy()
+})
+
+// Документ мог ещё не быть загружен (прямой переход по ссылке / F5) —
+// тогда запрашиваем его с сервера и заполняем форму и редактор
+onMounted(async () => {
+  if (isNew.value || bioRecord.value) return
+  const record = await bioStore.fetchBio(route.params.id)
+  if (!record) {
+    message.error('Биография не найдена')
+    router.push('/home/bio')
+    return
+  }
+  fillForm(record)
+  editor.value?.commands.setContent(form.text, false)
 })
 
 const plainLength = computed(() => htmlToPlainText(form.text).length)
@@ -264,23 +282,28 @@ function formatDate(iso) {
   })
 }
 
-function save() {
+const saving = ref(false)
+async function save() {
   if (!form.title.trim() || !plainLength.value) {
     message.warning('Пожалуйста, заполните название и текст биографии.')
     return
   }
-  if (isNew.value) {
-    bioStore.addBio({ title: form.title.trim(), text: form.text })
-    message.success('Биография добавлена')
-  } else {
-    bioStore.updateBio(route.params.id, { title: form.title.trim(), text: form.text })
-    message.success('Биография обновлена')
+  saving.value = true
+  try {
+    const payload = { title: form.title.trim(), text: form.text }
+    const result = isNew.value
+      ? await bioStore.addBio(payload)
+      : await bioStore.updateBio(route.params.id, payload)
+    if (!result) return
+    message.success(isNew.value ? 'Биография добавлена' : 'Биография обновлена')
+    router.push('/home/bio')
+  } finally {
+    saving.value = false
   }
-  router.push('/home/bio')
 }
 
-function remove() {
-  bioStore.removeBio(route.params.id)
+async function remove() {
+  if (!(await bioStore.removeBio(route.params.id))) return
   message.success('Биография удалена')
   router.push('/home/bio')
 }

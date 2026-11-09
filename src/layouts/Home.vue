@@ -54,6 +54,11 @@
               <span>Контакты</span>
             </a-menu-item>
 
+            <a-menu-item key="reports">
+              <BarChartOutlined />
+              <span>Отчёты</span>
+            </a-menu-item>
+
             <a-menu-item key="profile">
               <IdcardOutlined />
               <span>Профиль</span>
@@ -133,6 +138,11 @@
             <a-menu-item key="contacts">
               <ContactsOutlined />
               <span>Контакты</span>
+            </a-menu-item>
+
+            <a-menu-item key="reports">
+              <BarChartOutlined />
+              <span>Отчёты</span>
             </a-menu-item>
 
             <a-menu-item key="profile">
@@ -227,7 +237,8 @@ import {
   BookOutlined,
   BankOutlined,
   QrcodeOutlined,
-  ContactsOutlined
+  ContactsOutlined,
+  BarChartOutlined
 } from '@ant-design/icons-vue'
 
 const collapsed = ref(false);
@@ -263,8 +274,11 @@ async function handleStopImpersonation() {
   window.location.href = '/home/admin';
 }
 
-const selectedKey = ref(router.currentRoute.value.name);
-router.afterEach((to) => (selectedKey.value = to.name));
+// Вложенные страницы подсвечивают пункт своего раздела
+const MENU_KEY_BY_ROUTE = { report: 'reports' };
+const menuKeyFor = (name) => MENU_KEY_BY_ROUTE[name] || name;
+const selectedKey = ref(menuKeyFor(router.currentRoute.value.name));
+router.afterEach((to) => (selectedKey.value = menuKeyFor(to.name)));
 
 const isFilesModalOpen = ref(false)
 const isQrScannerOpen = ref(false)

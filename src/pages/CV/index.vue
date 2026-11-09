@@ -79,6 +79,10 @@
         <p class="empty-subtitle">Попробуйте изменить запрос поиска</p>
       </div>
 
+      <div v-else-if="!cvStore.loaded" class="empty-state">
+        <a-spin />
+      </div>
+
       <div v-else class="empty-state">
         <IdcardOutlined class="empty-icon" />
         <p class="empty-title">Резюме пока нет</p>
@@ -95,7 +99,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { message } from 'ant-design-vue';
 import {
@@ -115,6 +119,10 @@ import MobileMenuButton from '@/components/MobileMenuButton.vue';
 const router = useRouter();
 const cvStore = useCv();
 const cvList = computed(() => cvStore.cvList);
+
+onMounted(() => {
+  cvStore.fetchCvList();
+});
 const search = ref('');
 
 const filteredList = computed(() => {
@@ -147,9 +155,10 @@ function openEditPage(cv) {
   router.push(`/home/cv/${cv.id}`);
 }
 
-function deleteCv(id) {
-  cvStore.removeCv(id);
-  message.success('Резюме удалено');
+async function deleteCv(id) {
+  if (await cvStore.removeCv(id)) {
+    message.success('Резюме удалено');
+  }
 }
 
 const pdfLoadingId = ref(null);

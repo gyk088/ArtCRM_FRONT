@@ -34,6 +34,8 @@
           max-tag-count="responsive" :options="statusOptions" />
         <a-input-number v-model:value="filterPriceFrom" placeholder="Цена от" :min="0" style="width: 120px" />
         <a-input-number v-model:value="filterPriceTo" placeholder="Цена до" :min="0" style="width: 120px" />
+        <a-select v-model:value="filterSold" placeholder="Наличие" allowClear style="width: 150px"
+          :options="soldFilterOptions" />
       </div>
     </div>
 
@@ -69,6 +71,7 @@
             <div class="work-card-name">{{ record.name || 'Без названия' }}</div>
             <div class="work-card-artist">{{ getArtistName(record.artist) || 'Не указан' }}</div>
             <div v-if="record.price" class="work-card-price">{{ record.price }} {{ getCurrencySymbol(record.currency) }}</div>
+            <span v-if="record.sale" class="sold-pill" :title="saleTitle(record.sale)">Продана</span>
           </div>
 
           <div class="work-card-actions" @click.stop>
@@ -77,6 +80,14 @@
             </button>
             <button class="icon-btn icon-btn-certificate" title="Сгенерировать сертификат" @click="openCertificatePreview(record)">
               <SafetyCertificateOutlined />
+            </button>
+            <button
+              class="icon-btn icon-btn-sale"
+              :class="{ 'icon-btn-sale-done': record.sale }"
+              :title="record.sale ? `${saleTitle(record.sale)} — изменить` : 'Отметить как проданную'"
+              @click="openSaleModal(record)"
+            >
+              <DollarOutlined />
             </button>
             <button class="icon-btn icon-btn-danger" title="Удалить" @click="deleteRow(record.id)">
               <DeleteOutlined />
@@ -243,6 +254,11 @@
               </template>
               <template v-else-if="col.dataIndex === 'price'">
                 <span v-if="sortedData[virtualRow.index].price" class="cell-clamp">{{ sortedData[virtualRow.index].price }} {{ getCurrencySymbol(sortedData[virtualRow.index].currency) }}</span>
+                <span
+                  v-if="sortedData[virtualRow.index].sale"
+                  class="sold-pill"
+                  :title="saleTitle(sortedData[virtualRow.index].sale)"
+                >Продана</span>
               </template>
               <template v-else-if="col.dataIndex === 'actions'">
                 <button class="icon-btn icon-btn-edit" title="Редактировать" @click.stop="openEditPage(sortedData[virtualRow.index])">
@@ -254,6 +270,14 @@
                   @click.stop="openCertificatePreview(sortedData[virtualRow.index])"
                 >
                   <SafetyCertificateOutlined />
+                </button>
+                <button
+                  class="icon-btn icon-btn-sale"
+                  :class="{ 'icon-btn-sale-done': sortedData[virtualRow.index].sale }"
+                  :title="sortedData[virtualRow.index].sale ? `${saleTitle(sortedData[virtualRow.index].sale)} — изменить` : 'Отметить как проданную'"
+                  @click.stop="openSaleModal(sortedData[virtualRow.index])"
+                >
+                  <DollarOutlined />
                 </button>
                 <button class="icon-btn icon-btn-danger" title="Удалить" @click.stop="deleteRow(sortedData[virtualRow.index].id)">
                   <DeleteOutlined />
@@ -267,6 +291,15 @@
         </div>
       </div>
     </div>
+
+    <!-- Оформление/изменение/отмена продажи из колонки «Действия» -->
+    <SaleModal
+      v-model:open="saleModalOpen"
+      :art-id="saleWork?.id"
+      :work-name="saleWork?.name"
+      :price="saleWork?.price"
+      :currency="saleWork?.currency"
+    />
 
     <!-- Быстрый просмотр работы (без редактирования) -->
     <a-drawer v-model:open="isPreviewOpen" placement="right" :width="isMobile ? '100%' : '700px'" destroyOnClose root-class-name="preview-drawer">
@@ -302,6 +335,7 @@
             {{ getStatusName(previewWork.status) }}
           </div>
 
+          <div v-if="previewWork.sale" class="preview-sold">{{ saleTitle(previewWork.sale) }}</div>
           <div v-if="previewWork.price" class="preview-price">
             {{ formatPrice(previewWork.price) }} {{ getCurrencySymbol(previewWork.currency) }}
           </div>
@@ -336,10 +370,11 @@
 import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined, SearchOutlined, LoadingOutlined, CaretUpOutlined, CaretDownOutlined } from '@ant-design/icons-vue'
+import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined, DollarOutlined, SearchOutlined, LoadingOutlined, CaretUpOutlined, CaretDownOutlined } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import CertificatePreviewModal from '@/components/CertificatePreviewModal.vue'
+import SaleModal from '@/components/SaleModal.vue'
 import { useArtWork } from '@/stores/artWork.js'
 import { useMedia } from '@/stores/media.js'
 import { useSerias } from '@/stores/seria.js'
@@ -408,7 +443,13 @@ const {
   priceFrom: filterPriceFrom,
   priceTo: filterPriceTo,
   nameSearch: filterNameSearch,
+  sold: filterSold,
 } = storeToRefs(filtersStore)
+
+const soldFilterOptions = [
+  { label: 'В наличии', value: 'available' },
+  { label: 'Проданные', value: 'sold' },
+]
 
 
 // Хранилища для маппинга ID -> название
@@ -661,6 +702,12 @@ const filteredData = computed(() => {
     result = result.filter(item => Number(item.price) <= filterPriceTo.value)
   }
 
+  if (filterSold.value === 'sold') {
+    result = result.filter(item => item.sale)
+  } else if (filterSold.value === 'available') {
+    result = result.filter(item => !item.sale)
+  }
+
   return result
 })
 
@@ -674,7 +721,7 @@ const isArtistRole = computed(() => getUser()?.role === ROLES.ARTIST)
 // по ширине контейнера без горизонтальной прокрутки (table-layout: fixed).
 const columns = computed(() => [
   { title: ' ', dataIndex: 'avatar', key: 'avatar', width: '6%' },
-  { title: 'Название', dataIndex: 'name', key: 'name', width: isArtistRole.value ? '24%' : '16%', sorter: (a, b) => (a.name || '').localeCompare(b.name || '', 'ru') },
+  { title: 'Название', dataIndex: 'name', key: 'name', width: isArtistRole.value ? '22%' : '14%', sorter: (a, b) => (a.name || '').localeCompare(b.name || '', 'ru') },
   ...(isArtistRole.value ? [] : [
     { title: 'Художник', dataIndex: 'artist', key: 'artist', width: '9%', sorter: (a, b) => getArtistName(a.artist).localeCompare(getArtistName(b.artist), 'ru') },
   ]),
@@ -686,7 +733,7 @@ const columns = computed(() => [
   { title: 'Локация', dataIndex: 'location', key: 'location', width: '8%', sorter: (a, b) => getLocationName(a.location).localeCompare(getLocationName(b.location), 'ru') },
   { title: 'Статус', dataIndex: 'status', key: 'status', width: '9%', sorter: (a, b) => getStatusName(a.status).localeCompare(getStatusName(b.status), 'ru') },
   { title: 'Стоимость', dataIndex: 'price', key: 'price', width: '9%', sorter: (a, b) => a.price - b.price },
-  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: '8%' },
+  { title: 'Действия', dataIndex: 'actions', key: 'actions', width: '10%' },
 ])
 
 // Открытие страницы редактирования
@@ -706,7 +753,38 @@ const handleRowClick = (event, record) => {
 }
 
 // Удаление записи через API
+// Окно продажи из колонки «Действия». Отметка «Продана» в таблице
+// обновляется сама — стор продаж синхронизирует work.sale в списке работ.
+const saleModalOpen = ref(false)
+const saleWork = ref(null)
+
+function openSaleModal(record) {
+  saleWork.value = record
+  saleModalOpen.value = true
+}
+
+// Короткая подпись продажи: «Продана 12.10.2026 за 900 $»
+function saleTitle(sale) {
+  if (!sale) return ''
+  const date = sale.sale_date ? sale.sale_date.split('-').reverse().join('.') : ''
+  const price = sale.sale_price !== null && sale.sale_price !== undefined
+    ? ` за ${formatPrice(sale.sale_price)} ${getCurrencySymbol(sale.currency)}`
+    : ''
+  return `Продана ${date}${price}`
+}
+
 const deleteRow = (id) => {
+  // Проданную работу бэкенд удалить не даст (она пропала бы из отчётов) —
+  // объясняем сразу, а не после подтверждения
+  const work = artWorkStore.listArtWorks.find(w => w.id === id)
+  if (work?.sale) {
+    Modal.warning({
+      title: 'Работа продана',
+      content: 'Проданную работу нельзя удалить — она участвует в отчётах о продажах. Если продажа оформлена по ошибке, сначала отмените её в карточке работы.',
+      okText: 'Понятно',
+    })
+    return
+  }
   Modal.confirm({
     title: 'Удалить запись?',
     content: 'Вы уверены, что хотите удалить эту работу?',
@@ -810,7 +888,11 @@ const ROW_HEIGHT = 68
 const scrollContainerRef = ref(null)
 
 const gridTemplateColumns = computed(() => {
-  const fr = columns.value.map(c => `${parseFloat(c.width) || 1}fr`).join(' ')
+  // Колонке «Действия» нужна гарантированная ширина под 4 кнопки по 32px
+  // (иначе на узких экранах последняя, «Удалить», обрезается)
+  const fr = columns.value
+    .map(c => (c.key === 'actions' ? `minmax(150px, ${parseFloat(c.width) || 1}fr)` : `${parseFloat(c.width) || 1}fr`))
+    .join(' ')
   return `40px ${fr}`
 })
 
@@ -1140,6 +1222,27 @@ onMounted(async () => {
   line-height: 1.3;
 }
 
+.sold-pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #1f6b3a;
+  background: #e8f3ec;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.preview-sold {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f6b3a;
+}
+
 .imported-pill {
   display: inline-flex;
   align-items: center;
@@ -1312,6 +1415,20 @@ onMounted(async () => {
 .icon-btn-edit:hover {
   background: var(--status-default-bg);
   color: var(--accent-strong);
+}
+
+.icon-btn-sale {
+  color: var(--text-faint);
+}
+
+.icon-btn-sale:hover {
+  background: #e8f3ec;
+  color: #1f6b3a;
+}
+
+/* Работа продана — иконка зелёная, клик открывает изменение продажи */
+.icon-btn-sale-done {
+  color: #1f6b3a;
 }
 
 .icon-btn-danger {

@@ -89,7 +89,7 @@
               </a-form-item>
 
               <a-form-item label="Описание" class="field-full">
-                <a-textarea v-model:value="form.description" class="fixed-input description-input" />
+                <a-textarea v-model:value="form.description" class="fixed-input description-input" :maxlength="1000" show-count />
               </a-form-item>
             </section>
 
@@ -225,6 +225,14 @@
               </div>
             </section>
 
+            <!-- Продажа сохраняется сразу (своим запросом), независимо от кнопки «Сохранить» -->
+            <WorkSaleCard
+              v-if="!isNewWork && workLoaded"
+              :art-id="route.params.id"
+              :price="form.price"
+              :currency="form.currency"
+            />
+
             <div class="buttons-wrapper">
               <a-button type="primary" :loading="loading" @click="saveChanges" class="save-btn">
                 Сохранить
@@ -259,6 +267,7 @@
 
 
 <script setup>
+import { fileUrl as buildFileUrl } from '@/services/const.js'
 import { ref, reactive, computed, onMounted, defineComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PlusOutlined, DownloadOutlined } from '@ant-design/icons-vue'
@@ -270,6 +279,7 @@ import { useMedia } from '@/stores/media.js'
 import { useArtist } from '@/stores/artist.js'
 import { useArtWork } from '@/stores/artWork.js'
 import FileUploader from "@/components/FileUploader.vue"
+import WorkSaleCard from '@/components/WorkSaleCard.vue'
 import { downloadFile } from '@/utils/downloadFile.js'
 import { getUser } from '@/services/auth.js'
 import { ROLES } from '@/services/const'
@@ -305,6 +315,9 @@ const { isMobile } = useIsMobile()
 const uploadTarget = ref('avatar')
 const formRef = ref(null)
 const isNewWork = computed(() => route.params.id === 'new')
+// Удалось ли загрузить редактируемую работу. Пока нет — сохранять нельзя:
+// иначе форма без id ушла бы в POST и создала копию работы вместо обновления.
+const workLoaded = ref(false)
 
 // Для роли "художник" поле "Художник" всегда — сам пользователь, выбор запрещён
 const isArtistRole = computed(() => getUser()?.role === ROLES.ARTIST)
@@ -361,6 +374,7 @@ const loadArtWork = async () => {
   try {
     const work = await artWorkStore.getArtWorkById(route.params.id)
     if (work) {
+      workLoaded.value = true
       Object.assign(form, {
         id: work.id,
         name: work.name || '',
@@ -526,7 +540,7 @@ const handleFileSelect = (file) => {
   console.log('Выбран файл:', file)
   
   // Формируем URL для отображения файла (как в FileView компоненте)
-  const fileUrl = `https://dev.myoffer.life/files/${file.id}.${file.ext}`
+  const fileUrl = buildFileUrl(file)
   
   const fileData = {
     uid: file.id,
@@ -849,6 +863,14 @@ const getLocationIdByName = (locationName) => {
 }
 
 const saveChanges = async () => {
+  // Если это редактирование, а работа не загрузилась — не сохраняем
+  // (иначе вместо обновления создалась бы новая работа-копия)
+  if (!isNewWork.value && (!workLoaded.value || form.id !== route.params.id)) {
+    message.error('Работа не загрузилась. Обновите страницу и попробуйте снова.')
+    return
+  }
+  if (loading.value) return
+
   try {
     await formRef.value.validate()
   } catch {
@@ -882,8 +904,8 @@ const saveChanges = async () => {
     console.log('Отправляемые данные:', form.seria)
 
     let result
-    if (form.id && form.id !== 'new') {
-      result = await artWorkStore.updateArtWork({ ...workData, id: form.id })
+    if (!isNewWork.value) {
+      result = await artWorkStore.updateArtWork({ ...workData, id: route.params.id })
       if (result) {
         message.success('Работа обновлена')
       }

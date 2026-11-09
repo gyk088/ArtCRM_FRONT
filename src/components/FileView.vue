@@ -80,6 +80,7 @@
 </template>
 
 <script setup>
+import { fileUrl } from '@/services/const.js'
 import { computed, ref } from "vue"
 import {
   FileTextOutlined,
@@ -104,7 +105,7 @@ const openPreview = () => {
 
 // 👉 URL файла
 const src = computed(() => {
-  return `https://dev.myoffer.life/files/${props.file.id}.${props.file.ext}`
+  return fileUrl(props.file)
 })
 
 // 👉 типы

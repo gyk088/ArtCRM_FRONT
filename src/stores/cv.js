@@ -1,24 +1,24 @@
 import { defineStore } from 'pinia'
+import { createTextDocumentActions } from '@/stores/textDocumentStore.js'
 
-const STORAGE_KEY = 'cvList'
-
-function loadFromStorage() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : []
-  } catch (e) {
-    console.error('Error loading CV list:', e)
-    return []
-  }
-}
-
-function persist(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-}
+const actions = createTextDocumentActions({
+  endpoint: '/api/v1/cv',
+  legacyKey: 'cvList',
+  listKey: 'cvList',
+  texts: {
+    loadError: 'Не удалось загрузить резюме',
+    saveError: 'Не удалось сохранить резюме',
+    deleteError: 'Не удалось удалить резюме',
+    importError: 'Не удалось перенести сохранённые в браузере резюме на сервер',
+  },
+})
 
 export const useCv = defineStore('cv', {
   state: () => ({
-    cvList: loadFromStorage(),
+    cvList: [],
+    loading: false,
+    loaded: false,
+    _pending: null,
   }),
 
   getters: {
@@ -27,35 +27,10 @@ export const useCv = defineStore('cv', {
   },
 
   actions: {
-    addCv({ title, text }) {
-      const cv = {
-        id: Date.now(),
-        title,
-        text,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-      this.cvList.push(cv)
-      persist(this.cvList)
-      return cv
-    },
-
-    updateCv(id, { title, text }) {
-      const index = this.cvList.findIndex(c => String(c.id) === String(id))
-      if (index === -1) return null
-      this.cvList[index] = {
-        ...this.cvList[index],
-        title,
-        text,
-        updatedAt: new Date().toISOString(),
-      }
-      persist(this.cvList)
-      return this.cvList[index]
-    },
-
-    removeCv(id) {
-      this.cvList = this.cvList.filter(c => String(c.id) !== String(id))
-      persist(this.cvList)
-    },
+    fetchCvList: actions.fetchList,
+    fetchCv: actions.fetchOne,
+    addCv: actions.add,
+    updateCv: actions.update,
+    removeCv: actions.remove,
   },
 })

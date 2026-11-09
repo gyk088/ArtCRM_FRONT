@@ -14,5 +14,7 @@ export const useUserPicturesFilters = defineStore('user-pictures-filters', {
     priceFrom: null,
     priceTo: null,
     nameSearch: '',
+    // Наличие: null — все, 'available' — в наличии, 'sold' — проданные
+    sold: null,
   }),
 })

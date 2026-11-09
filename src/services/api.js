@@ -1,9 +1,10 @@
 import axios from 'axios'
 import { getToken, logout } from '@/services/auth.js'
+import { API_BASE_URL } from '@/services/const.js'
 
 const apiClient = axios.create({
   timeout: 100000,
-  baseURL: 'https://artapi.myoffer.life',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json'
   },

@@ -109,6 +109,20 @@ const router = createRouter({
             title: 'Редактировать контакт',
           },
       }, {
+        path: 'reports',
+        name: 'reports',
+        component: () => import('@/pages/Reports/index.vue'),
+        meta: {
+            title: 'Отчёты',
+          },
+      }, {
+        path: 'reports/:id',
+        name: 'report',
+        component: () => import('@/pages/Report/index.vue'),
+        meta: {
+            title: 'Отчёт',
+          },
+      }, {
         path: 'profile',
         name: 'profile',
         component: () => import('@/pages/UserConfig/index.vue'),

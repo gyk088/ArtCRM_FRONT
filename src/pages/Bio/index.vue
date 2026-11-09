@@ -79,6 +79,10 @@
         <p class="empty-subtitle">Попробуйте изменить запрос поиска</p>
       </div>
 
+      <div v-else-if="!bioStore.loaded" class="empty-state">
+        <a-spin />
+      </div>
+
       <div v-else class="empty-state">
         <FileTextOutlined class="empty-icon" />
         <p class="empty-title">Биографий пока нет</p>
@@ -95,7 +99,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { message } from 'ant-design-vue';
 import {
@@ -115,6 +119,10 @@ import MobileMenuButton from '@/components/MobileMenuButton.vue';
 const router = useRouter();
 const bioStore = useBio();
 const bioList = computed(() => bioStore.bioList);
+
+onMounted(() => {
+  bioStore.fetchBioList();
+});
 const search = ref('');
 
 const filteredList = computed(() => {
@@ -150,9 +158,10 @@ function openEditPage(bio) {
   router.push(`/home/bio/${bio.id}`);
 }
 
-function deleteBio(id) {
-  bioStore.removeBio(id);
-  message.success('Биография удалена');
+async function deleteBio(id) {
+  if (await bioStore.removeBio(id)) {
+    message.success('Биография удалена');
+  }
 }
 
 const pdfLoadingId = ref(null);
