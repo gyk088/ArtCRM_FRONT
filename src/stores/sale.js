@@ -11,6 +11,9 @@ const SERVER_ERRORS = {
   'Contact not found': 'Покупатель не найден в ваших контактах',
   'Sale not found': 'Продажа не найдена',
   'Art object not found': 'Работа не найдена',
+  'Discount cannot exceed 100%': 'Скидка не может быть больше 100%',
+  'Discount cannot exceed the work price': 'Скидка не может быть больше цены работы',
+  'Work price is not set: enter the sale price instead of a discount': 'У работы не указана цена — укажите цену продажи',
 }
 
 function errorText(e, fallback) {
@@ -46,8 +49,9 @@ export const useSale = defineStore('sale', {
 
     /**
      * POST /api/v1/sales
-     * @param {Object} data - { art_id, sale_date: 'YYYY-MM-DD', sale_price, list_price?,
-     *                          currency?, contact_id?, comment?, commission_pct? }
+     * @param {Object} data - { art_id, sale_date: 'YYYY-MM-DD', contact_id?, comment?,
+     *   и либо discount_type: 'pct'|'amount' + discount_value (цену посчитает сервер
+     *   от цены работы), либо sale_price + currency (у работы нет цены) }
      */
     async createSale(data) {
       try {

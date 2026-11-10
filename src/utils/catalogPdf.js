@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import { message } from 'ant-design-vue'
 import { escapeHtml } from './textPdf.js'
-import apiClient from '@/services/api.js'
+import { fileUrl } from '@/services/const.js'
 
 // fetch()/<img> не имеют встроенного таймаута — если файл недоступен, но
 // соединение не рвётся явно (зависший прокси, недоступный CORS-хост и т.п.),
@@ -28,6 +28,8 @@ async function loadImageAsDataUrl(url) {
     const resp = await withTimeout(fetch(url), 8000)
     if (!resp.ok) throw new Error('Image fetch failed')
     const blob = await resp.blob()
+    // nginx на неизвестный путь отдаёт index.html со статусом 200 — это не картинка
+    if (!blob.type.startsWith('image/')) throw new Error(`Not an image: ${blob.type}`)
 
     return await withTimeout(new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -72,11 +74,9 @@ async function renderWorkPage(work, { visibleFields, names }) {
 
   let imageDataUrl = null
   if (work.avatar?.id && work.avatar?.ext) {
-    // dev.myoffer.life/files отдаётся напрямую nginx без CORS, поэтому
-    // читаем файл через API-хост, где CORS настроен
-    const corsUrl = `${apiClient.defaults.baseURL}/${work.avatar.id}.${work.avatar.ext}`
+    // /files/ на том же домене, что и фронт — CORS не нужен
     try {
-      imageDataUrl = await loadImageAsDataUrl(corsUrl)
+      imageDataUrl = await loadImageAsDataUrl(fileUrl(work.avatar))
     } catch (error) {
       console.error('Не удалось загрузить изображение работы для каталога:', error)
     }

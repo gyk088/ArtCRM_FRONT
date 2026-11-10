@@ -230,7 +230,16 @@
     <!-- Таблица выбранных работ -->
     <section class="works-section">
       <div class="table-header">
-        <div class="section-heading">Добавленные работы</div>
+        <div>
+          <div class="section-heading">Добавленные работы</div>
+          <div v-if="selectedWorksData.length > 1 && isMobile" class="order-hint">
+            Меняйте порядок стрелками или номером позиции{{ isNewCollection ? '' : ' — сохраняется сразу' }}
+          </div>
+          <div v-else-if="selectedWorksData.length > 1" class="order-hint">
+            Перетащите строку за <HolderOutlined />, введите номер позиции или используйте стрелки — в этом порядке работы
+            покажутся на странице ссылки и в PDF{{ isNewCollection ? '' : '. Порядок сохраняется сразу' }}
+          </div>
+        </div>
         <div class="table-header-actions">
           <a-button
             :disabled="!selectedWorksData.length"
@@ -246,15 +255,119 @@
         </div>
       </div>
 
+      <!-- Телефон: список карточек вместо широкой таблицы -->
+      <div v-if="isMobile" class="m-works">
+        <div v-if="!selectedWorksData.length" class="m-works-empty">Работы ещё не добавлены</div>
+        <div v-for="(record, index) in selectedWorksData" :key="record.id" class="m-work">
+          <div class="m-work-order">
+            <button
+              type="button"
+              class="m-order-btn"
+              aria-label="Выше"
+              :disabled="index === 0"
+              @click="moveWorkBy(record.id, -1)"
+            >
+              <ArrowUpOutlined />
+            </button>
+            <a-input-number
+              :key="`${record.id}-${index}`"
+              :value="index + 1"
+              :min="1"
+              :max="selectedWorksData.length"
+              :controls="false"
+              size="small"
+              class="m-order-input"
+              inputmode="numeric"
+              @press-enter="(e) => { moveWorkTo(record.id, e.target.value); e.target.blur() }"
+              @blur="(e) => moveWorkTo(record.id, e.target.value)"
+            />
+            <button
+              type="button"
+              class="m-order-btn"
+              aria-label="Ниже"
+              :disabled="index === selectedWorksData.length - 1"
+              @click="moveWorkBy(record.id, 1)"
+            >
+              <ArrowDownOutlined />
+            </button>
+          </div>
+          <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="m-work-img" />
+          <div v-else class="m-work-img img-placeholder"><PictureOutlined /></div>
+          <div class="m-work-info">
+            <div class="m-work-name">{{ record.name || 'Без названия' }}</div>
+            <div class="m-work-artist">{{ getArtistName(record.artist) }}</div>
+          </div>
+          <div class="m-work-actions">
+            <button type="button" class="m-icon-btn" aria-label="Редактировать" @click="openEditWork(record)">
+              <EditOutlined />
+            </button>
+            <button type="button" class="m-icon-btn" aria-label="Сертификат" @click="openCertificatePreview(record)">
+              <SafetyCertificateOutlined />
+            </button>
+            <a-popconfirm title="Убрать работу из ссылки?" ok-text="Да" cancel-text="Нет" @confirm="removeSelectedWork(record.id)">
+              <button type="button" class="m-icon-btn m-icon-danger" aria-label="Удалить"><DeleteOutlined /></button>
+            </a-popconfirm>
+          </div>
+        </div>
+      </div>
+
       <a-table
+        v-else
         :data-source="selectedWorksData"
         :columns="selectedWorksColumns"
         row-key="id"
         size="small"
+        :pagination="false"
+        :custom-row="dragRowProps"
       >
-        <template #bodyCell="{ column, record }">
+        <template #bodyCell="{ column, record, index }">
+          <!-- Порядок: ручка для перетаскивания + стрелки (на телефоне drag&drop не работает) -->
+          <template v-if="column.dataIndex === 'order'">
+            <div class="order-cell">
+              <span
+                class="drag-handle"
+                title="Перетащите, чтобы изменить порядок"
+                @mousedown="armDrag(record.id)"
+              >
+                <HolderOutlined />
+              </span>
+              <a-input-number
+                :key="`${record.id}-${index}`"
+                :value="index + 1"
+                :min="1"
+                :max="selectedWorksData.length"
+                :controls="false"
+                size="small"
+                class="order-input"
+                title="Введите номер позиции и нажмите Enter"
+                @press-enter="(e) => { moveWorkTo(record.id, e.target.value); e.target.blur() }"
+                @blur="(e) => moveWorkTo(record.id, e.target.value)"
+                @click.stop
+              />
+              <div class="order-arrows">
+                <button
+                  type="button"
+                  class="order-arrow"
+                  title="Выше"
+                  :disabled="index === 0"
+                  @click.stop="moveWorkBy(record.id, -1)"
+                >
+                  <ArrowUpOutlined />
+                </button>
+                <button
+                  type="button"
+                  class="order-arrow"
+                  title="Ниже"
+                  :disabled="index === selectedWorksData.length - 1"
+                  @click.stop="moveWorkBy(record.id, 1)"
+                >
+                  <ArrowDownOutlined />
+                </button>
+              </div>
+            </div>
+          </template>
           <!-- Колонка аватара -->
-          <template v-if="column.dataIndex === 'avatar'">
+          <template v-else-if="column.dataIndex === 'avatar'">
             <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="preview-img" />
             <div v-else class="img-placeholder">
               <PictureOutlined />
@@ -413,6 +526,9 @@ import {
   FilePdfOutlined,
   EyeOutlined,
   TeamOutlined,
+  HolderOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import CertificatePreviewModal from '@/components/CertificatePreviewModal.vue'
@@ -683,6 +799,7 @@ const toggleableColumnDefs = {
 }
 
 const selectedWorksColumns = computed(() => [
+  { title: '№', dataIndex: 'order', key: 'order', width: 110 },
   { title: 'Картина', dataIndex: 'avatar', key: 'avatar', width: 100 },
   { title: "Название", dataIndex: "name", key: "name", width: 220 },
   { title: 'Художник', dataIndex: 'artist', key: 'artist', width: 160 },
@@ -702,13 +819,143 @@ function openWorksModal() {
 // он переживает фильтрацию/сортировку без отдельной preserveSelectedRowKeys
 const selectedRowKeys = ref([])
 
+// Строго в порядке form.works — это и есть порядок работ в ссылке
 const selectedWorksData = computed(() => {
-  return worksTable.value.filter(work => form.works.includes(work.id))
+  const byId = new Map(worksTable.value.map(work => [work.id, work]))
+  return form.works.map(id => byId.get(id)).filter(Boolean)
 })
 
 function removeSelectedWork(id) {
   form.works = form.works.filter(w => w !== id)
 }
+
+// === Порядок работ ===
+// Меняем местами по id (не по индексу строки): в form.works могут быть id
+// работ, которых ещё нет в загруженном списке и которые таблица не показывает.
+function moveWork(dragId, targetId, placeAfter) {
+  if (!dragId || dragId === targetId) return
+  const ids = form.works.filter(id => id !== dragId)
+  const targetIndex = ids.indexOf(targetId)
+  if (targetIndex === -1) return
+  ids.splice(placeAfter ? targetIndex + 1 : targetIndex, 0, dragId)
+  if (ids.join() === form.works.join()) return
+  form.works = ids
+  scheduleOrderSave()
+}
+
+// Сдвиг на одну видимую строку вверх/вниз
+function moveWorkBy(id, delta) {
+  const rows = selectedWorksData.value
+  const index = rows.findIndex(w => w.id === id)
+  const neighbour = rows[index + delta]
+  if (neighbour) moveWork(id, neighbour.id, delta > 0)
+}
+
+// Drag&drop строк таблицы (HTML5). Тянуть можно только за ручку: нажатие на
+// неё «взводит» строку, а drag, начатый в другом месте строки, отменяется.
+//
+// Всё состояние перетаскивания — НЕ реактивное, подсветка места вставки
+// ставится классами прямо на <tr>: любая перерисовка таблицы посреди drag
+// (а реактивное состояние её вызывает) обрывает перетаскивание в браузере,
+// и строку удавалось сдвинуть только на одну позицию.
+let armedDragId = null
+let draggingId = null
+let dropTarget = null // { id, after, el }
+
+function setDropMarker(el, after) {
+  if (dropTarget?.el && dropTarget.el !== el) {
+    dropTarget.el.classList.remove('row-drop-before', 'row-drop-after')
+  }
+  el.classList.toggle('row-drop-before', !after)
+  el.classList.toggle('row-drop-after', after)
+}
+
+function dragRowProps(record) {
+  return {
+    draggable: true,
+    onDragstart: (e) => {
+      if (armedDragId !== record.id) {
+        e.preventDefault()
+        return
+      }
+      draggingId = record.id
+      e.currentTarget.classList.add('row-dragging')
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/plain', record.id) // без данных Firefox не начинает drag
+    },
+    onDragover: (e) => {
+      if (!draggingId) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      const el = e.currentTarget
+      const rect = el.getBoundingClientRect()
+      const after = e.clientY > rect.top + rect.height / 2
+      if (dropTarget?.el !== el || dropTarget.after !== after) {
+        setDropMarker(el, after)
+        dropTarget = { id: record.id, after, el }
+      }
+    },
+    onDrop: (e) => {
+      e.preventDefault()
+      const from = draggingId
+      const target = dropTarget
+      clearDrag()
+      if (from && target) moveWork(from, target.id, target.after)
+    },
+    onDragend: clearDrag,
+  }
+}
+
+// Кнопку мыши могут отпустить где угодно — снимаем «взвод» глобально
+function disarmDrag() {
+  armedDragId = null
+}
+
+function armDrag(id) {
+  armedDragId = id
+  window.addEventListener('mouseup', disarmDrag, { once: true })
+}
+
+function clearDrag() {
+  document.querySelectorAll('.row-dragging, .row-drop-before, .row-drop-after').forEach(el => {
+    el.classList.remove('row-dragging', 'row-drop-before', 'row-drop-after')
+  })
+  draggingId = null
+  dropTarget = null
+  armedDragId = null
+}
+
+// Перенос на позицию, введённую в поле номера (1..N)
+function moveWorkTo(id, position) {
+  const rows = selectedWorksData.value
+  const from = rows.findIndex(w => w.id === id)
+  const to = Math.min(Math.max(Math.round(Number(position)) || 1, 1), rows.length) - 1
+  if (from === -1 || from === to) return
+  moveWork(id, rows[to].id, to > from)
+}
+
+// У существующей ссылки порядок сохраняем сразу (с задержкой, чтобы серия
+// перестановок ушла одним запросом); новая ссылка сохранит его при создании.
+let orderSaveTimer = null
+function scheduleOrderSave() {
+  if (isNewCollection.value) return
+  clearTimeout(orderSaveTimer)
+  orderSaveTimer = setTimeout(saveOrder, 700)
+}
+
+async function saveOrder() {
+  orderSaveTimer = null
+  const result = await collectionStore.updateCollection(route.params.id, { works: [...form.works] }, { silent: true })
+  if (result) message.success({ content: 'Порядок работ сохранён', key: 'works-order', duration: 1.5 })
+}
+
+onBeforeUnmount(() => {
+  // уходим со страницы, не дождавшись таймера — сохраняем сразу
+  if (orderSaveTimer) {
+    clearTimeout(orderSaveTimer)
+    saveOrder()
+  }
+})
 
 // Выгрузка каталога — все добавленные работы, по одной на страницу PDF,
 // с учётом тех же переключателей видимости полей, что и на публичной странице.
@@ -756,7 +1003,11 @@ function openCertificatePreview(record) {
 const savingWorks = ref(false)
 
 const addSelectedWorks = async () => {
-  const newWorks = [...selectedRowKeys.value]
+  // Уже добавленные работы сохраняют свой порядок, новые — в конец списка
+  const picked = new Set(selectedRowKeys.value)
+  const kept = form.works.filter(id => picked.has(id))
+  const keptSet = new Set(kept)
+  const newWorks = [...kept, ...selectedRowKeys.value.filter(id => !keptSet.has(id))]
 
   if (isNewCollection.value) {
     form.works = newWorks
@@ -784,6 +1035,10 @@ const saveChanges = async () => {
     message.warning('Проверьте обязательные поля')
     return
   }
+
+  // общее сохранение и так отправит works — отложенное сохранение порядка не нужно
+  clearTimeout(orderSaveTimer)
+  orderSaveTimer = null
 
   const payload = {
     name: form.name,
@@ -1470,5 +1725,202 @@ function goBack() {
   font-size: 13px;
   font-weight: 500;
   color: var(--accent);
+}
+
+/* === Порядок работ в ссылке === */
+.order-hint {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #7c7669;
+}
+
+.order-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #7c7669;
+  padding: 4px 2px;
+  font-size: 16px;
+  user-select: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.order-input {
+  width: 48px;
+}
+
+.order-input :deep(input) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.order-arrows {
+  display: flex;
+  flex-direction: column;
+}
+
+.order-arrow {
+  border: none;
+  background: none;
+  padding: 0 4px;
+  line-height: 1;
+  font-size: 11px;
+  color: #7c7669;
+  cursor: pointer;
+}
+
+.order-arrow:hover:not(:disabled) {
+  color: #8a6d2f;
+}
+
+.order-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.works-section :deep(.row-dragging > td) {
+  opacity: 0.4;
+}
+
+.works-section :deep(.row-drop-before > td) {
+  box-shadow: inset 0 2px 0 #8a6d2f;
+}
+
+.works-section :deep(.row-drop-after > td) {
+  box-shadow: inset 0 -2px 0 #8a6d2f;
+}
+
+/* === Телефон: список работ ссылки === */
+.m-works {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.m-works-empty {
+  padding: 16px 0;
+  color: #7c7669;
+  text-align: center;
+}
+
+.m-work {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 10px;
+}
+
+.m-work-order {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.m-order-btn {
+  border: none;
+  background: #efece4;
+  color: #5a564c;
+  width: 40px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.m-order-btn:disabled {
+  opacity: 0.35;
+}
+
+.m-order-input {
+  width: 40px;
+}
+
+.m-order-input :deep(input) {
+  text-align: center;
+  padding: 0 2px !important;
+}
+
+.m-work-img {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.m-work-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.m-work-name {
+  font-weight: 500;
+  color: #211f1a;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.m-work-artist {
+  font-size: 12px;
+  color: #7c7669;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.m-work-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.m-icon-btn {
+  border: none;
+  background: none;
+  width: 36px;
+  height: 30px;
+  border-radius: 6px;
+  color: #7c7669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.m-icon-danger {
+  color: #8f2c2c;
+}
+
+@media (max-width: 768px) {
+  .table-header {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 10px;
+  }
+
+  .table-header-actions {
+    flex-direction: column;
+  }
+
+  .table-header-actions .ant-btn {
+    width: 100%;
+    height: 40px;
+  }
 }
 </style>

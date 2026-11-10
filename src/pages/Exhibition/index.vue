@@ -313,7 +313,32 @@
         </div>
       </div>
 
+      <!-- Телефон: список карточек вместо широкой таблицы -->
+      <div v-if="isMobile" class="m-works">
+        <div v-if="!selectedWorksData.length" class="m-works-empty">Работы ещё не добавлены</div>
+        <div v-for="record in selectedWorksData" :key="record.id" class="m-work">
+          <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="m-work-img" />
+          <div v-else class="m-work-img img-placeholder"><PictureOutlined /></div>
+          <div class="m-work-info">
+            <div class="m-work-name">{{ record.name || 'Без названия' }}</div>
+            <div class="m-work-artist">{{ getArtistName(record.artist) }}</div>
+          </div>
+          <div class="m-work-actions">
+            <button type="button" class="m-icon-btn" aria-label="Редактировать" @click="openEditWork(record)">
+              <EditOutlined />
+            </button>
+            <button type="button" class="m-icon-btn" aria-label="Сертификат" @click="openCertificatePreview(record)">
+              <SafetyCertificateOutlined />
+            </button>
+            <a-popconfirm title="Убрать работу из выставки?" ok-text="Да" cancel-text="Нет" @confirm="removeSelectedWork(record.id)">
+              <button type="button" class="m-icon-btn m-icon-danger" aria-label="Удалить"><DeleteOutlined /></button>
+            </a-popconfirm>
+          </div>
+        </div>
+      </div>
+
       <a-table
+        v-else
         :data-source="selectedWorksData"
         :columns="selectedWorksColumns"
         row-key="id"
@@ -1669,5 +1694,32 @@ function goBack() {
   font-size: 13px;
   font-weight: 500;
   color: var(--accent);
+}
+
+/* === Телефон: список работ выставки === */
+.m-works { display: flex; flex-direction: column; gap: 8px; }
+.m-works-empty { padding: 16px 0; color: #7c7669; text-align: center; }
+.m-work {
+  display: flex; align-items: center; gap: 10px; padding: 8px;
+  background: #fff; border: 1px solid rgba(0, 0, 0, 0.07); border-radius: 10px;
+}
+.m-work-img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+.m-work-info { flex: 1; min-width: 0; }
+.m-work-name {
+  font-weight: 500; color: #211f1a; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.m-work-artist { font-size: 12px; color: #7c7669; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-work-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.m-icon-btn {
+  border: none; background: none; width: 36px; height: 36px; border-radius: 6px;
+  color: #7c7669; display: flex; align-items: center; justify-content: center; font-size: 16px;
+}
+.m-icon-danger { color: #8f2c2c; }
+
+@media (max-width: 768px) {
+  .table-header { flex-direction: column; align-items: stretch !important; gap: 10px; }
+  .table-header-actions { flex-direction: column; }
+  .table-header-actions .ant-btn { width: 100%; height: 40px; }
 }
 </style>

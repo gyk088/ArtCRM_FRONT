@@ -155,7 +155,7 @@
                 <EditOutlined />
               </button>
             </a-tooltip>
-            <a-tooltip title="Удалить папку">
+            <a-tooltip v-if="isOwn(folder)" title="Удалить папку">
               <button class="folder-action-btn danger" @click.stop="handleDeleteFolder(folder)">
                 <DeleteOutlined />
               </button>
@@ -235,7 +235,7 @@
             </button>
           </a-tooltip>
 
-          <a-tooltip v-if="remove" title="Удалить">
+          <a-tooltip v-if="remove && isOwn(item)" title="Удалить">
             <button
               class="file-action-btn danger"
               :disabled="item.loading"
@@ -325,6 +325,7 @@ import {
   CloseCircleOutlined
 } from "@ant-design/icons-vue"
 import { useFile, formatStorageSize, showStorageLimitModal } from "@/stores/file.js"
+import { getUser } from "@/services/auth.js"
 import { useArtWork } from "@/stores/artWork.js"
 import { useCollection } from "@/stores/collection.js"
 import { useExhibition } from "@/stores/exhibition.js"
@@ -333,6 +334,12 @@ import { downloadFile } from "@/utils/downloadFile.js"
 
 const emit = defineEmits(["select"])
 
+
+// Файлы и папки внутри галереи общие (галерея + её менеджеры), но удалить
+// файл/папку может только тот, кто их добавил — у чужих кнопки удаления нет.
+// Без user_id (только что загружаемый файл) — свой.
+const currentUserId = getUser()?.id
+const isOwn = (entity) => !entity?.user_id || entity.user_id === currentUserId
 
 const props = defineProps({
   select: {

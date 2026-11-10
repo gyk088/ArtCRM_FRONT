@@ -37,7 +37,19 @@
           <span class="cert-sign-line"></span>
           <span class="cert-sign-value">/ {{ artistName || '—' }} /</span>
         </div>
-        <div class="cert-sign-date">{{ dateStr }}</div>
+        <div class="cert-sign-date">
+          <a-date-picker
+            v-model:value="certDate"
+            picker="month"
+            format="MM/YYYY"
+            value-format="MM/YYYY"
+            :allow-clear="false"
+            size="small"
+            class="cert-date-input"
+            placeholder="Дата"
+          />
+          <span class="cert-date-hint">дату можно изменить</span>
+        </div>
       </div>
     </div>
 
@@ -71,13 +83,21 @@ function defaultHeaderText() {
   return getUser()?.certificate_header_text || DEFAULT_CERTIFICATE_HEADER_TEXT
 }
 
+// Дата под подписью (формат как в сертификате — MM/YYYY), по умолчанию текущий месяц
+function currentMonth() {
+  const now = new Date()
+  return `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`
+}
+
 const headerText = ref(defaultHeaderText())
+const certDate = ref(currentMonth())
 const downloading = ref(false)
-const now = new Date()
-const dateStr = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`
 
 watch(() => props.open, (isOpen) => {
-  if (isOpen) headerText.value = defaultHeaderText()
+  if (isOpen) {
+    headerText.value = defaultHeaderText()
+    certDate.value = currentMonth()
+  }
 })
 
 const fieldRows = computed(() => {
@@ -104,7 +124,8 @@ async function handleDownload() {
     await downloadCertificatePdf(props.work, {
       artistName: props.artistName,
       seriaName: props.seriaName,
-      headerText: headerText.value.trim() || defaultHeaderText()
+      headerText: headerText.value.trim() || defaultHeaderText(),
+      dateText: certDate.value || currentMonth()
     })
     close()
   } catch (error) {
@@ -222,6 +243,21 @@ async function handleDownload() {
   font-size: 12px;
   color: #000000;
   margin-top: 8px;
+}
+
+.cert-sign-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cert-date-input {
+  width: 110px;
+}
+
+.cert-date-hint {
+  font-size: 11px;
+  color: #7c7669;
 }
 
 .cert-actions {

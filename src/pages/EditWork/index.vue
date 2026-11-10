@@ -500,7 +500,10 @@ const ensureOwnArtistSelected = async () => {
   const fullName = [user?.name, user?.surname].filter(Boolean).join(' ').trim()
   if (!fullName) return
 
-  let ownArtist = artistOptions.value.find(opt => opt.label === fullName)
+  // Имена в профиле бывают с лишними пробелами — сравниваем без них, иначе
+  // на каждое открытие работы создавался бы дубль художника
+  const norm = (v) => String(v || '').replace(/\s+/g, ' ').trim().toLowerCase()
+  let ownArtist = artistOptions.value.find(opt => norm(opt.label) === norm(fullName))
 
   if (!ownArtist) {
     try {

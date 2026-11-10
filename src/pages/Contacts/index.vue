@@ -33,7 +33,55 @@
       </a-input>
     </div>
 
+    <!-- Телефон: карточки вместо широкой таблицы; телефон и мессенджер — крупные кнопки -->
+    <a-spin v-if="isMobile" :spinning="contactStore.loading">
+      <div v-if="!filteredContacts.length && !contactStore.loading" class="contacts-empty m-contacts-empty">
+        Пока пусто — добавьте контакт выше
+      </div>
+      <div class="m-contacts">
+        <div v-for="record in filteredContacts" :key="record.id" class="m-contact" @click="openEditPage(record)">
+          <div class="m-contact-top">
+            <div class="m-contact-name">{{ record.name || 'Без имени' }}</div>
+            <a-popconfirm
+              :title="`Удалить контакт «${record.name || 'без имени'}»?`"
+              ok-text="Удалить"
+              cancel-text="Отмена"
+              @confirm="handleDelete(record)"
+            >
+              <button type="button" class="m-contact-delete" aria-label="Удалить" @click.stop>
+                <DeleteOutlined />
+              </button>
+            </a-popconfirm>
+          </div>
+          <div class="m-contact-meta">
+            <a-tag v-if="getSourceName(record.source)" class="source-tag">{{ getSourceName(record.source) }}</a-tag>
+            <span v-if="purchasedCount(record)" class="works-badge works-badge--purchased">{{ purchasedCount(record) }} куплено</span>
+            <span v-if="interestedCount(record)" class="works-badge works-badge--interested">{{ interestedCount(record) }} в интересах</span>
+          </div>
+          <div v-if="record.notes" class="m-contact-notes">{{ record.notes }}</div>
+          <div v-if="record.phone || record.messenger" class="m-contact-actions" @click.stop>
+            <a v-if="record.phone" :href="`tel:${record.phone}`" class="m-contact-btn">
+              <PhoneOutlined /> {{ record.phone }}
+            </a>
+            <a
+              v-if="isLink(record.messenger)"
+              :href="record.messenger"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="m-contact-btn"
+            >
+              <MessageOutlined /> Написать
+            </a>
+            <span v-else-if="record.messenger" class="m-contact-btn m-contact-btn-plain">
+              <MessageOutlined /> {{ record.messenger }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </a-spin>
+
     <a-table
+      v-else
       class="contacts-table"
       :columns="columns"
       :data-source="filteredContacts"
@@ -146,7 +194,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, QrcodeOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, QrcodeOutlined, ThunderboltOutlined, PhoneOutlined, MessageOutlined } from '@ant-design/icons-vue'
+import { useIsMobile } from '@/composables/useIsMobile.js'
 import { useContact } from '@/stores/contact.js'
 import { useContactSource } from '@/stores/contactSource.js'
 import { getUser } from '@/services/auth.js'
@@ -156,6 +205,7 @@ import QrScannerModal from '@/components/QrScannerModal.vue'
 const router = useRouter()
 const contactStore = useContact()
 const contactSourceStore = useContactSource()
+const { isMobile } = useIsMobile()
 const contactList = computed(() => contactStore.listContacts)
 
 onMounted(() => {
@@ -483,5 +533,98 @@ async function handleQuickSave() {
   .search-input {
     width: 100%;
   }
+}
+
+/* === Телефон: карточки контактов === */
+.m-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.m-contacts-empty {
+  display: block;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.m-contact {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.m-contact-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.m-contact-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #211f1a;
+}
+
+.m-contact-delete {
+  border: none;
+  background: none;
+  color: #8f2c2c;
+  width: 32px;
+  height: 32px;
+  margin: -6px -8px 0 0;
+  font-size: 16px;
+}
+
+.m-contact-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.m-contact-meta:empty {
+  display: none;
+}
+
+.m-contact-notes {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #5a564c;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.m-contact-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.m-contact-btn {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 20px;
+  border: 1px solid #8a6d2f;
+  color: #8a6d2f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.m-contact-btn-plain {
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #5a564c;
 }
 </style>

@@ -4,6 +4,7 @@ import { ROLES } from '@/services/const'
 import { Layout } from 'ant-design-vue'
 import Home from '@/layouts/Home.vue';
 import { getToken, getUser } from '@/services/auth'
+import { FEATURES } from '@/services/features.js'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -44,25 +45,27 @@ const router = createRouter({
           name: 'bio',
           component: () => import('@/pages/Bio/index.vue'),
         meta: {
+            feature: 'bioCv',
             title: '<Биография>',
           },
       }, {
           path: '/home/bio/:id',
           name: 'edit-bio',
           component: () => import('@/pages/EditBio/index.vue'),
-          meta: { title: 'Редактировать биографию' },
+          meta: { title: 'Редактировать биографию', feature: 'bioCv' },
         },{
         path: 'cv',
         name: 'cv',
         component: () => import('@/pages/CV/index.vue'),
         meta: {
+            feature: 'bioCv',
             title: '<Резюме>',
           },
       }, {
           path: '/home/cv/:id',
           name: 'edit-cv',
           component: () => import('@/pages/EditCV/index.vue'),
-          meta: { title: 'Редактировать резюме' },
+          meta: { title: 'Редактировать резюме', feature: 'bioCv' },
         },{
         path: 'collection',
         name: 'collection',
@@ -159,6 +162,11 @@ router.beforeEach((to) => {
   }
 
   if (to.path === '/auth' && isAuthenticated && !to.query.token) {
+    return '/home'
+  }
+
+  // Временно скрытые разделы (services/features.js)
+  if (to.meta?.feature && !FEATURES[to.meta.feature]) {
     return '/home'
   }
 

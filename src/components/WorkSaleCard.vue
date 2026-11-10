@@ -8,12 +8,14 @@
         <div class="sale-badge">Продана</div>
         <div class="sale-main">
           {{ formatDate(sale.sale_date) }} · <b>{{ formatMoney(sale.sale_price, sale.currency) }}</b>
-          <span v-if="sale.discount_pct" class="sale-discount">−{{ formatPct(sale.discount_pct) }}</span>
+          <span v-if="sale.discount_pct > 0" class="sale-discount">−{{ formatPct(sale.discount_pct) }}</span>
         </div>
         <div class="sale-meta">
-          <div v-if="sale.list_price !== null">По прайсу: {{ formatMoney(sale.list_price, sale.currency) }}</div>
+          <div v-if="sale.discount_amount > 0">
+            Цена работы {{ formatMoney(sale.list_price, sale.currency) }}, скидка
+            {{ sale.discount_type === 'pct' ? formatPct(sale.discount_value) : formatMoney(sale.discount_amount, sale.currency) }}
+          </div>
           <div v-if="sale.contact">Покупатель: {{ sale.contact.name || 'без имени' }}</div>
-          <div v-if="sale.commission_pct !== null">Комиссия галереи: {{ formatPct(sale.commission_pct) }}</div>
           <div v-if="sale.sold_by">Оформил(а): {{ personName(sale.sold_by) }}</div>
           <div v-if="sale.comment" class="sale-comment">{{ sale.comment }}</div>
         </div>

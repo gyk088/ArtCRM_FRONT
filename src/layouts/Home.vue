@@ -29,12 +29,12 @@
               <span>Мои Выставки</span>
             </a-menu-item>
 
-            <a-menu-item key="bio">
+            <a-menu-item v-if="SHOW_BIO_CV" key="bio">
               <UserOutlined />
               <span>Биография</span>
             </a-menu-item>
 
-            <a-menu-item key="cv">
+            <a-menu-item v-if="SHOW_BIO_CV" key="cv">
               <FileTextOutlined />
               <span>Резюме</span>
             </a-menu-item>
@@ -115,12 +115,12 @@
               <span>Мои Выставки</span>
             </a-menu-item>
 
-            <a-menu-item key="bio">
+            <a-menu-item v-if="SHOW_BIO_CV" key="bio">
               <UserOutlined />
               <span>Биография</span>
             </a-menu-item>
 
-            <a-menu-item key="cv">
+            <a-menu-item v-if="SHOW_BIO_CV" key="cv">
               <FileTextOutlined />
               <span>Резюме</span>
             </a-menu-item>
@@ -213,6 +213,7 @@
 </template>
 
 <script setup>
+import { SHOW_BIO_CV } from '@/services/features.js'
 import { ref, computed, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -631,6 +632,11 @@ const handleLogout = () => {
   margin: 16px;
   position: relative;
   overflow-x: hidden;
+  /* clip обрезает так же, как hidden (уезжающие при переходе страницы), но
+     не делает .content-area контейнером прокрутки — иначе position: sticky
+     у панели «Сохранить / Отмена» на телефоне не работает. Браузеры без
+     поддержки clip остаются на hidden (строкой выше). */
+  overflow-x: clip;
 }
 
 /* === Полноэкранное мобильное меню === */

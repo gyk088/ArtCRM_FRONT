@@ -18,10 +18,23 @@
 
     <div class="filters-panel">
       <div class="filters-left">
-        <a-input v-model:value="filterNameSearch" placeholder="Поиск по названию" allowClear class="name-search"
-          style="width: 220px">
-          <template #prefix><SearchOutlined /></template>
-        </a-input>
+        <div class="search-row">
+          <a-input v-model:value="filterNameSearch" placeholder="Поиск по названию" allowClear class="name-search"
+            style="width: 220px">
+            <template #prefix><SearchOutlined /></template>
+          </a-input>
+          <!-- На телефоне остальные фильтры свёрнуты, чтобы работы были видны сразу -->
+          <a-button
+            v-if="isMobile"
+            class="filters-toggle"
+            :class="{ 'filters-toggle-active': activeFiltersCount }"
+            @click="filtersOpen = !filtersOpen"
+          >
+            <FilterOutlined />
+            <span v-if="activeFiltersCount" class="filters-count">{{ activeFiltersCount }}</span>
+          </a-button>
+        </div>
+        <template v-if="!isMobile || filtersOpen">
         <a-select v-model:value="filterArtist" mode="multiple" placeholder="Художник" allowClear style="width: 200px"
           max-tag-count="responsive" :options="artistOptions" />
         <a-select v-model:value="filterLocation" mode="multiple" placeholder="Локация" allowClear style="width: 200px"
@@ -36,10 +49,14 @@
         <a-input-number v-model:value="filterPriceTo" placeholder="Цена до" :min="0" style="width: 120px" />
         <a-select v-model:value="filterSold" placeholder="Наличие" allowClear style="width: 150px"
           :options="soldFilterOptions" />
+        <a-button v-if="isMobile && activeFiltersCount" type="link" class="filters-reset" @click="resetFilters">
+          Сбросить фильтры
+        </a-button>
+        </template>
       </div>
     </div>
 
-    <div class="selected-count">Выбрано работ: {{ selectedRowKeys.length }}</div>
+    <div v-if="!isMobile || selectedRowKeys.length" class="selected-count">Выбрано работ: {{ selectedRowKeys.length }}</div>
 
     <!-- Первая загрузка (кэша ещё нет) — явный, понятный лоадер вместо
          пустой таблицы/сетки, особенно заметно на больших каталогах. -->
@@ -70,7 +87,7 @@
           <div class="work-card-body">
             <div class="work-card-name">{{ record.name || 'Без названия' }}</div>
             <div class="work-card-artist">{{ getArtistName(record.artist) || 'Не указан' }}</div>
-            <div v-if="record.price" class="work-card-price">{{ record.price }} {{ getCurrencySymbol(record.currency) }}</div>
+            <div v-if="record.price" class="work-card-price">{{ formatPrice(record.price) }} {{ getCurrencySymbol(record.currency) }}</div>
             <span v-if="record.sale" class="sold-pill" :title="saleTitle(record.sale)">Продана</span>
           </div>
 
@@ -253,7 +270,7 @@
                 </a-dropdown>
               </template>
               <template v-else-if="col.dataIndex === 'price'">
-                <span v-if="sortedData[virtualRow.index].price" class="cell-clamp">{{ sortedData[virtualRow.index].price }} {{ getCurrencySymbol(sortedData[virtualRow.index].currency) }}</span>
+                <span v-if="sortedData[virtualRow.index].price" class="cell-clamp">{{ formatPrice(sortedData[virtualRow.index].price) }} {{ getCurrencySymbol(sortedData[virtualRow.index].currency) }}</span>
                 <span
                   v-if="sortedData[virtualRow.index].sale"
                   class="sold-pill"
@@ -370,7 +387,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined, DollarOutlined, SearchOutlined, LoadingOutlined, CaretUpOutlined, CaretDownOutlined } from '@ant-design/icons-vue'
+import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined, DollarOutlined, SearchOutlined, FilterOutlined, LoadingOutlined, CaretUpOutlined, CaretDownOutlined } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import CertificatePreviewModal from '@/components/CertificatePreviewModal.vue'
@@ -445,6 +462,27 @@ const {
   nameSearch: filterNameSearch,
   sold: filterSold,
 } = storeToRefs(filtersStore)
+
+// Свёрнутые фильтры на телефоне: сколько из них сейчас задано (кроме поиска)
+const filtersOpen = ref(false)
+const activeFiltersCount = computed(() => {
+  const arrays = [filterArtist, filterLocation, filterSeria, filterMedia, filterStatus]
+    .filter(r => Array.isArray(r.value) && r.value.length).length
+  const values = [filterPriceFrom, filterPriceTo, filterSold]
+    .filter(r => r.value !== null && r.value !== undefined && r.value !== '').length
+  return arrays + values
+})
+
+function resetFilters() {
+  filterArtist.value = []
+  filterLocation.value = []
+  filterSeria.value = []
+  filterMedia.value = []
+  filterStatus.value = []
+  filterPriceFrom.value = null
+  filterPriceTo.value = null
+  filterSold.value = null
+}
 
 const soldFilterOptions = [
   { label: 'В наличии', value: 'available' },
@@ -1722,6 +1760,52 @@ onMounted(async () => {
 
   .filters-left {
     flex-direction: column;
+    gap: 10px;
+  }
+
+  .search-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .search-row .name-search {
+    flex: 1;
+  }
+
+  .filters-toggle {
+    position: relative;
+    width: 44px;
+    height: 40px;
+    border-radius: 20px;
+    flex-shrink: 0;
+  }
+
+  .filters-toggle-active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .filters-count {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    line-height: 18px;
+  }
+
+  .filters-reset {
+    align-self: flex-start;
+    padding: 0;
+  }
+
+  .filters-panel {
+    margin-bottom: 12px;
   }
 
   .filters-left :deep(.ant-select),

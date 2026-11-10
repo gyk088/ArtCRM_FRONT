@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import { message } from 'ant-design-vue'
 import { escapeHtml } from './textPdf.js'
-import apiClient from '@/services/api.js'
+import { fileUrl } from '@/services/const.js'
 
 // Подгружаем обложку как data URL заранее, чтобы избежать "tainted canvas"
 // при кросс-доменной картинке на этапе рендера html2canvas
@@ -11,6 +11,8 @@ async function loadImageAsDataUrl(url) {
     const resp = await fetch(url)
     if (!resp.ok) throw new Error('Image fetch failed')
     const blob = await resp.blob()
+    // nginx на неизвестный путь отдаёт index.html со статусом 200 — это не картинка
+    if (!blob.type.startsWith('image/')) throw new Error(`Not an image: ${blob.type}`)
 
     return await new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -45,22 +47,21 @@ export const DEFAULT_CERTIFICATE_HEADER_TEXT =
   'Настоящий сертификат подтверждает подлинность произведения искусства и передачу неисключительной лицензии на использование его изображения любым способом, с правом передачи третьим лицам.'
 
 // Генерирует и скачивает сертификат подлинности работы в PDF
-export async function downloadCertificatePdf(work, { artistName = '', seriaName = '', headerText = DEFAULT_CERTIFICATE_HEADER_TEXT } = {}) {
+export async function downloadCertificatePdf(work, { artistName = '', seriaName = '', headerText = DEFAULT_CERTIFICATE_HEADER_TEXT, dateText = '' } = {}) {
   let avatarDataUrl = null
   if (work.avatar?.id && work.avatar?.ext) {
-    // dev.myoffer.life/files отдаётся напрямую nginx без CORS-заголовков,
-    // поэтому для чтения пикселей в canvas берём файл через API-хост,
-    // где CORS настроен (см. cors в ArtCRM_BACKEND/src/index.js)
-    const corsAvatarUrl = `${apiClient.defaults.baseURL}/${work.avatar.id}.${work.avatar.ext}`
+    // Файл с того же домена, что и фронт (/files/ отдаёт nginx), — CORS не нужен.
+    // Адрес без /files/ попадал в SPA-фолбэк nginx и возвращал HTML вместо картинки.
     try {
-      avatarDataUrl = await loadImageAsDataUrl(corsAvatarUrl)
+      avatarDataUrl = await loadImageAsDataUrl(fileUrl(work.avatar))
     } catch (error) {
       console.error('Не удалось загрузить обложку для сертификата:', error)
     }
   }
 
+  // Дата под подписью: выбранная в предпросмотре, по умолчанию — текущий месяц
   const now = new Date()
-  const dateStr = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`
+  const dateStr = dateText || `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`
 
   const rows = [
     ['Художник:', artistName],

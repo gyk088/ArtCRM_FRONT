@@ -37,7 +37,14 @@
 
         <!-- Фильтры -->
         <section class="card">
-          <div class="card-heading">Фильтры</div>
+          <!-- На телефоне фильтры свёрнуты, чтобы итоги были видны сразу -->
+          <button v-if="isMobile" type="button" class="filters-toggle" @click="filtersOpen = !filtersOpen">
+            <span class="card-heading">Фильтры</span>
+            <span class="filters-summary">{{ filtersSummary }}</span>
+            <DownOutlined class="filters-chevron" :class="{ open: filtersOpen }" />
+          </button>
+          <div v-else class="card-heading">Фильтры</div>
+          <div v-show="!isMobile || filtersOpen">
           <div class="period-row">
             <a-radio-group :value="activePreset" button-style="solid" size="small" @change="(e) => applyPreset(e.target.value)">
               <a-radio-button v-for="p in PERIOD_PRESETS" :key="p.key" :value="p.key">{{ p.label }}</a-radio-button>
@@ -87,6 +94,7 @@
               <a-input-number v-model:value="filters.price_max" placeholder="до" :min="0" style="width: 110px" />
             </div>
             <a-button v-if="hasActiveFilters" type="link" @click="resetFilters">Сбросить фильтры</a-button>
+          </div>
           </div>
         </section>
 
@@ -146,16 +154,32 @@
               <div class="kpi-label">Сумма скидок</div>
               <div class="kpi-value">{{ formatMoney(summary.discount_amount, currency) }}</div>
             </div>
-            <div class="kpi">
-              <div class="kpi-label">Комиссия галереи</div>
-              <div class="kpi-value">{{ formatMoney(summary.commission_total, currency) }}</div>
-            </div>
           </div>
 
           <section v-if="data" class="card">
             <a-tabs v-model:activeKey="tab">
               <a-tab-pane key="sales" :tab="`Продажи (${data.rows.length})`">
+                <!-- Телефон: карточки продаж вместо широкой таблицы -->
+                <div v-if="isMobile" class="m-sales">
+                  <div v-if="!data.rows.length" class="m-sales-empty">Нет продаж под выбранные фильтры</div>
+                  <div v-for="row in data.rows" :key="row.sale_id" class="m-sale" @click="openWork(row)">
+                    <img v-if="row.avatar_url" :src="row.avatar_url" class="m-sale-img" />
+                    <div v-else class="m-sale-img m-sale-img-empty"><PictureOutlined /></div>
+                    <div class="m-sale-body">
+                      <div class="m-sale-name">{{ row.art_name }}</div>
+                      <div class="m-sale-sub">{{ formatDate(row.sale_date) }} · {{ row.artist?.name || 'Художник не указан' }}</div>
+                      <div class="m-sale-prices">
+                        <b v-if="row.sale_price_converted !== null">{{ formatMoney(row.sale_price_converted, currency) }}</b>
+                        <span v-else class="no-rate">нет курса {{ row.currency }}</span>
+                        <span v-if="row.currency !== currency" class="m-sale-orig">{{ formatMoney(row.sale_price, row.currency) }}</span>
+                        <span v-if="row.discount_pct > 0" class="discount-pos">−{{ formatPct(row.discount_pct) }}</span>
+                      </div>
+                      <div v-if="row.contact" class="m-sale-sub">Покупатель: {{ row.contact.name }}</div>
+                    </div>
+                  </div>
+                </div>
                 <a-table
+                  v-else
                   :columns="salesColumns"
                   :data-source="data.rows"
                   row-key="sale_id"
@@ -180,7 +204,11 @@
                     <template v-else-if="column.key === 'list'">{{ formatMoney(record.list_price, record.currency) }}</template>
                     <template v-else-if="column.key === 'sale'">{{ formatMoney(record.sale_price, record.currency) }}</template>
                     <template v-else-if="column.key === 'discount'">
-                      <span :class="{ 'discount-pos': record.discount_pct > 0 }">{{ record.discount_pct ? formatPct(record.discount_pct) : '—' }}</span>
+                      <template v-if="record.discount_pct > 0">
+                        <div class="discount-pos">−{{ formatPct(record.discount_pct) }}</div>
+                        <div class="discount-amount">{{ formatMoney(record.discount_amount, record.currency) }}</div>
+                      </template>
+                      <span v-else>—</span>
                     </template>
                     <template v-else-if="column.key === 'converted'">
                       <b v-if="record.sale_price_converted !== null">{{ formatMoney(record.sale_price_converted, currency) }}</b>
@@ -225,8 +253,9 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
-  ArrowLeftOutlined, DownloadOutlined, LoadingOutlined, PictureOutlined,
+  ArrowLeftOutlined, DownloadOutlined, LoadingOutlined, PictureOutlined, DownOutlined,
 } from '@ant-design/icons-vue'
+import { useIsMobile } from '@/composables/useIsMobile.js'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
 import apiClient from '@/services/api.js'
 import { useReport } from '@/stores/report.js'
@@ -414,6 +443,17 @@ function onRangeChange(value) {
   filters.date_to = value?.[1] || null
 }
 
+const { isMobile } = useIsMobile()
+const filtersOpen = ref(false)
+// Подпись свёрнутых фильтров: период + отметка, что заданы другие фильтры
+const filtersSummary = computed(() => {
+  const preset = PERIOD_PRESETS.find(p => p.key === activePreset.value)
+  const period = preset
+    ? preset.label
+    : `${filters.date_from ? formatDate(filters.date_from) : '…'} — ${filters.date_to ? formatDate(filters.date_to) : '…'}`
+  return hasActiveFilters.value ? `${period} · есть фильтры` : period
+})
+
 const hasActiveFilters = computed(() => {
   const f = filters
   return f.artists.length || f.series.length || f.media.length || f.contacts.length || f.sold_by.length
@@ -505,9 +545,9 @@ function pluralSales(n) {
 const salesColumns = computed(() => [
   { title: 'Дата', key: 'date', width: 100, sorter: (a, b) => a.sale_date.localeCompare(b.sale_date), defaultSortOrder: 'descend' },
   { title: 'Работа', key: 'work', width: 260 },
-  { title: 'Прайс', key: 'list', width: 110, align: 'right' },
+  { title: 'Цена работы', key: 'list', width: 120, align: 'right' },
   { title: 'Продажа', key: 'sale', width: 110, align: 'right', sorter: (a, b) => a.sale_price - b.sale_price },
-  { title: 'Скидка', key: 'discount', width: 80, align: 'right', sorter: (a, b) => (a.discount_pct ?? -1e9) - (b.discount_pct ?? -1e9) },
+  { title: 'Скидка', key: 'discount', width: 110, align: 'right', sorter: (a, b) => (a.discount_pct ?? -1e9) - (b.discount_pct ?? -1e9) },
   { title: `В ${currency.value}`, key: 'converted', width: 130, align: 'right', sorter: (a, b) => (a.sale_price_converted ?? -1) - (b.sale_price_converted ?? -1) },
   { title: 'Покупатель', key: 'buyer', width: 150 },
   { title: 'Оформил(а)', key: 'sold_by', width: 140 },
@@ -814,6 +854,11 @@ async function exportXlsx() {
   color: var(--text-faint);
 }
 
+.discount-amount {
+  font-size: 12px;
+  color: #7c7669;
+}
+
 .discount-pos {
   color: #b4441c;
 }
@@ -866,6 +911,129 @@ async function exportXlsx() {
 
   .month-bar-row {
     grid-template-columns: 90px 1fr 100px;
+  }
+}
+
+/* === Телефон === */
+.filters-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.filters-toggle .card-heading {
+  margin: 0;
+}
+
+.filters-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: #5a564c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+.filters-chevron {
+  color: #7c7669;
+  transition: transform 0.2s;
+}
+
+.filters-chevron.open {
+  transform: rotate(180deg);
+}
+
+.m-sales {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.m-sales-empty {
+  padding: 16px 0;
+  text-align: center;
+  color: #7c7669;
+}
+
+.m-sale {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.m-sale-img {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.m-sale-img-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #efece4;
+  color: #7c7669;
+}
+
+.m-sale-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.m-sale-name {
+  font-weight: 600;
+  color: #211f1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.m-sale-sub {
+  font-size: 12px;
+  color: #7c7669;
+}
+
+.m-sale-prices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.m-sale-orig {
+  font-size: 12px;
+  color: #7c7669;
+}
+
+@media (max-width: 768px) {
+  /* Быстрые периоды — одной прокручиваемой строкой, а не «лесенкой» */
+  .period-row :deep(.ant-radio-group) {
+    display: flex;
+    overflow-x: auto;
+    max-width: 100%;
+    padding-bottom: 4px;
+  }
+
+  .period-row :deep(.ant-radio-button-wrapper) {
+    flex-shrink: 0;
+  }
+
+  .period-row :deep(.ant-picker) {
+    width: 100%;
   }
 }
 </style>

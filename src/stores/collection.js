@@ -99,7 +99,8 @@ export const useCollection = defineStore('collection', {
     /**
      * PUT /api/v1/collections/:id - Обновить ссылку
      */
-    async updateCollection(id, data) {
+    // silent: без уведомления об успехе (автосохранение порядка работ)
+    async updateCollection(id, data, { silent = false } = {}) {
       let result = null
       try {
         const resp = await apiClient.put(`/api/v1/collections/${id}`, data)
@@ -107,7 +108,7 @@ export const useCollection = defineStore('collection', {
         if (result) {
           const index = this.listCollections.findIndex(c => c.id === id)
           if (index !== -1) this.listCollections[index] = result
-          notifyServerSuccess('Ссылка обновлена')
+          if (!silent) notifyServerSuccess('Ссылка обновлена')
         }
       } catch (e) {
         console.error('Error updating collection:', e)

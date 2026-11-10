@@ -1,5 +1,5 @@
 <template lang="pug">
-a-config-provider(:locale="locale")
+a-config-provider(:locale="locale" :theme="appTheme")
   component(
     :is="layoutName"
   )
@@ -44,9 +44,20 @@ export default defineComponent({
           return "empty-layout";
       }
     });
+    // Фирменный цвет вместо синего по умолчанию — чтобы стандартные
+    // кнопки/переключатели/ссылки ant-design совпадали с оформлением страниц
+    const appTheme = {
+      token: {
+        colorPrimary: "#8a6d2f",
+        colorLink: "#8a6d2f",
+        colorInfo: "#8a6d2f",
+      },
+    };
+
     return {
       layoutName,
       locale,
+      appTheme,
     };
   },
 });
