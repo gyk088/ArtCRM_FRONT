@@ -814,7 +814,6 @@ const addStatus = async (e) => {
           label: newStatusData.name,
           value: newStatusData.id
         }
-        createdViaAPI = true
         message.success('Статус создан на сервере')
       }
     }
