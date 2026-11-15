@@ -1,14 +1,18 @@
 <template>
   <button class="mobile-menu-btn" type="button" @click="menu.open = true" aria-label="Открыть меню">
     <MenuOutlined />
+    <!-- есть непрочитанные уведомления -->
+    <span v-if="notifications.unreadCount" class="mobile-menu-dot" />
   </button>
 </template>
 
 <script setup>
 import { MenuOutlined } from '@ant-design/icons-vue'
 import { useMobileMenu } from '@/stores/mobileMenu.js'
+import { useNotifications } from '@/stores/notifications.js'
 
 const menu = useMobileMenu()
+const notifications = useNotifications()
 </script>
 
 <style scoped>
@@ -38,5 +42,20 @@ const menu = useMobileMenu()
     border-color: var(--accent, #8a6d2f);
     color: var(--accent, #8a6d2f);
   }
+}
+
+.mobile-menu-btn {
+  position: relative;
+}
+
+.mobile-menu-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d92d20;
+  border: 2px solid #fff;
 }
 </style>

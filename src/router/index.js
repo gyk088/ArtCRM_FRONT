@@ -33,7 +33,7 @@ const router = createRouter({
           name: 'dashboard',
           component: () => import('@/pages/UserPictures/index.vue'),
           meta: {
-            title: 'Главная таблица',
+            title: 'Мои работы',
           },
         }, {
           path: '/home/edit/:id',
@@ -112,6 +112,41 @@ const router = createRouter({
             title: 'Редактировать контакт',
           },
       }, {
+        path: 'notifications',
+        name: 'notifications',
+        component: () => import('@/pages/Notifications/index.vue'),
+        meta: {
+            title: 'Уведомления',
+          },
+      }, {
+        path: 'tasks',
+        name: 'task-boards',
+        component: () => import('@/pages/TaskBoards/index.vue'),
+        meta: {
+            title: 'Задачи',
+          },
+      }, {
+        path: 'tasks/:id',
+        name: 'task-board',
+        component: () => import('@/pages/TaskBoard/index.vue'),
+        meta: {
+            title: 'Доска задач',
+          },
+      }, {
+        path: 'notes',
+        name: 'notes',
+        component: () => import('@/pages/Notes/index.vue'),
+        meta: {
+            title: 'Заметки',
+          },
+      }, {
+        path: 'notes/:id',
+        name: 'note',
+        component: () => import('@/pages/Note/index.vue'),
+        meta: {
+            title: 'Заметка',
+          },
+      }, {
         path: 'reports',
         name: 'reports',
         component: () => import('@/pages/Reports/index.vue'),
@@ -152,6 +187,12 @@ const router = createRouter({
       component: () => import('../views/AboutView.vue'),
     },
   ],
+})
+
+// Заголовок вкладки браузера: «Название страницы · ArtCRM»
+router.afterEach((to) => {
+  const title = String(to.meta?.title || '').replace(/[<>]/g, '').trim()
+  document.title = title ? `${title} · ArtCRM` : 'ArtCRM'
 })
 
 router.beforeEach((to) => {

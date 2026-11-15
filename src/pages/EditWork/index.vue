@@ -42,7 +42,7 @@
                 </div>
 
                 <div v-for="(img, index) in form.images" :key="img.id" class="image-container">
-                  <img :src="img.url" class="preview-image" @click="openViewer(avatarOffset + index)" />
+                  <img v-thumb="img" class="preview-image" @click="openViewer(avatarOffset + index)" />
                   <button class="download-btn" title="Скачать" @click.stop="handleDownload(img)">
                     <DownloadOutlined />
                   </button>
@@ -203,6 +203,39 @@
                   </a-select>
                 </a-form-item>
               </div>
+
+              <!-- Теги: несколько на одну работу; новый тег можно создать прямо здесь -->
+              <a-form-item label="Теги">
+                <a-select
+                  v-model:value="form.tags"
+                  mode="multiple"
+                  placeholder="Добавьте теги"
+                  option-filter-prop="label"
+                  :options="tagOptions"
+                  allow-clear
+                  class="tags-select"
+                >
+                  <template #tagRender="{ value, label, closable, onClose }">
+                    <span class="tag-select-chip" :style="tagChipStyle(value)">
+                      {{ label }}
+                      <CloseOutlined v-if="closable" class="tag-select-chip-close" @click.stop="onClose" />
+                    </span>
+                  </template>
+                  <template #dropdownRender="{ menuNode: menu }">
+                    <VNodes :vnodes="menu" />
+                    <a-divider style="margin: 4px 0" />
+                    <a-space class="add-row">
+                      <a-input v-model:value="newTag" placeholder="Новый тег" @keyup.enter="addTag" @keydown.stop />
+                      <a-button type="text" :loading="creatingTag" @click="addTag">
+                        <template #icon>
+                          <PlusOutlined />
+                        </template>
+                        Добавить
+                      </a-button>
+                    </a-space>
+                  </template>
+                </a-select>
+              </a-form-item>
             </section>
 
             <section class="form-section">
@@ -270,11 +303,12 @@
 import { fileUrl as buildFileUrl } from '@/services/const.js'
 import { ref, reactive, computed, onMounted, defineComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { PlusOutlined, DownloadOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DownloadOutlined, CloseOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useSerias } from '@/stores/seria.js'
 import { useLocations } from '@/stores/locations.js'
 import { useStatuses } from '@/stores/statuses.js'
+import { useTags, TAG_PALETTE } from '@/stores/tags.js'
 import { useMedia } from '@/stores/media.js'
 import { useArtist } from '@/stores/artist.js'
 import { useArtWork } from '@/stores/artWork.js'
@@ -289,6 +323,7 @@ import MobileMenuButton from '@/components/MobileMenuButton.vue'
 const seriasStore = useSerias();
 const locationsStore = useLocations()
 const statusesStore = useStatuses()
+const tagsStore = useTags()
 const mediaStore = useMedia()
 const artistStore = useArtist()
 const artWorkStore = useArtWork()
@@ -346,6 +381,7 @@ const form = reactive({
   seria: null,
   media: null,
   status: null,
+  tags: [],
   artist: null,
   price: '',
   currency: 'RUB',
@@ -386,6 +422,7 @@ const loadArtWork = async () => {
         seria: work.seria || null,
         media: work.media || null,
         status: work.status || null,
+        tags: Array.isArray(work.tags) ? [...work.tags] : [],
         artist: work.artist || null,
         price: work.price || '',
         currency: work.currency || 'RUB',
@@ -522,7 +559,40 @@ const ensureOwnArtistSelected = async () => {
   }
 }
 
+// === ТЕГИ ===
+const tagOptions = computed(() => tagsStore.listTags.map(t => ({ label: t.name, value: t.id })))
+const newTag = ref('')
+const creatingTag = ref(false)
+
+function tagChipStyle(id) {
+  const color = tagsStore.getTagById(id)?.color
+  if (!color) return {}
+  const n = parseInt(color.slice(1), 16)
+  const rgba = (a) => `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
+  return { background: rgba(0.12), color, borderColor: rgba(0.45) }
+}
+
+// Новый тег из карточки работы: если такой уже есть — просто выбираем его
+async function addTag() {
+  const name = newTag.value.trim()
+  if (!name) return
+  const existing = tagsStore.listTags.find(t => t.name.toLowerCase() === name.toLowerCase())
+  let tag = existing
+  if (!tag) {
+    creatingTag.value = true
+    try {
+      const color = TAG_PALETTE[tagsStore.listTags.length % TAG_PALETTE.length]
+      tag = await tagsStore.createTag({ name, color }, { silent: true })
+    } finally {
+      creatingTag.value = false
+    }
+  }
+  if (tag && !form.tags.includes(tag.id)) form.tags = [...form.tags, tag.id]
+  if (tag) newTag.value = ''
+}
+
 onMounted(async () => {
+  tagsStore.getListTags()
   await loadSeriesFromAPI()
   await loadLocationsFromAPI()
   await loadStatusesFromAPI()
@@ -896,6 +966,7 @@ const saveChanges = async () => {
       seria: form.seria ?? null,
       media: form.media ?? null,
       status: form.status ?? null,
+      tags: form.tags || [],
       artist: form.artist ?? null,
       price: form.price ? parseFloat(form.price) : null,
       currency: form.currency,
@@ -1527,5 +1598,30 @@ function goBack() {
     flex-direction: column;
     gap: 0;
   }
+}
+
+/* === Теги === */
+.tags-select {
+  width: 100%;
+}
+
+.tag-select-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 2px 4px 2px 0;
+  padding: 0 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  background: #efece4;
+  color: #5a564c;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.tag-select-chip-close {
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0.7;
 }
 </style>

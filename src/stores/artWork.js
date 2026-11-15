@@ -323,6 +323,36 @@ export const useArtWork = defineStore('art-objects', {
     },
 
     /**
+     * POST /api/v1/art/art-objects/bulk-update - Массовое изменение работ
+     * @param {string[]} ids
+     * @param {object} changes - { fields?: {status, location, ...}, tags?: {mode, ids}, price_pct? }
+     * @return {{updated: number, objects: object[]}|null}
+     */
+    async bulkUpdateArtWorks(ids, changes) {
+      const ERRORS = {
+        'Nothing to change': 'Выберите, что изменить',
+        'Art object not found': 'Часть работ недоступна — обновите страницу',
+        'Tag not found': 'Тег не найден — обновите страницу',
+        'price_pct must be greater than -100 and at most 1000': 'Изменение цены — от −99% до +1000%',
+      }
+      try {
+        const resp = await apiClient.post('/api/v1/art/art-objects/bulk-update', { ids, changes })
+        const result = resp.data
+        // подменяем изменённые работы в списке (и в кэше) ответом сервера
+        const byId = new Map((result?.objects || []).map(o => [o.id, o]))
+        this.listArtWorks = this.listArtWorks.map(item => (byId.has(item.id) ? { ...item, ...byId.get(item.id) } : item))
+        saveArtWorksToCache(this.listArtWorks)
+        return result
+      } catch (e) {
+        console.error('Error bulk updating artworks:', e)
+        const raw = e?.response?.data?.error
+        const text = ERRORS[raw] || (raw && raw.startsWith('Invalid ') ? 'Значение из справочника не найдено — обновите страницу' : raw)
+        notifyServerError(text || 'Не удалось изменить работы')
+        return null
+      }
+    },
+
+    /**
      * POST /api/v1/art/art-objects/bulk-delete - Массовое удаление работ
      * @param {array} ids - массив ID работ
      */
@@ -341,12 +371,16 @@ export const useArtWork = defineStore('art-objects', {
           this.currentArtWork = null
         }
 
-        notifyServerSuccess('ArtWorks deleted successfully')
-        console.log('ArtWorks deleted:', ids)
       } catch (e) {
         console.error('Error bulk deleting artworks:', e)
-        notifyServerError(e?.response?.data?.error || 'Failed to delete artworks')
-        this.error = e?.response?.data?.error || 'Failed to delete artworks'
+        const raw = e?.response?.data?.error || ''
+        const text = raw === 'Art object not found'
+          ? 'Часть работ нельзя удалить (чужие или уже удалены) — обновите страницу'
+          : / is sold/.test(raw)
+            ? 'Среди выбранных есть проданная работа — сначала отмените продажу'
+            : raw || 'Не удалось удалить работы'
+        notifyServerError(text)
+        this.error = text
         success = false
       } finally {
         this.loading = false

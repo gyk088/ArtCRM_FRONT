@@ -7,7 +7,7 @@
       <!-- 🖼 КАРТИНКА -->
       <img
         v-if="isImage"
-        :src="src"
+        v-thumb="file"
         class="image"
         alt="file"
       />
@@ -16,6 +16,7 @@
       <video
         v-else-if="isVideo"
         :src="src"
+        preload="metadata"
         class="media"
       />
 

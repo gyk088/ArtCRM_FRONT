@@ -5,7 +5,7 @@
         <MobileMenuButton />
         <h2 class="page-title">Справочник</h2>
       </div>
-      <p class="page-subtitle">Художники, серии, медиа, локации и статусы — общие списки для ваших работ</p>
+      <p class="page-subtitle">Художники, серии, медиа, локации, статусы и теги — общие списки для ваших работ</p>
     </div>
 
     <a-tabs v-model:activeKey="activeTab" class="reference-tabs">
@@ -70,6 +70,23 @@
         />
       </a-tab-pane>
 
+      <a-tab-pane key="tags" tab="Теги">
+        <ReferenceEntityPanel
+          :store="tagsStore"
+          list-field="listTags"
+          load-action="getListTags"
+          create-action="createTag"
+          update-action="updateTag"
+          delete-action="deleteTag"
+          singular-label="тег"
+          has-color
+        />
+      </a-tab-pane>
+
+      <a-tab-pane key="task-statuses" tab="Статусы задач">
+        <TaskStatusPanel />
+      </a-tab-pane>
+
       <a-tab-pane key="contact-sources" tab="Источники контактов">
         <ReferenceEntityPanel
           :store="contactSourceStore"
@@ -99,13 +116,16 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import ReferenceEntityPanel from '@/components/ReferenceEntityPanel.vue'
+import TaskStatusPanel from '@/components/TaskStatusPanel.vue'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
 import { useArtist } from '@/stores/artist.js'
 import { useSerias } from '@/stores/seria.js'
 import { useMedia } from '@/stores/media.js'
 import { useLocations } from '@/stores/locations.js'
 import { useStatuses } from '@/stores/statuses.js'
+import { useTags } from '@/stores/tags.js'
 import { useContactSource } from '@/stores/contactSource.js'
 import { useContactCategory } from '@/stores/contactCategory.js'
 import { getUser } from '@/services/auth.js'
@@ -116,12 +136,15 @@ const seriaStore = useSerias()
 const mediaStore = useMedia()
 const locationsStore = useLocations()
 const statusesStore = useStatuses()
+const tagsStore = useTags()
 const contactSourceStore = useContactSource()
 const contactCategoryStore = useContactCategory()
 
 const isArtist = computed(() => getUser()?.role === ROLES.ARTIST)
 
-const activeTab = ref(isArtist.value ? 'serias' : 'artists')
+// ?tab=... — открыть сразу нужную вкладку (например, со страницы доски задач)
+const route = useRoute()
+const activeTab = ref(route.query.tab ? String(route.query.tab) : (isArtist.value ? 'serias' : 'artists'))
 </script>
 
 <style scoped>

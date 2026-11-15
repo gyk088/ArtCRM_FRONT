@@ -11,6 +11,8 @@ export const useUserPicturesFilters = defineStore('user-pictures-filters', {
     seria: [],
     media: [],
     status: [],
+    // теги: работы, у которых есть хотя бы один из выбранных
+    tags: [],
     priceFrom: null,
     priceTo: null,
     nameSearch: '',

@@ -28,6 +28,24 @@
               <span class="currency-label">Валюта отчёта</span>
               <a-select :value="currency" :options="CURRENCY_OPTIONS" style="width: 120px" @change="changeCurrency" />
             </div>
+            <div class="currency-pick">
+              <span class="currency-label">Комиссия галереи</span>
+              <a-input-number
+                :value="commissionPct"
+                :min="0"
+                :max="100"
+                :precision="2"
+                placeholder="нет"
+                style="width: 120px"
+                @change="changeCommission"
+              >
+                <template #addonAfter>%</template>
+              </a-input-number>
+            </div>
+            <a-button :loading="exportingPdf" :disabled="!data" @click="exportPdf">
+              <template #icon><FilePdfOutlined /></template>
+              PDF
+            </a-button>
             <a-button type="primary" :loading="exporting" @click="exportXlsx">
               <template #icon><DownloadOutlined /></template>
               Скачать Excel
@@ -75,6 +93,14 @@
           </div>
 
           <div class="filters-grid filters-grid-narrow">
+            <div class="filter-group">
+              <span class="filter-label">Расчёт с художником</span>
+              <a-radio-group v-model:value="filters.artist_paid" size="small">
+                <a-radio-button value="any">Все</a-radio-button>
+                <a-radio-button value="paid">Рассчитано</a-radio-button>
+                <a-radio-button value="unpaid">Не рассчитано</a-radio-button>
+              </a-radio-group>
+            </div>
             <div class="filter-group">
               <span class="filter-label">Скидка</span>
               <a-radio-group v-model:value="filters.discount" size="small">
@@ -154,6 +180,25 @@
               <div class="kpi-label">Сумма скидок</div>
               <div class="kpi-value">{{ formatMoney(summary.discount_amount, currency) }}</div>
             </div>
+            <div class="kpi">
+              <div class="kpi-label">Комиссия галереи</div>
+              <div class="kpi-value">{{ formatMoney(summary.commission_total, currency) }}</div>
+              <div v-if="summary.individual_commission_count" class="kpi-hint">
+                индивидуальная у {{ summary.individual_commission_count }} {{ salesGenitive(summary.individual_commission_count) }}
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">К выплате</div>
+              <div class="kpi-value">{{ formatMoney(summary.net_total, currency) }}</div>
+              <div class="kpi-hint">художникам после комиссии</div>
+            </div>
+            <div class="kpi kpi-paid">
+              <div class="kpi-label">Выплачено</div>
+              <div class="kpi-value">{{ formatMoney(summary.paid_total, currency) }}</div>
+              <div class="kpi-hint">
+                {{ summary.unpaid_total > 0 ? `осталось ${formatMoney(summary.unpaid_total, currency)}` : 'рассчитались полностью' }}
+              </div>
+            </div>
           </div>
 
           <section v-if="data" class="card">
@@ -163,7 +208,7 @@
                 <div v-if="isMobile" class="m-sales">
                   <div v-if="!data.rows.length" class="m-sales-empty">Нет продаж под выбранные фильтры</div>
                   <div v-for="row in data.rows" :key="row.sale_id" class="m-sale" @click="openWork(row)">
-                    <img v-if="row.avatar_url" :src="row.avatar_url" class="m-sale-img" />
+                    <img v-if="row.avatar_url" v-thumb="{ url: row.avatar_url, thumb_url: row.avatar_thumb_url }" class="m-sale-img" />
                     <div v-else class="m-sale-img m-sale-img-empty"><PictureOutlined /></div>
                     <div class="m-sale-body">
                       <div class="m-sale-name">{{ row.art_name }}</div>
@@ -175,6 +220,43 @@
                         <span v-if="row.discount_pct > 0" class="discount-pos">−{{ formatPct(row.discount_pct) }}</span>
                       </div>
                       <div v-if="row.contact" class="m-sale-sub">Покупатель: {{ row.contact.name }}</div>
+                      <label class="m-sale-paid" @click.stop>
+                        <a-checkbox
+                          :checked="row.artist_paid"
+                          :disabled="paidSaving[row.sale_id]"
+                          @change="(e) => setArtistPaid(row, e.target.checked)"
+                        />
+                        Расчёт с художником
+                      </label>
+                      <div class="m-sale-commission" @click.stop>
+                        <span class="m-sale-sub">Комиссия</span>
+                        <a-input-number
+                          :value="overrides[row.sale_id] ?? null"
+                          :min="0"
+                          :max="100"
+                          :precision="2"
+                          :placeholder="commissionPlaceholder"
+                          size="small"
+                          class="commission-input"
+                          :class="{ 'commission-individual': overrides[row.sale_id] !== undefined }"
+                          @change="(v) => setOverride(row.sale_id, v)"
+                        >
+                          <template #addonAfter>%</template>
+                        </a-input-number>
+                        <button
+                          v-if="overrides[row.sale_id] !== undefined"
+                          type="button"
+                          class="commission-reset"
+                          title="Вернуть общую комиссию"
+                          @click="setOverride(row.sale_id, null)"
+                        >
+                          <CloseOutlined />
+                        </button>
+                      </div>
+                      <div v-if="row.commission_converted !== null" class="m-sale-sub">
+                        Комиссия {{ formatMoney(row.commission_converted, currency) }} · художнику
+                        <b>{{ formatMoney(row.net_converted, currency) }}</b>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -184,7 +266,7 @@
                   :data-source="data.rows"
                   row-key="sale_id"
                   size="small"
-                  :scroll="{ x: 1100 }"
+                  :scroll="{ x: 1420 }"
                   :pagination="{ pageSize: 50, hideOnSinglePage: true, showSizeChanger: false }"
                   :custom-row="(row) => ({ onClick: () => openWork(row), class: 'clickable-row' })"
                   :locale="{ emptyText: 'Нет продаж под выбранные фильтры' }"
@@ -193,7 +275,7 @@
                     <template v-if="column.key === 'date'">{{ formatDate(record.sale_date) }}</template>
                     <template v-else-if="column.key === 'work'">
                       <div class="work-cell">
-                        <img v-if="record.avatar_url" :src="record.avatar_url" class="work-thumb" />
+                        <img v-if="record.avatar_url" v-thumb="{ url: record.avatar_url, thumb_url: record.avatar_thumb_url }" class="work-thumb" />
                         <div v-else class="work-thumb work-thumb-empty"><PictureOutlined /></div>
                         <div class="work-cell-text">
                           <div class="work-name">{{ record.art_name }}</div>
@@ -209,6 +291,50 @@
                         <div class="discount-amount">{{ formatMoney(record.discount_amount, record.currency) }}</div>
                       </template>
                       <span v-else>—</span>
+                    </template>
+                    <template v-else-if="column.key === 'commission'">
+                      <div class="commission-cell" @click.stop>
+                        <a-input-number
+                          :value="overrides[record.sale_id] ?? null"
+                          :min="0"
+                          :max="100"
+                          :precision="2"
+                          :placeholder="commissionPlaceholder"
+                          size="small"
+                          class="commission-input"
+                          :class="{ 'commission-individual': overrides[record.sale_id] !== undefined }"
+                          :title="overrides[record.sale_id] !== undefined ? 'Индивидуальная комиссия этой продажи' : 'Общая комиссия отчёта — введите число, чтобы задать свою'"
+                          @change="(v) => setOverride(record.sale_id, v)"
+                        >
+                          <template #addonAfter>%</template>
+                        </a-input-number>
+                        <button
+                          v-if="overrides[record.sale_id] !== undefined"
+                          type="button"
+                          class="commission-reset"
+                          title="Вернуть общую комиссию"
+                          @click="setOverride(record.sale_id, null)"
+                        >
+                          <CloseOutlined />
+                        </button>
+                      </div>
+                      <div v-if="record.commission_converted !== null" class="commission-amount">
+                        {{ formatMoney(record.commission_converted, currency) }}
+                      </div>
+                    </template>
+                    <template v-else-if="column.key === 'net'">
+                      <span v-if="record.net_converted !== null">{{ formatMoney(record.net_converted, currency) }}</span>
+                      <span v-else class="no-rate">—</span>
+                    </template>
+                    <template v-else-if="column.key === 'paid'">
+                      <span class="paid-cell" @click.stop>
+                        <a-checkbox
+                          :checked="record.artist_paid"
+                          :disabled="paidSaving[record.sale_id]"
+                          :title="record.artist_paid ? `Рассчитались ${formatDateTimeShort(record.artist_paid_at)}` : 'Отметить расчёт с художником'"
+                          @change="(e) => setArtistPaid(record, e.target.checked)"
+                        />
+                      </span>
                     </template>
                     <template v-else-if="column.key === 'converted'">
                       <b v-if="record.sale_price_converted !== null">{{ formatMoney(record.sale_price_converted, currency) }}</b>
@@ -253,12 +379,14 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
-  ArrowLeftOutlined, DownloadOutlined, LoadingOutlined, PictureOutlined, DownOutlined,
+  ArrowLeftOutlined, DownloadOutlined, LoadingOutlined, PictureOutlined, DownOutlined, CloseOutlined, FilePdfOutlined,
 } from '@ant-design/icons-vue'
 import { useIsMobile } from '@/composables/useIsMobile.js'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
 import apiClient from '@/services/api.js'
 import { useReport } from '@/stores/report.js'
+import { useSale } from '@/stores/sale.js'
+import { downloadReportPdf } from '@/utils/reportPdf.js'
 import { useArtist } from '@/stores/artist.js'
 import { useSerias } from '@/stores/seria.js'
 import { useMedia } from '@/stores/media.js'
@@ -282,13 +410,19 @@ const EMPTY_FILTERS = () => ({
   date_from: null, date_to: null,
   artists: [], series: [], media: [], contacts: [], sold_by: [], currencies: [],
   discount: 'any', discount_min: null, discount_max: null, price_min: null, price_max: null,
+  artist_paid: 'any',
 })
 
 const report = ref(null)
 const name = ref('')
 const currency = ref('BYN')
 const filters = reactive(EMPTY_FILTERS())
+const saleStore = useSale()
 const rates = reactive({})
+// Комиссия галереи: общая для отчёта и индивидуальные по продажам
+// ({ [sale_id]: pct }) — см. ReportService на бэкенде
+const commissionPct = ref(null)
+const overrides = reactive({})
 const data = ref(null)
 
 const loadingReport = ref(false)
@@ -310,6 +444,7 @@ function applyReport(r) {
   Object.assign(filters, EMPTY_FILTERS(), r.filters || {})
   for (const key of Object.keys(rates)) delete rates[key]
   Object.assign(rates, r.rates || {})
+  applyCommission(r)
   // снимаем флаг после того, как отработают вотчеры этого тика
   setTimeout(() => { applyingServer = false })
 }
@@ -378,6 +513,8 @@ async function flushSave() {
       currency.value = updated.currency
       for (const key of Object.keys(rates)) delete rates[key]
       Object.assign(rates, updated.rates || {})
+      // комиссии берём с сервера, только если пользователь не успел ввести новые
+      if (!pendingPatch.commission_overrides && pendingPatch.commission_pct === undefined) applyCommission(updated)
       setTimeout(() => { applyingServer = false })
       loadData()
     } else {
@@ -421,6 +558,33 @@ function saveName() {
   if (trimmed !== report.value.name) scheduleSave({ name: trimmed }, 0)
 }
 
+// ---------- комиссия ----------
+function applyCommission(r) {
+  commissionPct.value = r.commission_pct ?? null
+  for (const key of Object.keys(overrides)) delete overrides[key]
+  Object.assign(overrides, r.commission_overrides || {})
+}
+
+const commissionPlaceholder = computed(() =>
+  commissionPct.value !== null ? String(commissionPct.value).replace('.', ',') : '—'
+)
+
+function changeCommission(value) {
+  const v = value === null || value === undefined || value === '' ? null : Number(value)
+  commissionPct.value = v
+  scheduleSave({ commission_pct: v }, 700)
+}
+
+// Индивидуальная комиссия продажи; null — вернуть общую
+function setOverride(saleId, value) {
+  const v = value === null || value === undefined || value === '' ? null : Number(value)
+  if (v === null) delete overrides[saleId]
+  else overrides[saleId] = v
+  // копим изменения разных строк в одном запросе
+  pendingPatch.commission_overrides = { ...(pendingPatch.commission_overrides || {}), [saleId]: v }
+  scheduleSave({}, 700)
+}
+
 // Смена валюты — курсы пересчитывает сервер (кроме неотправленных правок курсов)
 function changeCurrency(value) {
   if (value === currency.value) return
@@ -458,7 +622,7 @@ const hasActiveFilters = computed(() => {
   const f = filters
   return f.artists.length || f.series.length || f.media.length || f.contacts.length || f.sold_by.length
     || f.currencies.length || f.discount !== 'any' || f.discount_min !== null || f.discount_max !== null
-    || f.price_min !== null || f.price_max !== null
+    || f.price_min !== null || f.price_max !== null || f.artist_paid !== 'any'
 })
 
 function resetFilters() {
@@ -534,6 +698,11 @@ const missingRatesText = computed(() => {
   return `${total} ${pluralSales(total)} без курса (${list.map(m => `${m.currency} — ${m.count}`).join(', ')}) не вошли в итог`
 })
 
+// «у 1 продажи», «у 5 продаж»
+function salesGenitive(n) {
+  return n % 10 === 1 && n % 100 !== 11 ? 'продажи' : 'продаж'
+}
+
 function pluralSales(n) {
   const mod10 = n % 10
   const mod100 = n % 100
@@ -549,6 +718,9 @@ const salesColumns = computed(() => [
   { title: 'Продажа', key: 'sale', width: 110, align: 'right', sorter: (a, b) => a.sale_price - b.sale_price },
   { title: 'Скидка', key: 'discount', width: 110, align: 'right', sorter: (a, b) => (a.discount_pct ?? -1e9) - (b.discount_pct ?? -1e9) },
   { title: `В ${currency.value}`, key: 'converted', width: 130, align: 'right', sorter: (a, b) => (a.sale_price_converted ?? -1) - (b.sale_price_converted ?? -1) },
+  { title: 'Комиссия', key: 'commission', width: 160, align: 'right', sorter: (a, b) => (a.commission_converted ?? -1) - (b.commission_converted ?? -1) },
+  { title: 'Художнику', key: 'net', width: 120, align: 'right', sorter: (a, b) => (a.net_converted ?? -1) - (b.net_converted ?? -1) },
+  { title: 'Расчёт', key: 'paid', width: 80, align: 'center', sorter: (a, b) => Number(a.artist_paid) - Number(b.artist_paid) },
   { title: 'Покупатель', key: 'buyer', width: 150 },
   { title: 'Оформил(а)', key: 'sold_by', width: 140 },
 ])
@@ -557,7 +729,10 @@ function groupColumns(firstTitle) {
   return [
     { title: firstTitle, dataIndex: 'name', key: 'name' },
     { title: 'Продаж', dataIndex: 'count', key: 'count', align: 'right', width: 90 },
-    { title: `Сумма, ${currency.value}`, dataIndex: 'total', key: 'total', align: 'right', width: 160 },
+    { title: `Сумма, ${currency.value}`, dataIndex: 'total', key: 'total', align: 'right', width: 150 },
+    { title: 'Комиссия', dataIndex: 'commission', key: 'commission', align: 'right', width: 140 },
+    { title: 'К выплате', dataIndex: 'net', key: 'net', align: 'right', width: 140 },
+    { title: 'Выплачено', dataIndex: 'paid', key: 'paid', align: 'right', width: 140 },
     { title: 'Без курса', dataIndex: 'noRate', key: 'noRate', align: 'right', width: 100 },
   ]
 }
@@ -567,6 +742,9 @@ const artistRows = computed(() => (summary.value.by_artist || []).map(g => ({
   name: g.artist?.name || 'Не указан',
   count: g.count,
   total: formatMoney(g.total, currency.value),
+  commission: formatMoney(g.commission, currency.value),
+  net: formatMoney(g.net, currency.value),
+  paid: formatMoney(g.paid, currency.value),
   noRate: g.count_without_rate || '',
 })))
 
@@ -576,6 +754,9 @@ const monthRows = computed(() => (summary.value.by_month || []).map(g => ({
   count: g.count,
   totalRaw: g.total,
   total: formatMoney(g.total, currency.value),
+  commission: formatMoney(g.commission, currency.value),
+  net: formatMoney(g.net, currency.value),
+  paid: formatMoney(g.paid, currency.value),
   noRate: g.count_without_rate || '',
 })))
 const maxMonthTotal = computed(() => Math.max(0, ...monthRows.value.map(m => m.totalRaw)))
@@ -606,6 +787,81 @@ function openWork(row) {
 
 function goBack() {
   router.push({ name: 'reports' })
+}
+
+// ---------- расчёт с художником ----------
+// Отметка хранится на продаже (видна во всех отчётах); после сохранения
+// пересчитываем отчёт — меняются «Выплачено» и «осталось»
+const paidSaving = reactive({})
+
+async function setArtistPaid(row, paid) {
+  paidSaving[row.sale_id] = true
+  const prev = row.artist_paid
+  row.artist_paid = paid
+  try {
+    const updated = await saleStore.updateSale(row.sale_id, { artist_paid: paid })
+    if (!updated) {
+      row.artist_paid = prev
+      return
+    }
+    row.artist_paid_at = updated.artist_paid_at
+    loadData()
+  } finally {
+    delete paidSaving[row.sale_id]
+  }
+}
+
+function formatDateTimeShort(value) {
+  return value ? new Date(value).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+}
+
+// ---------- PDF: итоговые блоки + таблица продаж ----------
+const exportingPdf = ref(false)
+
+async function exportPdf() {
+  if (Object.keys(pendingPatch).length) await flushSave()
+  if (!data.value) return
+  exportingPdf.value = true
+  try {
+    const s = summary.value
+    const cur = currency.value
+    const preset = PERIOD_PRESETS.find(p => p.key === activePreset.value)
+    const period = preset && preset.key !== 'all'
+      ? `${preset.label} (${filters.date_from ? formatDate(filters.date_from) : '…'} — ${filters.date_to ? formatDate(filters.date_to) : '…'})`
+      : (filters.date_from || filters.date_to
+        ? `${filters.date_from ? formatDate(filters.date_from) : 'с начала'} — ${filters.date_to ? formatDate(filters.date_to) : 'по сегодня'}`
+        : 'всё время')
+    const subtitle = [
+      `Период: ${period}`,
+      `валюта отчёта: ${cur}`,
+      commissionPct.value !== null ? `комиссия галереи: ${formatPct(commissionPct.value)}` : 'комиссия не задана',
+      hasActiveFilters.value ? 'применены фильтры' : '',
+    ].filter(Boolean).join(' · ')
+    const missing = (s.missing_rates || []).map(m => `${m.currency} — ${m.count}`).join(', ')
+    await downloadReportPdf({
+      title: name.value || report.value?.name || 'Отчёт',
+      subtitle,
+      currency: cur,
+      warning: missing ? `Не вошли в итог (нет курса): ${missing}` : '',
+      kpis: [
+        { label: 'Выручка', value: formatMoney(s.total, cur), main: true },
+        { label: 'Продаж', value: String(s.count) },
+        { label: 'Средний чек', value: formatMoney(s.avg_check, cur) },
+        { label: 'Средняя скидка', value: formatPct(s.avg_discount_pct) },
+        { label: 'Сумма скидок', value: formatMoney(s.discount_amount, cur) },
+        { label: 'Комиссия галереи', value: formatMoney(s.commission_total, cur) },
+        { label: 'К выплате', value: formatMoney(s.net_total, cur), hint: 'художникам после комиссии' },
+        { label: 'Выплачено', value: formatMoney(s.paid_total, cur), hint: s.unpaid_total > 0 ? `осталось ${formatMoney(s.unpaid_total, cur)}` : 'рассчитались полностью' },
+      ],
+      rows: data.value.rows,
+      summary: s,
+    })
+  } catch (e) {
+    console.error('Error generating report PDF:', e)
+    message.error('Не удалось создать PDF')
+  } finally {
+    exportingPdf.value = false
+  }
 }
 
 async function exportXlsx() {
@@ -1035,5 +1291,81 @@ async function exportXlsx() {
   .period-row :deep(.ant-picker) {
     width: 100%;
   }
+}
+
+/* === Комиссия === */
+.commission-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.commission-input {
+  width: 96px;
+}
+
+.commission-individual :deep(.ant-input-number) {
+  border-color: var(--accent, #8a6d2f);
+  background: #faf5ea;
+}
+
+.commission-individual :deep(input) {
+  color: var(--accent, #8a6d2f);
+  font-weight: 600;
+}
+
+.commission-reset {
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  color: #7c7669;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.commission-reset:hover {
+  color: #8f2c2c;
+}
+
+.commission-amount {
+  font-size: 12px;
+  color: #7c7669;
+  margin-top: 2px;
+}
+
+.kpi-hint {
+  font-size: 11px;
+  color: #7c7669;
+  margin-top: 2px;
+}
+
+.m-sale-commission {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* === Расчёт с художником === */
+.paid-cell {
+  display: inline-flex;
+  padding: 4px;
+}
+
+.kpi-paid {
+  border-color: rgba(30, 123, 69, 0.35);
+}
+
+.kpi-paid .kpi-value {
+  color: #1e7b45;
+}
+
+.m-sale-paid {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #5a564c;
 }
 </style>

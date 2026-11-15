@@ -162,7 +162,7 @@
             </a-tooltip>
           </div>
 
-          <img v-if="folder.avatar?.url" :src="folder.avatar.url" class="folder-cover-img" :alt="folder.name" />
+          <img v-if="folder.avatar?.url" v-thumb="folder.avatar" class="folder-cover-img" :alt="folder.name" />
           <FolderFilled v-else class="folder-icon" />
 
           <a-input
@@ -335,11 +335,12 @@ import { downloadFile } from "@/utils/downloadFile.js"
 const emit = defineEmits(["select"])
 
 
-// Файлы и папки внутри галереи общие (галерея + её менеджеры), но удалить
-// файл/папку может только тот, кто их добавил — у чужих кнопки удаления нет.
-// Без user_id (только что загружаемый файл) — свой.
-const currentUserId = getUser()?.id
-const isOwn = (entity) => !entity?.user_id || entity.user_id === currentUserId
+// Файлы и папки внутри галереи общие (галерея + её менеджеры); удалить
+// файл/папку может тот, кто их добавил, или сама галерея (как работы) —
+// у остальных кнопки удаления нет. Без user_id (загружаемый файл) — свой.
+const currentUser = getUser()
+const isOwn = (entity) =>
+  !entity?.user_id || entity.user_id === currentUser?.id || currentUser?.role === 'gallery'
 
 const props = defineProps({
   select: {

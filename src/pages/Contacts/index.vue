@@ -41,8 +41,12 @@
       <div class="m-contacts">
         <div v-for="record in filteredContacts" :key="record.id" class="m-contact" @click="openEditPage(record)">
           <div class="m-contact-top">
-            <div class="m-contact-name">{{ record.name || 'Без имени' }}</div>
+            <div class="m-contact-name">
+              {{ record.name || 'Без имени' }}
+              <div v-if="addedBy(record)" class="contact-owner">Добавил(а): {{ addedBy(record) }}</div>
+            </div>
             <a-popconfirm
+              v-if="canDelete(record)"
               :title="`Удалить контакт «${record.name || 'без имени'}»?`"
               ok-text="Удалить"
               cancel-text="Отмена"
@@ -93,6 +97,7 @@
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'name'">
           {{ record.name || 'Без имени' }}
+          <div v-if="addedBy(record)" class="contact-owner">Добавил(а): {{ addedBy(record) }}</div>
         </template>
         <template v-else-if="column.dataIndex === 'phone'">
           <a v-if="record.phone" :href="`tel:${record.phone}`" class="contact-link" @click.stop>{{ record.phone }}</a>
@@ -137,6 +142,7 @@
             </a-button>
           </a-tooltip>
           <a-popconfirm
+            v-if="canDelete(record)"
             :title="`Удалить контакт «${record.name || 'без имени'}»?`"
             ok-text="Удалить"
             cancel-text="Отмена"
@@ -271,6 +277,17 @@ function openCreatePage() {
 
 function openEditPage(record) {
   router.push({ name: 'edit-contact', params: { id: record.id } })
+}
+
+// В галерее контакты общие: у чужих показываем, кто добавил; удалить может
+// автор или сама галерея (как работы)
+const me = getUser()
+function addedBy(record) {
+  if (!record.owner || record.owner.id === me?.id) return ''
+  return [record.owner.name, record.owner.surname].map(v => (v || '').trim()).filter(Boolean).join(' ') || 'коллега'
+}
+function canDelete(record) {
+  return !record.user_id || record.user_id === me?.id || me?.role === 'gallery'
 }
 
 async function handleDelete(record) {
@@ -626,5 +643,11 @@ async function handleQuickSave() {
 .m-contact-btn-plain {
   border-color: rgba(0, 0, 0, 0.12);
   color: #5a564c;
+}
+
+.contact-owner {
+  font-size: 12px;
+  font-weight: 400;
+  color: #7c7669;
 }
 </style>

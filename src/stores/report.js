@@ -9,6 +9,8 @@ const SERVER_ERRORS = {
   'Report not found': 'Отчёт не найден',
   'Report name is required': 'Укажите название отчёта',
   'date_from must be before date_to': 'Дата «с» должна быть раньше даты «по»',
+  'commission_pct must be between 0 and 100': 'Комиссия должна быть от 0 до 100%',
+  'Sale not found': 'Продажа не найдена — обновите отчёт',
 }
 
 function errorText(e, fallback) {

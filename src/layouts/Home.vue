@@ -59,6 +59,22 @@
               <span>Отчёты</span>
             </a-menu-item>
 
+            <a-menu-item key="notifications">
+              <BellOutlined />
+              <span>Уведомления</span>
+              <span v-if="notificationsStore.unreadCount" class="menu-badge">{{ notificationsStore.unreadCount > 99 ? '99+' : notificationsStore.unreadCount }}</span>
+            </a-menu-item>
+
+            <a-menu-item key="task-boards">
+              <ProjectOutlined />
+              <span>Задачи</span>
+            </a-menu-item>
+
+            <a-menu-item key="notes">
+              <FormOutlined />
+              <span>Заметки</span>
+            </a-menu-item>
+
             <a-menu-item key="profile">
               <IdcardOutlined />
               <span>Профиль</span>
@@ -143,6 +159,22 @@
             <a-menu-item key="reports">
               <BarChartOutlined />
               <span>Отчёты</span>
+            </a-menu-item>
+
+            <a-menu-item key="notifications">
+              <BellOutlined />
+              <span>Уведомления</span>
+              <span v-if="notificationsStore.unreadCount" class="menu-badge">{{ notificationsStore.unreadCount > 99 ? '99+' : notificationsStore.unreadCount }}</span>
+            </a-menu-item>
+
+            <a-menu-item key="task-boards">
+              <ProjectOutlined />
+              <span>Задачи</span>
+            </a-menu-item>
+
+            <a-menu-item key="notes">
+              <FormOutlined />
+              <span>Заметки</span>
             </a-menu-item>
 
             <a-menu-item key="profile">
@@ -239,8 +271,12 @@ import {
   BankOutlined,
   QrcodeOutlined,
   ContactsOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  FormOutlined,
+  ProjectOutlined,
+  BellOutlined
 } from '@ant-design/icons-vue'
+import { useNotifications, setNotificationNavigator } from '@/stores/notifications.js'
 
 const collapsed = ref(false);
 // Открывается кнопкой MobileMenuButton, которая лежит на каждой странице
@@ -276,7 +312,7 @@ async function handleStopImpersonation() {
 }
 
 // Вложенные страницы подсвечивают пункт своего раздела
-const MENU_KEY_BY_ROUTE = { report: 'reports' };
+const MENU_KEY_BY_ROUTE = { report: 'reports', note: 'notes', 'task-board': 'task-boards' };
 const menuKeyFor = (name) => MENU_KEY_BY_ROUTE[name] || name;
 const selectedKey = ref(menuKeyFor(router.currentRoute.value.name));
 router.afterEach((to) => (selectedKey.value = menuKeyFor(to.name)));
@@ -358,7 +394,12 @@ function handleScanQr() {
 // этой паузы анимация выезда выглядит как "завис, потом появился" вместо
 // плавного слайда. Последующие переходы на тот же экран уже из кэша и
 // анимируются нормально — этим и объясняется "иногда".
+// Уведомления: счётчик в меню + опрос раз в минуту (см. stores/notifications.js)
+const notificationsStore = useNotifications()
+setNotificationNavigator((link) => router.push(link))
+
 onMounted(() => {
+  notificationsStore.startPolling()
   const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 300))
   idle(() => {
     router.getRoutes().forEach((route) => {
@@ -678,6 +719,20 @@ const handleLogout = () => {
        высоте новой — экран будто "сначала растягивается на всю высоту". */
     min-height: calc(100vh - 24px);
   }
+}
+
+.menu-badge {
+  float: right;
+  min-width: 20px;
+  height: 20px;
+  margin-top: 10px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #d92d20;
+  color: #fff;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
 }
 </style>
 

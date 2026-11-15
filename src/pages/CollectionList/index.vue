@@ -67,7 +67,7 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'cover'">
-            <img v-if="record.avatar?.url" :src="record.avatar.url" class="import-preview-thumb" />
+            <img v-if="record.avatar?.url" v-thumb="record.avatar" class="import-preview-thumb" />
             <div v-else class="import-preview-thumb import-preview-thumb--empty">
               <PictureOutlined />
             </div>
@@ -213,7 +213,7 @@
         @drop.stop="handleCollectionReorderDrop(collection.id)">
         <template #cover>
           <div class="card-cover">
-            <img v-if="collection.avatar?.url" :src="collection.avatar.url" :alt="collection.name" class="cover-img" />
+            <img v-if="collection.avatar?.url" v-thumb="collection.avatar" :alt="collection.name" class="cover-img" />
             <div v-else class="cover-placeholder">
               <PictureOutlined />
             </div>

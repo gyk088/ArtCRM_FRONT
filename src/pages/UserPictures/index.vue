@@ -9,6 +9,12 @@
       </span>
 
       <div class="header-actions">
+        <a-button class="buttons" v-if="selectedRowKeys.length > 0" @click="isBulkEditOpen = true">
+          <EditOutlined /> Изменить выбранные ({{ selectedRowKeys.length }})
+        </a-button>
+        <a-button class="buttons buttons-danger" v-if="selectedRowKeys.length > 0" :loading="bulkDeleting" @click="deleteSelected">
+          <DeleteOutlined /> Удалить выбранные ({{ selectedRowKeys.length }})
+        </a-button>
         <a-button class="buttons" type="primary" v-if="selectedRowKeys.length > 0" @click="createCollection">
           Создать ссылку
         </a-button>
@@ -35,16 +41,18 @@
           </a-button>
         </div>
         <template v-if="!isMobile || filtersOpen">
-        <a-select v-model:value="filterArtist" mode="multiple" placeholder="Художник" allowClear style="width: 200px"
+        <a-select v-model:value="filterArtist" mode="multiple" option-filter-prop="label" placeholder="Художник" allowClear style="width: 200px"
           max-tag-count="responsive" :options="artistOptions" />
-        <a-select v-model:value="filterLocation" mode="multiple" placeholder="Локация" allowClear style="width: 200px"
+        <a-select v-model:value="filterLocation" mode="multiple" option-filter-prop="label" placeholder="Локация" allowClear style="width: 200px"
           max-tag-count="responsive" :options="locationOptions" />
-        <a-select v-model:value="filterSeria" mode="multiple" placeholder="Серия" allowClear style="width: 200px"
+        <a-select v-model:value="filterSeria" mode="multiple" option-filter-prop="label" placeholder="Серия" allowClear style="width: 200px"
           max-tag-count="responsive" :options="seriaOptions" />
-        <a-select v-model:value="filterMedia" mode="multiple" placeholder="Медиа" allowClear style="width: 200px"
+        <a-select v-model:value="filterMedia" mode="multiple" option-filter-prop="label" placeholder="Медиа" allowClear style="width: 200px"
           max-tag-count="responsive" :options="mediaFilterOptions" />
-        <a-select v-model:value="filterStatus" mode="multiple" placeholder="Статус" allowClear style="width: 200px"
+        <a-select v-model:value="filterStatus" mode="multiple" option-filter-prop="label" placeholder="Статус" allowClear style="width: 200px"
           max-tag-count="responsive" :options="statusOptions" />
+        <a-select v-model:value="filterTags" mode="multiple" option-filter-prop="label" placeholder="Теги" allowClear style="width: 200px"
+          max-tag-count="responsive" :options="tagFilterOptions" />
         <a-input-number v-model:value="filterPriceFrom" placeholder="Цена от" :min="0" style="width: 120px" />
         <a-input-number v-model:value="filterPriceTo" placeholder="Цена до" :min="0" style="width: 120px" />
         <a-select v-model:value="filterSold" placeholder="Наличие" allowClear style="width: 150px"
@@ -78,7 +86,7 @@
           </label>
 
           <div class="work-card-image">
-            <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" />
+            <img v-if="record.avatar && record.avatar.url" v-thumb="record.avatar" />
             <div v-else class="img-placeholder">
               <PictureOutlined />
             </div>
@@ -87,6 +95,7 @@
           <div class="work-card-body">
             <div class="work-card-name">{{ record.name || 'Без названия' }}</div>
             <div class="work-card-artist">{{ getArtistName(record.artist) || 'Не указан' }}</div>
+            <TagChips :ids="record.tags" small :max="3" class="work-card-tags" />
             <div v-if="record.price" class="work-card-price">{{ formatPrice(record.price) }} {{ getCurrencySymbol(record.currency) }}</div>
             <span v-if="record.sale" class="sold-pill" :title="saleTitle(record.sale)">Продана</span>
           </div>
@@ -166,7 +175,7 @@
 
             <div v-for="col in columns" :key="col.key" class="vt-td">
               <template v-if="col.dataIndex === 'avatar'">
-                <img v-if="sortedData[virtualRow.index].avatar && sortedData[virtualRow.index].avatar.url" :src="sortedData[virtualRow.index].avatar.url" class="preview-img clickable-cell" @click.stop="openPreview(sortedData[virtualRow.index])" />
+                <img v-if="sortedData[virtualRow.index].avatar && sortedData[virtualRow.index].avatar.url" v-thumb="sortedData[virtualRow.index].avatar" class="preview-img clickable-cell" @click.stop="openPreview(sortedData[virtualRow.index])" />
                 <div v-else class="img-placeholder clickable-cell" @click.stop="openPreview(sortedData[virtualRow.index])">
                   <PictureOutlined />
                 </div>
@@ -246,6 +255,44 @@
                     <a-menu @click="({ key }) => handleFieldChange(sortedData[virtualRow.index], 'status', key)">
                       <a-menu-item v-for="status in statusOptions" :key="status.value">
                         {{ status.label }}
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+              </template>
+              <template v-else-if="col.dataIndex === 'tags'">
+                <!-- Теги: клик по ячейке — список тегов с галочками, правка прямо в таблице -->
+                <a-dropdown :trigger="['click']" @click.stop>
+                  <span
+                    class="editable-cell tags-cell"
+                    :class="{ 'editable-cell-updating': isCellUpdating(sortedData[virtualRow.index], 'tags') }"
+                    @click.stop
+                  >
+                    <TagChips
+                      v-if="(sortedData[virtualRow.index].tags || []).length"
+                      :ids="sortedData[virtualRow.index].tags"
+                      small
+                      :max="3"
+                    />
+                    <span v-else class="tags-cell-empty">Добавить</span>
+                  </span>
+                  <template #overlay>
+                    <a-menu
+                      class="tags-menu"
+                      @click="({ key }) => toggleWorkTag(sortedData[virtualRow.index], key)"
+                    >
+                      <a-menu-item v-for="tag in tagsStore.listTags" :key="tag.id">
+                        <span class="tags-menu-item">
+                          <CheckOutlined
+                            class="tags-menu-check"
+                            :style="{ visibility: (sortedData[virtualRow.index].tags || []).includes(tag.id) ? 'visible' : 'hidden' }"
+                          />
+                          <span class="tags-menu-dot" :style="{ background: tag.color || '#c9c3b6' }" />
+                          {{ tag.name }}
+                        </span>
+                      </a-menu-item>
+                      <a-menu-item v-if="!tagsStore.listTags.length" key="__empty" disabled>
+                        Тегов пока нет — создайте их в Справочнике
                       </a-menu-item>
                     </a-menu>
                   </template>
@@ -352,6 +399,8 @@
             {{ getStatusName(previewWork.status) }}
           </div>
 
+          <TagChips :ids="previewWork.tags" class="preview-tags" />
+
           <div v-if="previewWork.sale" class="preview-sold">{{ saleTitle(previewWork.sale) }}</div>
           <div v-if="previewWork.price" class="preview-price">
             {{ formatPrice(previewWork.price) }} {{ getCurrencySymbol(previewWork.currency) }}
@@ -374,6 +423,12 @@
       </div>
     </a-drawer>
 
+    <BulkEditModal
+      v-model:open="isBulkEditOpen"
+      :ids="selectedRowKeys"
+      :hide-artist="isArtistRole"
+    />
+
     <CertificatePreviewModal
       v-model:open="isCertPreviewOpen"
       :work="certPreviewWork"
@@ -384,10 +439,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, h } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined, DollarOutlined, SearchOutlined, FilterOutlined, LoadingOutlined, CaretUpOutlined, CaretDownOutlined } from '@ant-design/icons-vue'
+import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined, DollarOutlined, SearchOutlined, FilterOutlined, LoadingOutlined, CaretUpOutlined, CaretDownOutlined, CheckOutlined } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import CertificatePreviewModal from '@/components/CertificatePreviewModal.vue'
@@ -396,6 +451,9 @@ import { useArtWork } from '@/stores/artWork.js'
 import { useMedia } from '@/stores/media.js'
 import { useSerias } from '@/stores/seria.js'
 import { useStatuses } from '@/stores/statuses.js'
+import { useTags } from '@/stores/tags.js'
+import TagChips from '@/components/TagChips.vue'
+import BulkEditModal from '@/components/BulkEditModal.vue'
 import { useLocations } from '@/stores/locations.js'
 import { useArtist } from '@/stores/artist.js'
 import { useFile } from "@/stores/file.js"
@@ -414,6 +472,10 @@ const artWorkStore = useArtWork()
 const mediaStore = useMedia()
 const seriasStore = useSerias()
 const statusesStore = useStatuses()
+const tagsStore = useTags()
+// Массовое изменение выбранных работ
+const isBulkEditOpen = ref(false)
+const tagFilterOptions = computed(() => tagsStore.listTags.map(t => ({ label: t.name, value: t.id })))
 const locationsStore = useLocations()
 const artistStore = useArtist()
 
@@ -457,6 +519,7 @@ const {
   seria: filterSeria,
   media: filterMedia,
   status: filterStatus,
+  tags: filterTags,
   priceFrom: filterPriceFrom,
   priceTo: filterPriceTo,
   nameSearch: filterNameSearch,
@@ -466,7 +529,7 @@ const {
 // Свёрнутые фильтры на телефоне: сколько из них сейчас задано (кроме поиска)
 const filtersOpen = ref(false)
 const activeFiltersCount = computed(() => {
-  const arrays = [filterArtist, filterLocation, filterSeria, filterMedia, filterStatus]
+  const arrays = [filterArtist, filterLocation, filterSeria, filterMedia, filterStatus, filterTags]
     .filter(r => Array.isArray(r.value) && r.value.length).length
   const values = [filterPriceFrom, filterPriceTo, filterSold]
     .filter(r => r.value !== null && r.value !== undefined && r.value !== '').length
@@ -479,6 +542,7 @@ function resetFilters() {
   filterSeria.value = []
   filterMedia.value = []
   filterStatus.value = []
+  filterTags.value = []
   filterPriceFrom.value = null
   filterPriceTo.value = null
   filterSold.value = null
@@ -614,6 +678,7 @@ const loadDirectories = async () => {
       mediaStore.getListMedia(),
       seriasStore.getListSerias(),
       statusesStore.getListStatuses(),
+      tagsStore.getListTags(),
       locationsStore.getListLocations(),
       artistStore.getListArtists()
     ])
@@ -732,6 +797,10 @@ const filteredData = computed(() => {
     result = result.filter(item => filterStatus.value.includes(item.status))
   }
 
+  if (filterTags.value?.length) {
+    result = result.filter(item => (item.tags || []).some(id => filterTags.value.includes(id)))
+  }
+
   if (filterPriceFrom.value != null) {
     result = result.filter(item => Number(item.price) >= filterPriceFrom.value)
   }
@@ -759,17 +828,18 @@ const isArtistRole = computed(() => getUser()?.role === ROLES.ARTIST)
 // по ширине контейнера без горизонтальной прокрутки (table-layout: fixed).
 const columns = computed(() => [
   { title: ' ', dataIndex: 'avatar', key: 'avatar', width: '6%' },
-  { title: 'Название', dataIndex: 'name', key: 'name', width: isArtistRole.value ? '22%' : '14%', sorter: (a, b) => (a.name || '').localeCompare(b.name || '', 'ru') },
+  { title: 'Название', dataIndex: 'name', key: 'name', width: isArtistRole.value ? '18%' : '13%', sorter: (a, b) => (a.name || '').localeCompare(b.name || '', 'ru') },
   ...(isArtistRole.value ? [] : [
     { title: 'Художник', dataIndex: 'artist', key: 'artist', width: '9%', sorter: (a, b) => getArtistName(a.artist).localeCompare(getArtistName(b.artist), 'ru') },
   ]),
-  { title: 'Техника', dataIndex: 'technique', key: 'technique', width: '8%', sorter: (a, b) => (a.technique || '').localeCompare(b.technique || '', 'ru') },
+  { title: 'Техника', dataIndex: 'technique', key: 'technique', width: '7%', sorter: (a, b) => (a.technique || '').localeCompare(b.technique || '', 'ru') },
   { title: 'Размер', dataIndex: 'size', key: 'size', width: '8%', sorter: (a, b) => (a.size || '').localeCompare(b.size || '', 'ru') },
   { title: 'Год', dataIndex: 'year', key: 'year', width: '5%', sorter: (a, b) => a.year - b.year },
   { title: 'Медиа', dataIndex: 'media', key: 'media', width: '8%', sorter: (a, b) => getMediaName(a.media).localeCompare(getMediaName(b.media), 'ru') },
   { title: 'Серия', dataIndex: 'seria', key: 'seria', width: '7%', sorter: (a, b) => getSeriaName(a.seria).localeCompare(getSeriaName(b.seria), 'ru') },
   { title: 'Локация', dataIndex: 'location', key: 'location', width: '8%', sorter: (a, b) => getLocationName(a.location).localeCompare(getLocationName(b.location), 'ru') },
   { title: 'Статус', dataIndex: 'status', key: 'status', width: '9%', sorter: (a, b) => getStatusName(a.status).localeCompare(getStatusName(b.status), 'ru') },
+  { title: 'Теги', dataIndex: 'tags', key: 'tags', width: '10%', sorter: (a, b) => tagNames(a).localeCompare(tagNames(b), 'ru') },
   { title: 'Стоимость', dataIndex: 'price', key: 'price', width: '9%', sorter: (a, b) => a.price - b.price },
   { title: 'Действия', dataIndex: 'actions', key: 'actions', width: '10%' },
 ])
@@ -846,6 +916,73 @@ const deleteRow = (id) => {
   })
 }
 
+// === Удаление выбранных работ ===
+// Бэкенд удаляет пачку целиком или ничего (bulk-delete), поэтому заранее
+// откладываем то, что он всё равно не даст удалить: проданные работы и (у
+// менеджера) работы коллег — удалять их может только автор или сама галерея
+// (AuthorizationService.canDeleteWorkOwner).
+const bulkDeleting = ref(false)
+
+function canDeleteWork(work) {
+  const me = getUser()
+  return work.user_id === me?.id || me?.role === ROLES.GALLERY
+}
+
+const pluralWorks = (n) => {
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return 'работа'
+  if ([2, 3, 4].includes(m10) && ![12, 13, 14].includes(m100)) return 'работы'
+  return 'работ'
+}
+
+function deleteSelected() {
+  const selected = artWorkStore.listArtWorks.filter(w => selectedRowKeys.value.includes(w.id))
+  const sold = selected.filter(w => w.sale)
+  const foreign = selected.filter(w => !w.sale && !canDeleteWork(w))
+  const deletable = selected.filter(w => !w.sale && canDeleteWork(w))
+
+  const skipped = []
+  if (sold.length) skipped.push(`проданные (${sold.length}) — сначала отмените продажу`)
+  if (foreign.length) skipped.push(`добавленные коллегами (${foreign.length}) — удалить их может автор или галерея`)
+
+  if (!deletable.length) {
+    Modal.warning({
+      title: 'Эти работы удалить нельзя',
+      content: `Не удалить: ${skipped.join('; ')}.`,
+      okText: 'Понятно',
+    })
+    return
+  }
+
+  const names = deletable.slice(0, 5).map(w => `«${w.name || 'Без названия'}»`).join(', ')
+  const more = deletable.length > 5 ? ` и ещё ${deletable.length - 5}` : ''
+  Modal.confirm({
+    title: `Удалить ${deletable.length} ${pluralWorks(deletable.length)}?`,
+    content: h('div', [
+      h('p', { style: 'margin: 0 0 8px' }, `${names}${more}. Работы уберутся и из ссылок, выставок и контактов. Восстановить их будет нельзя.`),
+      skipped.length ? h('p', { style: 'margin: 0; color: #8f2c2c' }, `Не будут удалены: ${skipped.join('; ')}.`) : null,
+    ]),
+    okText: 'Удалить',
+    okType: 'danger',
+    cancelText: 'Отмена',
+    onOk: async () => {
+      bulkDeleting.value = true
+      try {
+        const ids = deletable.map(w => w.id)
+        if (await artWorkStore.bulkDeleteArtWorks(ids)) {
+          message.success(`Удалено: ${ids.length} ${pluralWorks(ids.length)}`)
+          // в выделении остаются только не удалённые (проданные / чужие)
+          selectedRowKeys.value = selectedRowKeys.value.filter(id => !ids.includes(id))
+          if (previewWork.value && ids.includes(previewWork.value.id)) isPreviewOpen.value = false
+        }
+      } finally {
+        bulkDeleting.value = false
+      }
+    },
+  })
+}
+
 // Предпросмотр и генерация сертификата подлинности работы (PDF)
 const isCertPreviewOpen = ref(false)
 const certPreviewWork = ref(null)
@@ -859,6 +996,19 @@ const openCertificatePreview = (record) => {
 const updatingCell = ref({ id: null, field: null })
 
 const isCellUpdating = (record, field) => updatingCell.value.id === record.id && updatingCell.value.field === field
+
+// Теги работы: клик по тегу в меню ячейки — добавить/снять его
+function toggleWorkTag(record, tagId) {
+  if (tagId === '__empty') return
+  const current = record.tags || []
+  const next = current.includes(tagId) ? current.filter(id => id !== tagId) : [...current, tagId]
+  handleFieldChange(record, 'tags', next)
+}
+
+// Для сортировки по колонке «Теги» — названия тегов работы через запятую
+function tagNames(record) {
+  return (record.tags || []).map(id => tagsStore.getTagById(id)?.name || '').sort((a, b) => a.localeCompare(b, 'ru')).join(', ')
+}
 
 const handleFieldChange = async (record, field, value) => {
   if (value === record[field] || isCellUpdating(record, field)) return
@@ -929,7 +1079,14 @@ const gridTemplateColumns = computed(() => {
   // Колонке «Действия» нужна гарантированная ширина под 4 кнопки по 32px
   // (иначе на узких экранах последняя, «Удалить», обрезается)
   const fr = columns.value
-    .map(c => (c.key === 'actions' ? `minmax(150px, ${parseFloat(c.width) || 1}fr)` : `${parseFloat(c.width) || 1}fr`))
+    .map(c => {
+      const fr = `${parseFloat(c.width) || 1}fr`
+      if (c.key === 'actions') return `minmax(150px, ${fr})`
+      // год (4 цифры) и размер («130x96см») не должны переноситься посреди числа
+      if (c.key === 'year') return `minmax(60px, ${fr})`
+      if (c.key === 'size') return `minmax(72px, ${fr})`
+      return fr
+    })
     .join(' ')
   return `40px ${fr}`
 })
@@ -1136,7 +1293,8 @@ onMounted(async () => {
 
 /* === Кнопки === */
 .buttons {
-  width: 170px;
+  /* min-width вместо width: «Изменить выбранные (N)» длиннее остальных */
+  min-width: 170px;
   background-color: transparent;
   border: 1px solid var(--accent);
   color: var(--accent);
@@ -1149,6 +1307,17 @@ onMounted(async () => {
   border-color: var(--accent-strong);
   background-color: var(--accent);
   color: #16151a;
+}
+
+.buttons-danger {
+  border-color: #c45656;
+  color: #a33a3a;
+}
+
+.buttons-danger:hover {
+  border-color: #a33a3a !important;
+  background-color: #a33a3a !important;
+  color: #fff !important;
 }
 
 /* === Таблица (собственная вёрстка на CSS Grid + виртуализация строк) === */
@@ -1862,5 +2031,52 @@ onMounted(async () => {
 
 .name-search .ant-input-clear-icon {
   color: var(--text-faint) !important;
+}
+
+/* === Теги работы === */
+.tags-cell {
+  display: block;
+  max-height: 44px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.tags-cell-empty {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.work-card-tags {
+  margin-top: 4px;
+}
+
+.preview-tags {
+  margin: 8px 0;
+}
+</style>
+
+<style>
+/* Меню тегов в ячейке таблицы «Мои работы» (a-dropdown рендерится в body) */
+.tags-menu {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.tags-menu-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tags-menu-check {
+  color: #8a6d2f;
+  font-size: 12px;
+}
+
+.tags-menu-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 </style>

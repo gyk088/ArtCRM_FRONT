@@ -41,7 +41,7 @@
         hoverable @click="openEditPage(exhibition)">
         <template #cover>
           <div class="card-cover">
-            <img v-if="exhibition.avatar?.url" :src="exhibition.avatar.url" :alt="exhibition.name" class="cover-img" />
+            <img v-if="exhibition.avatar?.url" v-thumb="exhibition.avatar" :alt="exhibition.name" class="cover-img" />
             <div v-else class="cover-placeholder">
               <PictureOutlined />
             </div>

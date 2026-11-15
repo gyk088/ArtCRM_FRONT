@@ -22,3 +22,9 @@ export const API_BASE_URL = String(__MY_BASE_URL__ || '').replace(/\/+$/, '')
 
 // Прямая ссылка на загруженный файл ({ id, ext } из my_file)
 export const fileUrl = (file) => `${API_BASE_URL}/files/${file.id}.${file.ext}`
+
+// Превью картинки для списков (создаётся бэкендом при загрузке, см.
+// backend src/bll/utils/thumbs.js). null — если файл не картинка.
+const THUMB_EXT = /^(jpe?g|png|webp|gif|avif|tiff?)$/i
+export const thumbUrl = (file) =>
+  file?.id && THUMB_EXT.test(file.ext || '') ? `${API_BASE_URL}/files/thumbs/${file.id}.webp` : null

@@ -291,7 +291,7 @@
               <ArrowDownOutlined />
             </button>
           </div>
-          <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="m-work-img" />
+          <img v-if="record.avatar && record.avatar.url" v-thumb="record.avatar" class="m-work-img" />
           <div v-else class="m-work-img img-placeholder"><PictureOutlined /></div>
           <div class="m-work-info">
             <div class="m-work-name">{{ record.name || 'Без названия' }}</div>
@@ -368,7 +368,7 @@
           </template>
           <!-- Колонка аватара -->
           <template v-else-if="column.dataIndex === 'avatar'">
-            <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="preview-img" />
+            <img v-if="record.avatar && record.avatar.url" v-thumb="record.avatar" class="preview-img" />
             <div v-else class="img-placeholder">
               <PictureOutlined />
             </div>
@@ -444,11 +444,12 @@
       @ok="addSelectedWorks"
     >
       <div class="modal-filters-panel">
-        <a-select id="collectionFilterArtist" v-model:value="filterArtist" mode="multiple" placeholder="Художник" allowClear style="width: 180px" max-tag-count="responsive" :options="artistOptions" />
-        <a-select id="collectionFilterLocation" v-model:value="filterLocation" mode="multiple" placeholder="Локация" allowClear style="width: 180px" max-tag-count="responsive" :options="locationOptions" />
-        <a-select id="collectionFilterSeria" v-model:value="filterSeria" mode="multiple" placeholder="Серия" allowClear style="width: 180px" max-tag-count="responsive" :options="seriaOptions" />
-        <a-select id="collectionFilterMedia" v-model:value="filterMedia" mode="multiple" placeholder="Медиа" allowClear style="width: 180px" max-tag-count="responsive" :options="mediaFilterOptions" />
-        <a-select id="collectionFilterStatus" v-model:value="filterStatus" mode="multiple" placeholder="Статус" allowClear style="width: 180px" max-tag-count="responsive" :options="statusFilterOptions" />
+        <a-select id="collectionFilterArtist" v-model:value="filterArtist" mode="multiple" option-filter-prop="label" placeholder="Художник" allowClear style="width: 180px" max-tag-count="responsive" :options="artistOptions" />
+        <a-select id="collectionFilterLocation" v-model:value="filterLocation" mode="multiple" option-filter-prop="label" placeholder="Локация" allowClear style="width: 180px" max-tag-count="responsive" :options="locationOptions" />
+        <a-select id="collectionFilterSeria" v-model:value="filterSeria" mode="multiple" option-filter-prop="label" placeholder="Серия" allowClear style="width: 180px" max-tag-count="responsive" :options="seriaOptions" />
+        <a-select id="collectionFilterMedia" v-model:value="filterMedia" mode="multiple" option-filter-prop="label" placeholder="Медиа" allowClear style="width: 180px" max-tag-count="responsive" :options="mediaFilterOptions" />
+        <a-select id="collectionFilterStatus" v-model:value="filterStatus" mode="multiple" option-filter-prop="label" placeholder="Статус" allowClear style="width: 180px" max-tag-count="responsive" :options="statusFilterOptions" />
+        <a-select v-model:value="filterTags" mode="multiple" option-filter-prop="label" placeholder="Теги" allowClear style="width: 180px" max-tag-count="responsive" :options="tagFilterOptions" />
         <a-input-number id="collectionFilterPriceFrom" name="collectionFilterPriceFrom" v-model:value="filterPriceFrom" placeholder="Цена от" :min="0" style="width: 120px" />
         <a-input-number id="collectionFilterPriceTo" name="collectionFilterPriceTo" v-model:value="filterPriceTo" placeholder="Цена до" :min="0" style="width: 120px" />
       </div>
@@ -463,7 +464,7 @@
       >
         <template #cell="{ column, record }">
           <template v-if="column.dataIndex === 'avatar'">
-            <img v-if="record.avatar && record.avatar.url" :src="record.avatar.url" class="preview-img" />
+            <img v-if="record.avatar && record.avatar.url" v-thumb="record.avatar" class="preview-img" />
             <div v-else class="img-placeholder">
               <PictureOutlined />
             </div>
@@ -479,6 +480,9 @@
           </template>
           <template v-else-if="column.dataIndex === 'location'">
             {{ getLocationName(record.location) }}
+          </template>
+          <template v-else-if="column.dataIndex === 'tags'">
+            <TagChips :ids="record.tags" small :max="2" />
           </template>
           <template v-else-if="column.dataIndex === 'status'">
             {{ getStatusName(record.status) }}
@@ -539,6 +543,8 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { toEditableHtml } from '@/utils/richText.js'
 import { useArtWork } from '@/stores/artWork.js'
 import { useStatuses } from '@/stores/statuses.js'
+import { useTags } from '@/stores/tags.js'
+import TagChips from '@/components/TagChips.vue'
 import { useSerias } from '@/stores/seria.js'
 import { useArtist } from '@/stores/artist.js'
 import { useMedia } from '@/stores/media.js'
@@ -555,6 +561,10 @@ const router = useRouter()
 
 const artWorkStore = useArtWork()
 const statusesStore = useStatuses()
+const tagsStore = useTags()
+const tagFilterOptions = computed(() => tagsStore.listTags.map(t => ({ label: t.name, value: t.id })))
+// для сортировки по колонке «Теги»
+const tagNames = (w) => (w.tags || []).map(id => tagsStore.getTagById(id)?.name || '').sort((a, b) => a.localeCompare(b, 'ru')).join(', ')
 const seriasStore = useSerias()
 const artistStore = useArtist()
 const mediaStore = useMedia()
@@ -575,6 +585,7 @@ const filterLocation = ref([])
 const filterSeria = ref([])
 const filterMedia = ref([])
 const filterStatus = ref([])
+const filterTags = ref([])
 const filterPriceFrom = ref(null)
 const filterPriceTo = ref(null)
 
@@ -592,6 +603,8 @@ const filteredWorksTable = computed(() => {
   if (filterSeria.value?.length) result = result.filter(w => filterSeria.value.includes(w.seria))
   if (filterMedia.value?.length) result = result.filter(w => filterMedia.value.includes(w.media))
   if (filterStatus.value?.length) result = result.filter(w => filterStatus.value.includes(w.status))
+  // теги: работы, у которых есть хотя бы один из выбранных
+  if (filterTags.value?.length) result = result.filter(w => (w.tags || []).some(id => filterTags.value.includes(id)))
   if (filterPriceFrom.value != null) result = result.filter(w => Number(w.price) >= filterPriceFrom.value)
   if (filterPriceTo.value != null) result = result.filter(w => Number(w.price) <= filterPriceTo.value)
 
@@ -671,6 +684,7 @@ onMounted(async () => {
   await Promise.all([
     loadWorks(),
     statusesStore.getListStatuses(),
+    tagsStore.getListTags(),
     seriasStore.getListSerias(),
     artistStore.getListArtists(),
     mediaStore.getListMedia(),
@@ -781,6 +795,7 @@ const columns = [
   { title: 'Серия', dataIndex: 'seria', key: 'seria', sorter: (a, b) => getSeriaName(a.seria).localeCompare(getSeriaName(b.seria), 'ru') },
   { title: 'Локация', dataIndex: 'location', key: 'location', sorter: (a, b) => getLocationName(a.location).localeCompare(getLocationName(b.location), 'ru') },
   { title: 'Статус', dataIndex: 'status', key: 'status', width: 120, sorter: (a, b) => getStatusName(a.status).localeCompare(getStatusName(b.status), 'ru') },
+  { title: 'Теги', dataIndex: 'tags', key: 'tags', width: 170, sorter: (a, b) => tagNames(a).localeCompare(tagNames(b), 'ru') },
   { title: 'Стоимость', dataIndex: 'price', key: 'price', width: 100, sorter: (a, b) => a.price - b.price },
 ]
 
