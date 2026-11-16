@@ -80,6 +80,11 @@
               <span>Профиль</span>
             </a-menu-item>
 
+            <a-menu-item key="backup">
+              <CloudDownloadOutlined />
+              <span>Бекап</span>
+            </a-menu-item>
+
             <a-menu-item v-if="canSeeAdminPanel" key="admin-panel">
               <TeamOutlined />
               <span>Админ-панель</span>
@@ -182,6 +187,11 @@
               <span>Профиль</span>
             </a-menu-item>
 
+            <a-menu-item key="backup">
+              <CloudDownloadOutlined />
+              <span>Бекап</span>
+            </a-menu-item>
+
             <a-menu-item v-if="canSeeAdminPanel" key="admin-panel">
               <TeamOutlined />
               <span>Админ-панель</span>
@@ -274,7 +284,8 @@ import {
   BarChartOutlined,
   FormOutlined,
   ProjectOutlined,
-  BellOutlined
+  BellOutlined,
+  CloudDownloadOutlined
 } from '@ant-design/icons-vue'
 import { useNotifications, setNotificationNavigator } from '@/stores/notifications.js'
 

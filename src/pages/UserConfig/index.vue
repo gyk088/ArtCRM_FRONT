@@ -166,12 +166,6 @@
           <p v-else-if="!sessionsLoading" class="section-hint">Сессии не найдены</p>
         </a-spin>
       </section>
-
-      <section class="form-section">
-        <div class="section-heading">Бекап данных</div>
-        <p class="section-hint">Скачайте копию своих данных и файлов к себе на компьютер</p>
-        <BackupPanel />
-      </section>
     </div>
     </div>
   </div>
@@ -184,7 +178,6 @@ import { useUser } from '@/stores/user.js'
 import { useAuth } from '@/stores/auth.js'
 import { getUser } from '@/services/auth.js'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
-import BackupPanel from '@/components/BackupPanel.vue'
 import { DEFAULT_CERTIFICATE_HEADER_TEXT } from '@/utils/certificatePdf.js'
 
 const userStore = useUser()

@@ -168,6 +168,13 @@ const router = createRouter({
             title: 'Профиль',
           },
       }, {
+        path: 'backup',
+        name: 'backup',
+        component: () => import('@/pages/Backup/index.vue'),
+        meta: {
+            title: 'Бекап',
+          },
+      }, {
         path: 'admin',
         name: 'admin-panel',
         component: () => import('@/pages/AdminPanel/index.vue'),
