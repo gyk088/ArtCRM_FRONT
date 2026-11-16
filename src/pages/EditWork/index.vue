@@ -68,7 +68,8 @@
 
               <a-form-item label="Художник" class="field-full">
                 <a-select v-model:value="form.artist" :options="artistOptions" :disabled="isArtistRole"
-                  class="series-select" :allowClear="!isArtistRole">
+                  class="series-select" :allowClear="!isArtistRole" show-search :filter-option="filterByText"
+                  placeholder="Начните вводить имя художника" @search="v => (newArtist = v)">
                   <template #dropdownRender="{ menuNode: menu }">
                     <VNodes :vnodes="menu" />
 
@@ -76,7 +77,7 @@
 
                     <a-space class="add-row">
                       <a-input ref="artistInputRef" v-model:value="newArtist"
-                        @keyup.enter="addArtist" />
+                        @keyup.enter="addArtist" @keydown.stop />
                       <a-button type="text" @click="addArtist">
                         <template #icon>
                           <PlusOutlined />
@@ -114,12 +115,12 @@
               <div class="field-row">
                 <a-form-item label="Локация" class="field-half">
                   <a-select v-model:value="form.address" placeholder="Выберите или введите локацию" class="series-select"
-                    :options="items.map(item => ({ value: item }))" allowClear>
+                    :options="items.map(item => ({ value: item }))" allowClear show-search :filter-option="filterByText" @search="v => (name = v)">
                     <template #dropdownRender="{ menuNode: menu }">
                       <VNodes :vnodes="menu" />
                       <a-divider style="margin: 4px 0" />
                       <a-space class="add-row">
-                        <a-input ref="inputRef" v-model:value="name" placeholder="Введите локацию" @keyup.enter="addItem" />
+                        <a-input ref="inputRef" v-model:value="name" placeholder="Введите локацию" @keyup.enter="addItem" @keydown.stop />
                         <a-button type="text" @click="addItem">
                           <template #icon>
                             <PlusOutlined />
@@ -133,7 +134,7 @@
 
                 <a-form-item label="Серия" class="field-half">
                   <a-select v-model:value="form.seria" :options="seriesOptions" placeholder="Введите или выберите серию"
-                    class="series-select" allowClear>
+                    class="series-select" allowClear show-search :filter-option="filterByText" @search="v => (newSeries = v)">
                     <template #dropdownRender="{ menuNode: menu }">
                       <VNodes :vnodes="menu" />
 
@@ -141,7 +142,7 @@
 
                       <a-space class="add-row">
                         <a-input ref="seriesInputRef" v-model:value="newSeries" placeholder="Введите серию"
-                          @keyup.enter="addSeries" />
+                          @keyup.enter="addSeries" @keydown.stop />
                         <a-button type="text" @click="addSeries">
                           <template #icon>
                             <PlusOutlined />
@@ -158,7 +159,7 @@
                 <!-- Поле Медиа (после серии) -->
                 <a-form-item label="Медиа" class="field-half">
                   <a-select v-model:value="form.media" :options="mediaOptions" placeholder="Введите или выберите медиа"
-                    class="series-select" allowClear>
+                    class="series-select" allowClear show-search :filter-option="filterByText" @search="v => (newMedia = v)">
                     <template #dropdownRender="{ menuNode: menu }">
                       <VNodes :vnodes="menu" />
 
@@ -166,7 +167,7 @@
 
                       <a-space class="add-row">
                         <a-input ref="mediaInputRef" v-model:value="newMedia" placeholder="Введите медиа"
-                          @keyup.enter="addMedia" />
+                          @keyup.enter="addMedia" @keydown.stop />
                         <a-button type="text" @click="addMedia">
                           <template #icon>
                             <PlusOutlined />
@@ -179,7 +180,8 @@
                 </a-form-item>
 
                 <a-form-item label="Статус" class="field-half">
-                  <a-select v-model:value="form.status" placeholder="Выберите статус" class="status-select" allowClear>
+                  <a-select v-model:value="form.status" placeholder="Выберите статус" class="status-select" allowClear
+                    show-search :filter-option="filterByText" @search="v => (newStatus = v)">
                     <template #dropdownRender="{ menuNode: menu }">
                       <VNodes :vnodes="menu" />
 
@@ -187,7 +189,7 @@
 
                       <a-space class="add-row">
                         <a-input ref="statusInputRef" v-model:value="newStatus" placeholder="Введите статус"
-                          @keyup.enter="addStatus" />
+                          @keyup.enter="addStatus" @keydown.stop />
                         <a-button type="text" @click="addStatus">
                           <template #icon>
                             <PlusOutlined />
@@ -197,7 +199,7 @@
                       </a-space>
                     </template>
 
-                    <a-select-option v-for="status in statusOptions" :key="status.value" :value="status.value">
+                    <a-select-option v-for="status in statusOptions" :key="status.value" :value="status.value" :label="status.label">
                       {{ status.label }}
                     </a-select-option>
                   </a-select>
@@ -342,6 +344,11 @@ const mediaOptions = ref([])
 const newMedia = ref('')
 const mediaInputRef = ref(null)
 const artistOptions = ref([])
+
+// Поиск в выпадающих списках (художник, медиа, серия, локация, статус) —
+// по названию, без учёта регистра. У локаций label нет, ищем по value.
+const filterByText = (input, option) =>
+  String(option?.label ?? option?.value ?? '').toLowerCase().includes(String(input || '').trim().toLowerCase())
 const newArtist = ref('')
 const artistInputRef = ref(null)
 const loading = ref(false)
