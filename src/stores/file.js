@@ -28,6 +28,29 @@ export function showStorageLimitModal(used, limit) {
   })
 }
 
+export const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 МБ
+
+// Предупреждение о слишком большом файле — модальным окном по центру
+// экрана: короткое сообщение вверху (message.error) пропадало раньше, чем
+// его успевали прочитать. При выборе нескольких файлов сразу before-upload
+// вызывается для каждого — собираем их и показываем одно окно со списком.
+let tooLargeQueue = []
+export function showFileTooLargeModal(file) {
+  tooLargeQueue.push(file)
+  if (tooLargeQueue.length > 1) return
+  setTimeout(() => {
+    const files = tooLargeQueue
+    tooLargeQueue = []
+    const names = files.map(f => `«${f?.name || 'файл'}»${f?.size ? ` — ${formatStorageSize(f.size)}` : ''}`)
+    Modal.warning({
+      title: files.length > 1 ? 'Файлы слишком большие' : 'Файл слишком большой',
+      content: `${names.join(', ')}. Максимальный размер файла — 5 МБ. Уменьшите файл (например, сожмите фото или видео) и загрузите снова.`,
+      okText: 'Понятно',
+      centered: true
+    })
+  }, 0)
+}
+
 export const useFile = defineStore('file', {
   state: () => {
     return {
@@ -94,6 +117,8 @@ export const useFile = defineStore('file', {
 
         if (data?.code === 'STORAGE_LIMIT_EXCEEDED') {
           showStorageLimitModal(data.used, data.limit)
+        } else if (e?.response?.status === 413) {
+          showFileTooLargeModal(file)
         } else {
           notifyServerError(errorMessage)
         }

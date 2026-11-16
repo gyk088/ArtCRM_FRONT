@@ -324,7 +324,7 @@ import {
   PictureOutlined,
   CloseCircleOutlined
 } from "@ant-design/icons-vue"
-import { useFile, formatStorageSize, showStorageLimitModal } from "@/stores/file.js"
+import { useFile, formatStorageSize, showStorageLimitModal, showFileTooLargeModal, MAX_FILE_SIZE } from "@/stores/file.js"
 import { getUser } from "@/services/auth.js"
 import { useArtWork } from "@/stores/artWork.js"
 import { useCollection } from "@/stores/collection.js"
@@ -781,11 +781,9 @@ const handleDropOnFolder = async (target) => {
 }
 
 // 📥 добавление во временные
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 МБ
-
 const handleBeforeUpload = (file) => {
   if (file.size > MAX_FILE_SIZE) {
-    message.error(`Файл «${file.name}» превышает максимальный размер 5 МБ`)
+    showFileTooLargeModal(file)
     return false
   }
 
