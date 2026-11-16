@@ -10,6 +10,7 @@ const SERVER_ERRORS = {
   'Task not found': 'Задача не найдена — обновите страницу',
   'Task status not found': 'Статус не найден — обновите страницу',
   'Assignee not found': 'Исполнитель не найден',
+  'File not found': 'Файл не найден в ваших «Файлах»',
   'Board name is required': 'Укажите название доски',
   'Task title is required': 'Укажите заголовок задачи',
   'Status name is required': 'Укажите название статуса',
@@ -88,6 +89,20 @@ export const useTasks = defineStore('tasks', {
     },
 
     // ---------- статусы (справочник) ----------
+    // ---------- заметки и файлы задачи ----------
+    /** GET /api/v1/tasks/:id/attachments — { notes, files } */
+    async getAttachments(id) {
+      return request(() => apiClient.get(`/api/v1/tasks/${id}/attachments`), 'Не удалось загрузить заметки и файлы задачи')
+    },
+    /** POST /api/v1/tasks/:id/files — прикрепить файл из «Файлов» */
+    async attachFile(id, fileId) {
+      return request(() => apiClient.post(`/api/v1/tasks/${id}/files`, { file_id: fileId }), 'Не удалось прикрепить файл')
+    },
+    /** DELETE /api/v1/tasks/:id/files/:fileId — открепить (файл остаётся в «Файлах») */
+    async detachFile(id, fileId) {
+      return request(() => apiClient.delete(`/api/v1/tasks/${id}/files/${fileId}`), 'Не удалось открепить файл')
+    },
+
     async getStatuses() {
       const data = await request(() => apiClient.get('/api/v1/tasks/statuses'), 'Не удалось загрузить статусы задач')
       if (data) this.statuses = data

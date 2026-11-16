@@ -58,6 +58,15 @@
           >
             <template #suffixIcon><UserOutlined /></template>
           </a-select>
+          <!-- Заметка привязана к задаче (из окна задачи) -->
+          <span v-if="note.task" class="note-task-chip">
+            <router-link :to="`/home/tasks/${note.task.board_id}?task=${note.task.id}`" title="Открыть задачу">
+              <CheckSquareOutlined /> Задача: «{{ note.task.title }}»
+            </router-link>
+            <a-tooltip title="Отвязать от задачи">
+              <button type="button" class="note-task-x" @click="unlinkTask"><CloseOutlined /></button>
+            </a-tooltip>
+          </span>
           <div class="note-authors">
             <span>Создал(а): <b>{{ personName(note.createdBy) }}</b>, {{ formatDateTime(note.ctime) }}</span>
             <span v-if="note.updatedBy">Изменил(а): <b>{{ personName(note.updatedBy) }}</b>, {{ formatDateTime(note.utime) }}</span>
@@ -206,6 +215,7 @@ import {
   UndoOutlined, RedoOutlined, BoldOutlined, ItalicOutlined, UnderlineOutlined, StrikethroughOutlined,
   FontColorsOutlined, HighlightOutlined, AlignLeftOutlined, AlignCenterOutlined, AlignRightOutlined,
   UnorderedListOutlined, OrderedListOutlined, BlockOutlined, LineOutlined, ClearOutlined, MenuOutlined,
+  CheckSquareOutlined, CloseOutlined,
 } from '@ant-design/icons-vue'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
 import { useNotes } from '@/stores/notes.js'
@@ -245,6 +255,15 @@ const HIGHLIGHT_COLORS = ['#fde68a', '#fecaca', '#bbf7d0', '#bfdbfe', '#e9d5ff',
 const route = useRoute()
 const router = useRouter()
 const notesStore = useNotes()
+
+// Отвязать заметку от задачи (сама заметка остаётся)
+async function unlinkTask() {
+  const saved = await notesStore.updateNote(note.value.id, { task_id: null })
+  if (saved) {
+    note.value = { ...note.value, task: null }
+    message.success('Заметка отвязана от задачи')
+  }
+}
 const artistStore = useArtist()
 const me = getUser()
 
@@ -572,6 +591,41 @@ function formatDateTime(value) {
   gap: 16px;
   flex-wrap: wrap;
   margin: 8px 0 12px;
+}
+
+.note-task-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 2px 4px 2px 10px;
+  font-size: 13px;
+  background: rgba(138, 109, 47, 0.1);
+  border-radius: 999px;
+}
+
+.note-task-chip a {
+  color: #6f581f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-task-x {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #a29c8c;
+  cursor: pointer;
+}
+
+.note-task-x:hover {
+  color: #b43c3c;
 }
 
 .note-artist-select {

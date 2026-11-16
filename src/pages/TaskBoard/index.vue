@@ -83,6 +83,8 @@
                   </span>
                   <span v-if="task.priority === 'high'" class="prio-chip" title="Высокий приоритет"><FlagFilled /></span>
                   <span v-if="task.description" class="desc-mark" title="Есть описание"><AlignLeftOutlined /></span>
+                  <span v-if="task.notes_count" class="desc-mark count-mark" :title="`Заметок: ${task.notes_count}`"><FileTextOutlined /> {{ task.notes_count }}</span>
+                  <span v-if="task.files_count" class="desc-mark count-mark" :title="`Файлов: ${task.files_count}`"><PaperClipOutlined /> {{ task.files_count }}</span>
                   <span v-if="task.artist" class="artist-chip" :title="`Художник: ${task.artist.name}`">{{ task.artist.name }}</span>
                   <span
                     v-if="task.assignee"
@@ -113,6 +115,7 @@
       @saved="onTaskSaved"
       @created="onTaskCreated"
       @deleted="onTaskDeleted"
+      @counts="onTaskCounts"
     />
 
     <!-- Настройки доски: название, описание, колонки -->
@@ -147,6 +150,8 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, SearchOutlined, SettingOutlined, CheckCircleOutlined, ClockCircleOutlined,
   FlagFilled, AlignLeftOutlined, PlusOutlined,
+  FileTextOutlined,
+  PaperClipOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import BoardStatusPicker from '@/components/BoardStatusPicker.vue'
@@ -334,6 +339,11 @@ async function saveSettings() {
 
 function onTaskSaved(updated) {
   tasks.value = tasks.value.map(t => (t.id === updated.id ? updated : t))
+}
+
+// Заметки/файлы задачи изменились в окне задачи — обновляем значки на карточке
+function onTaskCounts({ id, notes_count, files_count }) {
+  tasks.value = tasks.value.map(t => (t.id === id ? { ...t, notes_count, files_count } : t))
 }
 
 function onTaskDeleted(id) {

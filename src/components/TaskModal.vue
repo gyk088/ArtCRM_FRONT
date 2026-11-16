@@ -32,6 +32,15 @@
             :auto-size="{ minRows: 6, maxRows: 18 }"
             placeholder="Подробности, ссылки, договорённости…"
           />
+          <!-- Заметки (из «Заметок») и файлы (из «Файлов») задачи -->
+          <TaskAttachments
+            v-if="!isCreate && task?.id"
+            :task-id="task.id"
+            :task-title="form.title"
+            @counts="c => emit('counts', { id: task.id, ...c })"
+            @leave="close"
+          />
+          <div v-else-if="isCreate" class="task-attach-hint">Заметки и файлы можно добавить после создания задачи.</div>
         </div>
 
         <div class="task-side">
@@ -113,6 +122,7 @@
 
 <script setup>
 import HistoryButton from '@/components/HistoryButton.vue'
+import TaskAttachments from '@/components/TaskAttachments.vue'
 // Просмотр и правка задачи (сохраняется по кнопке «Сохранить») и создание
 // новой: task = null + createDefaults { board_id, status_id }.
 import { computed, nextTick, reactive, ref, watch } from 'vue'
@@ -133,7 +143,7 @@ const props = defineProps({
   createDefaults: { type: Object, default: null },
 })
 // saved(task) — задача изменена; created(task) — создана; deleted(id) — удалена
-const emit = defineEmits(['update:open', 'saved', 'created', 'deleted'])
+const emit = defineEmits(['update:open', 'saved', 'created', 'deleted', 'counts'])
 
 const isCreate = computed(() => !props.task && !!props.createDefaults)
 const titleInputRef = ref(null)
@@ -280,8 +290,15 @@ async function remove() {
 
 .task-layout {
   display: grid;
-  grid-template-columns: 1fr 240px;
+  /* minmax(0, …): длинный заголовок заметки или имя файла (без переносов)
+     не должен распирать левую колонку и выталкивать правую за край окна */
+  grid-template-columns: minmax(0, 1fr) 240px;
   gap: 20px;
+}
+
+.task-main,
+.task-side {
+  min-width: 0;
 }
 
 .field-label {
@@ -334,6 +351,12 @@ async function remove() {
   color: #1e7b45;
 }
 
+.task-attach-hint {
+  margin-top: 14px;
+  font-size: 12px;
+  color: #7c7669;
+}
+
 .task-footer {
   display: flex;
   justify-content: space-between;
@@ -348,7 +371,7 @@ async function remove() {
 
 @media (max-width: 700px) {
   .task-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
