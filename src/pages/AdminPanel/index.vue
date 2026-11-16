@@ -137,6 +137,14 @@
                 >
                   Квоты
                 </a-button>
+                <a-button
+                  v-if="isSuperAdminViewer && canBackup(record)"
+                  type="text"
+                  size="small"
+                  @click="openBackup(record)"
+                >
+                  Бекап
+                </a-button>
               </div>
             </template>
 
@@ -205,6 +213,7 @@
                 <a-button type="text" size="small" @click="openChangePassword(record)">Пароль</a-button>
                 <a-button type="text" size="small" @click="openChangeEmail(record)">Email</a-button>
                 <a-button type="text" size="small" @click="openQuotaModal(record.id, 'gallery')">Квоты</a-button>
+                <a-button type="text" size="small" @click="openBackup(record)">Бекап</a-button>
                 <a-button type="text" size="small" @click="openCreateUser(record.id)">
                   <template #icon><UserAddOutlined /></template>
                   Добавить
@@ -282,6 +291,17 @@
     </a-modal>
 
     <!-- Смена пароля -->
+    <!-- Бекап данных пользователя (только Super Admin) -->
+    <a-modal
+      v-model:open="isBackupModalOpen"
+      title="Бекап данных"
+      :footer="null"
+      destroy-on-close
+    >
+      <p class="modal-target">{{ backupTargetLabel }}</p>
+      <BackupPanel v-if="backupTargetId" :user-id="backupTargetId" />
+    </a-modal>
+
     <a-modal
       v-model:open="isPasswordModalOpen"
       title="Сменить пароль"
@@ -435,6 +455,7 @@ import { formatStorageSize } from '@/stores/file.js'
 import { ROLES, TEXT_ROLES } from '@/services/const.js'
 import { getUser } from '@/services/auth.js'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
+import BackupPanel from '@/components/BackupPanel.vue'
 
 const adminStore = useAdmin()
 const activeTab = ref('users')
@@ -499,6 +520,21 @@ const galleryColumns = [
   { title: 'Статус', dataIndex: 'active', key: 'active', width: 150 },
   { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 170 },
 ]
+
+// === Бекап (Super Admin) ===
+// Бекап делают галерея, художник и менеджер без галереи; данные менеджера
+// галереи входят в бекап самой галереи (см. бэкенд BackupService).
+const canBackup = (record) =>
+  record.role === ROLES.GALLERY || record.role === ROLES.ARTIST ||
+  (record.role === ROLES.MANAGER && !record.managed_by_gallery_id)
+const isBackupModalOpen = ref(false)
+const backupTargetId = ref(null)
+const backupTargetLabel = ref('')
+const openBackup = (record) => {
+  backupTargetId.value = record.id
+  backupTargetLabel.value = [[record.name, record.surname].filter(Boolean).join(' '), record.email].filter(Boolean).join(' · ')
+  isBackupModalOpen.value = true
+}
 
 // === Роль ===
 const rolePendingId = ref(null)
