@@ -53,6 +53,18 @@
             class="w-full"
           />
 
+          <template v-if="artists.length || form.artist_id">
+            <div class="field-label">Художник</div>
+            <a-select
+              v-model:value="form.artist_id"
+              :options="artistOptions"
+              allow-clear
+              show-search
+              option-filter-prop="label"
+              placeholder="Не привязана"
+              class="w-full"
+            />
+          </template>
           <div class="field-label">Срок</div>
           <a-date-picker
             v-model:value="form.due_date"
@@ -90,6 +102,7 @@
         </a-popconfirm>
         <span v-else />
         <div class="task-footer-right">
+          <HistoryButton v-if="!isCreate && task?.id" type="task" :id="task.id" title="История задачи" icon-only />
           <a-button @click="close">Отмена</a-button>
           <a-button type="primary" :loading="saving" @click="save">{{ isCreate ? 'Создать задачу' : 'Сохранить' }}</a-button>
         </div>
@@ -99,6 +112,7 @@
 </template>
 
 <script setup>
+import HistoryButton from '@/components/HistoryButton.vue'
 // Просмотр и правка задачи (сохраняется по кнопке «Сохранить») и создание
 // новой: task = null + createDefaults { board_id, status_id }.
 import { computed, nextTick, reactive, ref, watch } from 'vue'
@@ -113,6 +127,8 @@ const props = defineProps({
   task: { type: Object, default: null },
   statuses: { type: Array, default: () => [] },
   assignees: { type: Array, default: () => [] },
+  // справочник художников ({ id, name }) — задачу можно привязать к художнику
+  artists: { type: Array, default: () => [] },
   // режим создания: { board_id, status_id } — колонка, где нажали «Добавить задачу»
   createDefaults: { type: Object, default: null },
 })
@@ -126,7 +142,7 @@ const tasksStore = useTasks()
 const me = getUser()
 const saving = ref(false)
 
-const form = reactive({ title: '', description: '', status_id: null, assignee_id: undefined, due_date: null, priority: 'normal' })
+const form = reactive({ title: '', description: '', status_id: null, assignee_id: undefined, artist_id: undefined, due_date: null, priority: 'normal' })
 
 watch(() => [props.open, props.task, props.createDefaults], async () => {
   if (props.open && isCreate.value) {
@@ -135,6 +151,7 @@ watch(() => [props.open, props.task, props.createDefaults], async () => {
       description: '',
       status_id: props.createDefaults.status_id,
       assignee_id: undefined,
+      artist_id: props.createDefaults.artist_id || undefined,
       due_date: null,
       priority: 'normal',
     })
@@ -148,6 +165,7 @@ watch(() => [props.open, props.task, props.createDefaults], async () => {
       description: props.task.description || '',
       status_id: props.task.status_id,
       assignee_id: props.task.assignee?.id || undefined,
+      artist_id: props.task.artist?.id || undefined,
       due_date: props.task.due_date || null,
       priority: props.task.priority || 'normal',
     })
@@ -156,6 +174,13 @@ watch(() => [props.open, props.task, props.createDefaults], async () => {
 
 const statusOptions = computed(() => props.statuses.map(s => ({ label: s.name, value: s.id, color: s.color, isFinal: s.is_final })))
 const assigneeOptions = computed(() => props.assignees.map(u => ({ label: personName(u), value: u.id })))
+const artistOptions = computed(() => {
+  const list = props.artists.map(a => ({ label: a.name, value: a.id }))
+  // привязанный художник мог не попасть в справочник (например, удалён из списка) — показываем имя
+  const current = props.task?.artist
+  if (current && !list.some(o => o.value === current.id)) list.unshift({ label: current.name || 'Художник', value: current.id })
+  return list.sort((a, b) => String(a.label).localeCompare(String(b.label), 'ru'))
+})
 
 // подсветка срока — по тому, что сейчас в форме
 const due = computed(() => {
@@ -179,6 +204,7 @@ async function save() {
     description: form.description,
     status_id: form.status_id,
     assignee_id: form.assignee_id || null,
+    artist_id: form.artist_id || null,
     due_date: form.due_date || null,
     priority: form.priority,
   }

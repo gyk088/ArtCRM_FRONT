@@ -4,6 +4,7 @@
       <div class="page-header-top">
         <MobileMenuButton />
         <h2 class="page-title">{{ isNewContact ? 'Новый контакт' : 'Редактировать контакт' }}</h2>
+        <span v-if="!isNewContact" class="header-history"><HistoryButton type="contact" :id="String(route.params.id)" /></span>
       </div>
       <p class="page-subtitle">{{ form.name || 'Без имени' }}</p>
     </div>
@@ -211,6 +212,7 @@
 </template>
 
 <script setup>
+import HistoryButton from '@/components/HistoryButton.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
@@ -493,6 +495,10 @@ onMounted(async () => {
   border-radius: 14px;
   padding: 20px 24px 40px;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.header-history {
+  margin-left: auto;
 }
 
 .page-header-top {

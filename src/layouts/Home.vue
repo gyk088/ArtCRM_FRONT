@@ -29,6 +29,11 @@
               <span>Мои Выставки</span>
             </a-menu-item>
 
+            <a-menu-item v-if="!isArtist" key="artists">
+              <SkinOutlined />
+              <span>Мои художники</span>
+            </a-menu-item>
+
             <a-menu-item v-if="SHOW_BIO_CV" key="bio">
               <UserOutlined />
               <span>Биография</span>
@@ -83,6 +88,11 @@
             <a-menu-item key="backup">
               <CloudDownloadOutlined />
               <span>Бекап</span>
+            </a-menu-item>
+
+            <a-menu-item v-if="canSeeAdminPanel" key="history">
+              <HistoryOutlined />
+              <span>История изменений</span>
             </a-menu-item>
 
             <a-menu-item v-if="canSeeAdminPanel" key="admin-panel">
@@ -136,6 +146,11 @@
               <span>Мои Выставки</span>
             </a-menu-item>
 
+            <a-menu-item v-if="!isArtist" key="artists">
+              <SkinOutlined />
+              <span>Мои художники</span>
+            </a-menu-item>
+
             <a-menu-item v-if="SHOW_BIO_CV" key="bio">
               <UserOutlined />
               <span>Биография</span>
@@ -190,6 +205,11 @@
             <a-menu-item key="backup">
               <CloudDownloadOutlined />
               <span>Бекап</span>
+            </a-menu-item>
+
+            <a-menu-item v-if="canSeeAdminPanel" key="history">
+              <HistoryOutlined />
+              <span>История изменений</span>
             </a-menu-item>
 
             <a-menu-item v-if="canSeeAdminPanel" key="admin-panel">
@@ -285,7 +305,9 @@ import {
   FormOutlined,
   ProjectOutlined,
   BellOutlined,
-  CloudDownloadOutlined
+  CloudDownloadOutlined,
+  HistoryOutlined,
+  SkinOutlined
 } from '@ant-design/icons-vue'
 import { useNotifications, setNotificationNavigator } from '@/stores/notifications.js'
 
@@ -323,7 +345,7 @@ async function handleStopImpersonation() {
 }
 
 // Вложенные страницы подсвечивают пункт своего раздела
-const MENU_KEY_BY_ROUTE = { report: 'reports', note: 'notes', 'task-board': 'task-boards' };
+const MENU_KEY_BY_ROUTE = { report: 'reports', note: 'notes', 'task-board': 'task-boards', artist: 'artists', portfolio: 'artists' };
 const menuKeyFor = (name) => MENU_KEY_BY_ROUTE[name] || name;
 const selectedKey = ref(menuKeyFor(router.currentRoute.value.name));
 router.afterEach((to) => (selectedKey.value = menuKeyFor(to.name)));

@@ -198,7 +198,21 @@
         @drop.stop="handleFileReorderDrop(item.id)"
       >
         <div class="file-thumb" @click.stop>
-          <FileView :file="item" />
+          <FileView :file="item">
+            <!-- Действия в полном просмотре — те же, что у карточки файла -->
+            <template #actions="{ close, download, copyLink }">
+              <a-button v-if="select" type="primary" class="fv-select" @click="close(); handleSelectFile(item)">
+                <CheckOutlined /> Выбрать
+              </a-button>
+              <a-button @click="download"><DownloadOutlined /> Скачать</a-button>
+              <a-button @click="copyLink"><LinkOutlined /> Ссылка</a-button>
+              <a-button @click="close(); startRenameFile(item)"><EditOutlined /> Изменить</a-button>
+              <a-button v-if="currentFolder" @click="close(); handleRemoveFromFolder(item)"><RollbackOutlined /> Из папки</a-button>
+              <a-button v-if="remove && isOwn(item)" danger class="fv-delete" :loading="item.loading" @click="close(); removeFile(item)">
+                <DeleteOutlined /> Удалить
+              </a-button>
+            </template>
+          </FileView>
         </div>
 
         <div class="file-info">
@@ -319,6 +333,7 @@ import {
   ExclamationCircleOutlined,
   RollbackOutlined,
   DownloadOutlined,
+  LinkOutlined,
   EditOutlined,
   LoadingOutlined,
   PictureOutlined,
@@ -1292,6 +1307,23 @@ const removeFile = async (item) => {
 
 /* Превью растягивается на всю ширину карточки (не выходя за её пределы)
    и центрируется, оставаясь квадратным */
+/* «Удалить» в полном просмотре — справа, отдельно от остальных */
+.fv-delete {
+  margin-left: auto;
+}
+
+/* «Выбрать» в полном просмотре файла (кнопка из слота FileView) */
+.fv-select {
+  background: #8a6d2f;
+  border-color: #8a6d2f;
+}
+
+.fv-select:hover,
+.fv-select:focus {
+  background: #6f581f !important;
+  border-color: #6f581f !important;
+}
+
 .file-thumb {
   width: 100%;
   aspect-ratio: 1 / 1;

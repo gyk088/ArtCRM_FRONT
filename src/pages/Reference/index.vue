@@ -5,22 +5,10 @@
         <MobileMenuButton />
         <h2 class="page-title">Справочник</h2>
       </div>
-      <p class="page-subtitle">Художники, серии, медиа, локации, статусы и теги — общие списки для ваших работ</p>
+      <p class="page-subtitle">Серии, медиа, локации, статусы и теги — общие списки для ваших работ</p>
     </div>
 
     <a-tabs v-model:activeKey="activeTab" class="reference-tabs">
-      <a-tab-pane v-if="!isArtist" key="artists" tab="Художники">
-        <ReferenceEntityPanel
-          :store="artistStore"
-          list-field="listArtists"
-          load-action="getListArtists"
-          create-action="createArtist"
-          update-action="updateArtist"
-          delete-action="deleteArtist"
-          singular-label="художника"
-        />
-      </a-tab-pane>
-
       <a-tab-pane key="serias" tab="Серии">
         <ReferenceEntityPanel
           :store="seriaStore"
@@ -116,11 +104,10 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import ReferenceEntityPanel from '@/components/ReferenceEntityPanel.vue'
 import TaskStatusPanel from '@/components/TaskStatusPanel.vue'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
-import { useArtist } from '@/stores/artist.js'
 import { useSerias } from '@/stores/seria.js'
 import { useMedia } from '@/stores/media.js'
 import { useLocations } from '@/stores/locations.js'
@@ -131,7 +118,6 @@ import { useContactCategory } from '@/stores/contactCategory.js'
 import { getUser } from '@/services/auth.js'
 import { ROLES } from '@/services/const'
 
-const artistStore = useArtist()
 const seriaStore = useSerias()
 const mediaStore = useMedia()
 const locationsStore = useLocations()
@@ -144,7 +130,10 @@ const isArtist = computed(() => getUser()?.role === ROLES.ARTIST)
 
 // ?tab=... — открыть сразу нужную вкладку (например, со страницы доски задач)
 const route = useRoute()
-const activeTab = ref(route.query.tab ? String(route.query.tab) : (isArtist.value ? 'serias' : 'artists'))
+// Художники переехали в раздел «Мои художники» — старые ссылки ?tab=artists ведут туда
+const router = useRouter()
+if (route.query.tab === 'artists' && !isArtist.value) router.replace({ name: 'artists' })
+const activeTab = ref(route.query.tab && route.query.tab !== 'artists' ? String(route.query.tab) : 'serias')
 </script>
 
 <style scoped>

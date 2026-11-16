@@ -27,6 +27,7 @@
               <template v-else-if="dirty">Изменения…</template>
               <template v-else>Сохранено</template>
             </span>
+            <HistoryButton type="note" :id="String(route.params.id)" icon-only />
             <a-button :loading="exporting" @click="exportPdf">
               <template #icon><FilePdfOutlined /></template>
               <span class="hide-mobile">PDF</span>
@@ -188,6 +189,7 @@
 </template>
 
 <script setup>
+import HistoryButton from '@/components/HistoryButton.vue'
 // Заметка: заголовок, художник, форматированный текст. Всё сохраняется само
 // (через ~1 с после последней правки) и при уходе со страницы.
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'

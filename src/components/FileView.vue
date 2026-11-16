@@ -36,7 +36,9 @@
     <a-drawer
       v-model:open="previewVisible"
       placement="right"
-      width="480"
+      :width="isMobile ? '100%' : 520"
+      :title="file.title || file.name"
+      root-class-name="file-preview-drawer"
     >
 
       <!-- 🖼 КАРТИНКА -->
@@ -75,6 +77,16 @@
       <!-- 💬 Комментарий -->
       <div v-if="file.comment" class="modal-file-comment">{{ file.comment }}</div>
 
+      <!-- Действия с файлом: родитель (раздел «Файлы») передаёт свои через
+           слот actions; по умолчанию — скачать и скопировать ссылку -->
+      <template #footer>
+        <div class="fv-actions">
+          <slot name="actions" :close="closePreview" :download="downloadFile" :copy-link="copyLink">
+            <a-button @click="downloadFile"><DownloadOutlined /> Скачать</a-button>
+            <a-button @click="copyLink"><LinkOutlined /> Ссылка</a-button>
+          </slot>
+        </div>
+      </template>
     </a-drawer>
 
   </div>
@@ -83,7 +95,11 @@
 <script setup>
 import { fileUrl } from '@/services/const.js'
 import { computed, ref } from "vue"
+import { message } from "ant-design-vue"
+import { useIsMobile } from '@/composables/useIsMobile.js'
 import {
+  DownloadOutlined,
+  LinkOutlined,
   FileTextOutlined,
   FileImageOutlined,
   FilePdfOutlined,
@@ -99,9 +115,29 @@ const props = defineProps({
 })
 
 const previewVisible = ref(false)
+const { isMobile } = useIsMobile()
 
 const openPreview = () => {
   previewVisible.value = true
+}
+const closePreview = () => {
+  previewVisible.value = false
+}
+
+// Прямая ссылка на файл (абсолютная — чтобы её можно было отправить)
+const copyLink = async () => {
+  const link = new URL(src.value, window.location.origin).href
+  try {
+    await navigator.clipboard.writeText(link)
+  } catch {
+    const textarea = document.createElement("textarea")
+    textarea.value = link
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand("copy")
+    document.body.removeChild(textarea)
+  }
+  message.success("Ссылка на файл скопирована")
 }
 
 // 👉 URL файла
@@ -227,6 +263,18 @@ const iconComponent = computed(() => {
   font-size: 18px;
   margin-top: 8px;
   margin-bottom: 19px;
+}
+
+.fv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fv-actions :deep(.ant-btn) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .modal-file-btn {

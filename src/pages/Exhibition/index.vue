@@ -4,6 +4,7 @@
       <div class="page-header-top">
         <MobileMenuButton />
         <h2 class="page-title">{{ isNewExhibition ? "Создать выставку" : "Редактировать выставку" }}</h2>
+        <span v-if="!isNewExhibition" class="header-history"><HistoryButton type="exhibition" :id="String(route.params.id)" /></span>
       </div>
       <p class="page-subtitle">{{ form.name || "Без названия" }}</p>
     </div>
@@ -38,7 +39,7 @@
             </a-form-item>
 
             <a-form-item label="Художник/Галерея" name="artistOrGallery">
-              <a-input id="exhibitionArtistOrGallery" name="exhibitionArtistOrGallery" v-model:value="form.artistOrGallery" class="fixed-input" />
+              <ArtistOrGalleryInput id="exhibitionArtistOrGallery" v-model="form.artistOrGallery" :prefill="isNewExhibition" />
             </a-form-item>
 
             <a-form-item label="Место проведения" name="venue">
@@ -434,12 +435,18 @@
         <a-input-number id="exhibitionFilterPriceTo" name="exhibitionFilterPriceTo" v-model:value="filterPriceTo" placeholder="Цена до" :min="0" style="width: 120px" />
       </div>
 
-      <div class="modal-selected-count">Выбрано работ: {{ selectedRowKeys.length }}</div>
+      <div class="modal-selected-count">
+        Выбрано на экране: {{ visibleSelectedCount }}
+        <span v-if="visibleSelectedCount !== selectedRowKeys.length" class="modal-selected-total">
+          · всего в выставке будет {{ selectedRowKeys.length }} (часть скрыта фильтром)
+        </span>
+      </div>
 
       <WorksPickerTable
         :data="filteredWorksTable"
         :columns="columns"
         v-model:selected-row-keys="selectedRowKeys"
+        :locked-keys="form.works"
         :loading="worksLoading"
       >
         <template #cell="{ column, record }">
@@ -470,6 +477,11 @@
           <template v-else>
             {{ record[column.dataIndex] }}
           </template>
+        </template>
+        <template #tile="{ record }">
+          <div class="wpt-tile-name" :title="record.name">{{ record.name || 'Без названия' }}</div>
+          <div class="wpt-tile-sub">{{ getArtistName(record.artist) || '\u00a0' }}</div>
+          <div class="wpt-tile-sub">{{ [record.size, record.year, getStatusName(record.status)].filter(Boolean).join(' · ') || '\u00a0' }}</div>
         </template>
       </WorksPickerTable>
     </a-modal>
@@ -528,6 +540,8 @@ import { useExhibition } from '@/stores/exhibition.js'
 import { downloadCatalogPdf } from '@/utils/catalogPdf.js'
 import FileUploader from "@/components/FileUploader.vue"
 import WorksPickerTable from "@/components/WorksPickerTable.vue"
+import HistoryButton from '@/components/HistoryButton.vue'
+import ArtistOrGalleryInput from '@/components/ArtistOrGalleryInput.vue'
 import { useIsMobile } from '@/composables/useIsMobile.js'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
 
@@ -663,6 +677,10 @@ onMounted(async () => {
     mediaStore.getListMedia(),
     locationsStore.getListLocations()
   ])
+
+  // Пока грузились справочники, могли уйти со страницы «Назад» —
+  // тогда route.params.id уже чужой, ничего не запрашиваем
+  if (route.name !== 'edit-exhibition') return
 
   if (!isNewExhibition.value) {
     // === Редактирование существующей выставки — подгружаем её с бэкенда ===
@@ -875,6 +893,11 @@ function openWorksModal() {
 // выбранные ID в модалке — WorksPickerTable сам хранит выбор по id, поэтому
 // он переживает фильтрацию/сортировку без отдельной preserveSelectedRowKeys
 const selectedRowKeys = ref([])
+// Сколько выбранных работ видно при текущих фильтрах окна выбора
+const visibleSelectedCount = computed(() => {
+  const picked = new Set(selectedRowKeys.value)
+  return filteredWorksTable.value.filter(w => picked.has(w.id)).length
+})
 
 const selectedWorksData = computed(() => {
   return worksTable.value.filter(work => form.works.includes(work.id))
@@ -1014,6 +1037,10 @@ function goBack() {
 
 .page-header {
   margin-bottom: 20px;
+}
+
+.header-history {
+  margin-left: auto;
 }
 
 .page-header-top {
@@ -1702,6 +1729,11 @@ function goBack() {
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.modal-selected-total {
+  font-weight: 400;
+  color: var(--text-faint, #7c7669);
 }
 
 .modal-selected-count {

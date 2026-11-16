@@ -2,6 +2,21 @@ import { defineStore } from 'pinia'
 import apiClient from '@/services/api.js'
 import { notifyServerError, notifyServerSuccess } from '@/services/notify.js'
 
+// Ошибки бэкенда по художникам — по-русски
+function artistErrorText(e, fallback) {
+    const raw = e?.response?.data?.error || ''
+    const used = raw.match(/^Cannot delete artist: it is used by (\d+) art object/)
+    if (used) return `Нельзя удалить художника: у него есть работы (${used[1]}). Сначала перенесите или удалите их.`
+    const map = {
+        'Artist not found': 'Художник не найден',
+        'Artist name is required': 'Укажите имя художника',
+        'File not found': 'Файл не найден',
+        'commission_pct must be between 0 and 100': 'Комиссия — от 0 до 100%',
+        'Artist birth_year must be a year': 'Год рождения указан неверно',
+    }
+    return map[raw] || raw || fallback
+}
+
 export const useArtist = defineStore('artist', {
     state: () => {
         return {
@@ -187,6 +202,90 @@ export const useArtist = defineStore('artist', {
                 this.loading = false
             }
             return success
+        },
+
+        // ==================== «Мои художники» ====================
+
+        /**
+         * GET /api/v1/art/artists/summary — художники со сводкой (работы,
+         * продажи, не выплачено, открытые задачи) и лимит галереи
+         * { quota: { used, limit } | null, artists: [...] }
+         */
+        async getSummary() {
+            try {
+                const resp = await apiClient.get('/api/v1/art/artists/summary')
+                return resp.data
+            } catch (e) {
+                console.error('Error fetching artists summary:', e)
+                notifyServerError(artistErrorText(e, 'Не удалось загрузить художников'))
+                return null
+            }
+        },
+
+        /** GET /api/v1/art/artists/byline-options — { gallery, own } для поля «Художник/Галерея» */
+        async getBylineOptions() {
+            try {
+                const resp = await apiClient.get('/api/v1/art/artists/byline-options')
+                return resp.data
+            } catch (e) {
+                // Подсказки необязательны — поле остаётся обычным текстовым
+                console.error('Error fetching byline options:', e)
+                return null
+            }
+        },
+
+        /** GET /api/v1/art/artists/:id/overview — карточка художника */
+        async getOverview(id) {
+            try {
+                const resp = await apiClient.get(`/api/v1/art/artists/${id}/overview`)
+                return resp.data
+            } catch (e) {
+                console.error('Error fetching artist overview:', e)
+                if (e?.response?.status !== 404) notifyServerError(artistErrorText(e, 'Не удалось загрузить художника'))
+                return null
+            }
+        },
+
+        /**
+         * PUT /api/v1/art/artists — имя и анкета (фото, контакты, комиссия);
+         * в отличие от updateArtist — с понятными сообщениями об ошибках
+         */
+        async saveProfile(data) {
+            try {
+                const resp = await apiClient.put('/api/v1/art/artists', data)
+                this.listArtists = this.listArtists.map(a => (a.id === resp.data.id ? resp.data : a))
+                return resp.data
+            } catch (e) {
+                console.error('Error saving artist profile:', e)
+                notifyServerError(artistErrorText(e, 'Не удалось сохранить художника'))
+                return null
+            }
+        },
+
+        /** POST /api/v1/art/artists — с понятным текстом при превышении лимита */
+        async addArtist(data) {
+            try {
+                const resp = await apiClient.post('/api/v1/art/artists', data)
+                this.listArtists.push(resp.data)
+                return resp.data
+            } catch (e) {
+                console.error('Error creating artist:', e)
+                notifyServerError(artistErrorText(e, 'Не удалось добавить художника'))
+                return null
+            }
+        },
+
+        /** DELETE /api/v1/art/artists/:id — нельзя, если у художника есть работы */
+        async removeArtist(id) {
+            try {
+                await apiClient.delete(`/api/v1/art/artists/${id}`)
+                this.listArtists = this.listArtists.filter(a => a.id !== id)
+                return true
+            } catch (e) {
+                console.error('Error deleting artist:', e)
+                notifyServerError(artistErrorText(e, 'Не удалось удалить художника'))
+                return false
+            }
         },
 
         /**

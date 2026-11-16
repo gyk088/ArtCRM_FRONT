@@ -18,6 +18,10 @@
         <a-button class="buttons" type="primary" v-if="selectedRowKeys.length > 0" @click="createCollection">
           Создать ссылку
         </a-button>
+        <a-radio-group v-if="!isMobile" v-model:value="viewMode" button-style="solid" class="view-switch">
+          <a-radio-button value="table" title="Таблица"><UnorderedListOutlined /></a-radio-button>
+          <a-radio-button value="tiles" title="Плитка"><AppstoreOutlined /></a-radio-button>
+        </a-radio-group>
         <a-button class="buttons" type="primary" @click="openEditPage()">Добавить</a-button>
       </div>
     </div>
@@ -130,7 +134,7 @@
          ant-design-vue не умеет виртуальный скролл ни в одной версии —
          при сотнях/тысячах работ рендерить все строки в DOM разом слишком
          дорого. В DOM всегда только видимые строки + небольшой overscan. -->
-    <div v-else class="virtual-table-wrap">
+    <div v-else-if="viewMode === 'table'" class="virtual-table-wrap">
       <div class="vt-header" :style="{ gridTemplateColumns }">
         <div class="vt-th vt-th-select">
           <a-checkbox
@@ -356,6 +360,127 @@
       </div>
     </div>
 
+    <!-- Плитка (десктоп) — та же виртуализация, что у таблицы, но по рядам
+         плиток: в DOM только видимые ряды, поэтому быстро и на тысячах работ -->
+    <div v-else class="tiles-wrap">
+      <div class="tiles-toolbar">
+        <a-checkbox
+          :checked="allSelected"
+          :indeterminate="someSelected"
+          @change="e => toggleSelectAll(e.target.checked)"
+        >Выбрать все</a-checkbox>
+        <div class="tiles-sort">
+          <span class="tiles-sort-label">Сортировка:</span>
+          <a-select
+            :value="sortState.key"
+            :options="sortOptions"
+            placeholder="Без сортировки"
+            allow-clear
+            size="small"
+            style="width: 170px"
+            @change="setSortKey"
+          />
+          <a-button
+            size="small"
+            :disabled="!sortState.key"
+            :title="sortState.order === 'descend' ? 'По убыванию' : 'По возрастанию'"
+            @click="toggleSortOrder"
+          >
+            <CaretDownOutlined v-if="sortState.order === 'descend'" />
+            <CaretUpOutlined v-else />
+          </a-button>
+        </div>
+        <div class="tiles-size">
+          <a-radio-group v-model:value="tileSize" size="small">
+            <a-radio-button value="s" title="Мелкие">S</a-radio-button>
+            <a-radio-button value="m" title="Средние">M</a-radio-button>
+            <a-radio-button value="l" title="Крупные">L</a-radio-button>
+          </a-radio-group>
+        </div>
+      </div>
+
+      <div ref="tilesScrollRef" class="tiles-body">
+        <div v-if="!loading && sortedData.length === 0" class="vt-empty">Работы не найдены</div>
+
+        <div v-else :style="{ height: tilesTotalSize + 'px', position: 'relative' }">
+          <div
+            v-for="vRow in tileRows"
+            :key="vRow.key"
+            :ref="el => el && tileVirtualizer.measureElement(el)"
+            :data-index="vRow.index"
+            class="tiles-row"
+            :style="{ gridTemplateColumns: `repeat(${tileCols}, minmax(0, 1fr))`, transform: `translateY(${vRow.start}px)` }"
+          >
+            <div
+              v-for="record in rowItems(vRow.index)"
+              :key="record.id"
+              class="work-card work-tile"
+              :class="{ 'work-tile-selected': selectedRowKeys.includes(record.id) }"
+              @click="openPreview(record)"
+            >
+              <label class="work-card-select" @click.stop>
+                <a-checkbox
+                  :checked="selectedRowKeys.includes(record.id)"
+                  @change="(e) => toggleCardSelect(record.id, e.target.checked)"
+                />
+              </label>
+              <span v-if="record.imported" class="imported-pill work-tile-imported" title="Добавлено из импортированной ссылки">
+                <ImportOutlined /> Импорт
+              </span>
+
+              <div class="work-card-image">
+                <img v-if="record.avatar && record.avatar.url" v-thumb="record.avatar" loading="lazy" />
+                <div v-else class="img-placeholder">
+                  <PictureOutlined />
+                </div>
+              </div>
+
+              <div class="work-card-body">
+                <div class="work-card-name" :title="record.name">{{ record.name || 'Без названия' }}</div>
+                <div v-if="!isArtistRole" class="work-card-artist">{{ getArtistName(record.artist) || 'Не указан' }}</div>
+                <div class="work-card-artist">
+                  {{ [record.technique, record.size, record.year].filter(Boolean).join(' · ') || '\u00a0' }}
+                </div>
+                <div class="work-tile-line">
+                  <span
+                    v-if="getStatusName(record.status)"
+                    class="status-pill"
+                    :class="statusPillClass(record.status)"
+                    :style="getStatusColorStyle(record.status)"
+                  >{{ getStatusName(record.status) }}</span>
+                  <span v-if="record.sale" class="sold-pill" :title="saleTitle(record.sale)">Продана</span>
+                </div>
+                <div class="work-card-price">
+                  <template v-if="record.price">{{ formatPrice(record.price) }} {{ getCurrencySymbol(record.currency) }}</template>
+                  <template v-else>&nbsp;</template>
+                </div>
+              </div>
+
+              <div class="work-card-actions" @click.stop>
+                <button class="icon-btn icon-btn-edit" title="Редактировать" @click="openEditPage(record)">
+                  <EditOutlined />
+                </button>
+                <button class="icon-btn icon-btn-certificate" title="Сгенерировать сертификат" @click="openCertificatePreview(record)">
+                  <SafetyCertificateOutlined />
+                </button>
+                <button
+                  class="icon-btn icon-btn-sale"
+                  :class="{ 'icon-btn-sale-done': record.sale }"
+                  :title="record.sale ? `${saleTitle(record.sale)} — изменить` : 'Отметить как проданную'"
+                  @click="openSaleModal(record)"
+                >
+                  <DollarOutlined />
+                </button>
+                <button class="icon-btn icon-btn-danger" title="Удалить" @click="deleteRow(record.id)">
+                  <DeleteOutlined />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Оформление/изменение/отмена продажи из колонки «Действия» -->
     <SaleModal
       v-model:open="saleModalOpen"
@@ -416,10 +541,18 @@
           </div>
         </div>
 
-        <a-button type="primary" block class="preview-edit-btn" @click="openEditPage(previewWork)">
-          <template #icon><EditOutlined /></template>
-          Редактировать
-        </a-button>
+        <!-- Закреплённая снизу панель «Закрыть / Редактировать» — всегда под
+             рукой, даже пока описание длинной работы ещё прокручивается -->
+        <div class="preview-actions">
+          <a-button size="large" class="preview-close-btn" @click="isPreviewOpen = false">
+            <template #icon><CloseOutlined /></template>
+            Закрыть
+          </a-button>
+          <a-button type="primary" block size="large" class="preview-edit-btn" @click="openEditPage(previewWork)">
+            <template #icon><EditOutlined /></template>
+            Редактировать
+          </a-button>
+        </div>
       </div>
     </a-drawer>
 
@@ -439,10 +572,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, h } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, h, watch, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined, DollarOutlined, SearchOutlined, FilterOutlined, LoadingOutlined, CaretUpOutlined, CaretDownOutlined, CheckOutlined } from '@ant-design/icons-vue'
+import { PictureOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SafetyCertificateOutlined, DollarOutlined, SearchOutlined, FilterOutlined, LoadingOutlined, CaretUpOutlined, CaretDownOutlined, CheckOutlined, UnorderedListOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import CertificatePreviewModal from '@/components/CertificatePreviewModal.vue'
@@ -461,6 +594,7 @@ import { useUserPicturesFilters } from '@/stores/userPicturesFilters.js'
 import { getUser } from '@/services/auth.js'
 import { ROLES } from '@/services/const'
 import { useIsMobile } from '@/composables/useIsMobile.js'
+import { useCloseOnBack } from '@/composables/useCloseOnBack.js'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
 
 const fileStore = useFile()
@@ -491,6 +625,20 @@ const openPreview = (record) => {
   previewWork.value = record
   isPreviewOpen.value = true
 }
+
+// «Назад» в браузере/на телефоне закрывает панель просмотра, а не уводит со
+// страницы. В адресе — ?work=<id>, поэтому после «Назад» со страницы
+// редактирования панель с этой работой открывается снова.
+const { restoreFromUrl: restorePreviewFromUrl } = useCloseOnBack(isPreviewOpen, {
+  key: 'work',
+  value: () => previewWork.value?.id,
+  restore: (id) => {
+    const record = artWorkStore.listArtWorks?.find(w => w.id === id)
+    if (!record) return false
+    openPreview(record)
+    return true
+  },
+})
 
 function formatPersonName(person) {
   if (!person) return ''
@@ -1101,6 +1249,87 @@ const rowVirtualizer = useVirtualizer(computed(() => ({
 const virtualItems = computed(() => rowVirtualizer.value.getVirtualItems())
 const totalSize = computed(() => rowVirtualizer.value.getTotalSize())
 
+// === Вид списка: таблица или плитка (десктоп; запоминаем выбор) ===
+const VIEW_KEY = 'ATR_WORKS_VIEW'
+const TILE_SIZE_KEY = 'ATR_WORKS_TILE_SIZE'
+const readPref = (key, allowed, def) => {
+  try {
+    const v = localStorage.getItem(key)
+    return allowed.includes(v) ? v : def
+  } catch {
+    return def
+  }
+}
+const writePref = (key, v) => {
+  try { localStorage.setItem(key, v) } catch { /* приватный режим — не страшно */ }
+}
+const viewMode = ref(readPref(VIEW_KEY, ['table', 'tiles'], 'table'))
+const tileSize = ref(readPref(TILE_SIZE_KEY, ['s', 'm', 'l'], 'm'))
+watch(viewMode, v => writePref(VIEW_KEY, v))
+
+// Выбраны только видимые работы: поменяли фильтр/поиск — скрытые снимаются,
+// иначе «Удалить / Изменить выбранные» затронули бы работы, которых не видно
+watch(filteredData, (list) => {
+  if (!selectedRowKeys.value.length) return
+  const visible = new Set(list.map(w => w.id))
+  const kept = selectedRowKeys.value.filter(id => visible.has(id))
+  if (kept.length !== selectedRowKeys.value.length) selectedRowKeys.value = kept
+})
+watch(tileSize, v => writePref(TILE_SIZE_KEY, v))
+
+// Сортировка в плитке — те же сортировки, что у колонок таблицы
+const sortOptions = computed(() => columns.value.filter(c => c.sorter).map(c => ({ value: c.key, label: c.title })))
+function setSortKey(key) {
+  sortState.value = key ? { key, order: sortState.value.order || 'ascend' } : { key: null, order: null }
+}
+function toggleSortOrder() {
+  if (!sortState.value.key) return
+  sortState.value = { ...sortState.value, order: sortState.value.order === 'descend' ? 'ascend' : 'descend' }
+}
+
+// Сколько плиток в ряду — от ширины контейнера и выбранного размера
+const TILE_MIN = { s: 150, m: 200, l: 280 }
+const TILE_GAP = 14
+const tilesScrollRef = ref(null)
+const tilesWidth = ref(0)
+let tilesResizeObserver = null
+watch(tilesScrollRef, (el) => {
+  tilesResizeObserver?.disconnect()
+  tilesResizeObserver = null
+  if (!el) return
+  tilesWidth.value = el.clientWidth
+  if (typeof ResizeObserver !== 'undefined') {
+    tilesResizeObserver = new ResizeObserver(() => { tilesWidth.value = el.clientWidth })
+    tilesResizeObserver.observe(el)
+  }
+})
+onBeforeUnmount(() => tilesResizeObserver?.disconnect())
+
+const tileCols = computed(() => {
+  const inner = Math.max(0, tilesWidth.value - TILE_GAP * 2)
+  return Math.max(1, Math.floor((inner + TILE_GAP) / (TILE_MIN[tileSize.value] + TILE_GAP)))
+})
+const tileRowCount = computed(() => Math.ceil(sortedData.value.length / tileCols.value))
+const rowItems = (rowIndex) => sortedData.value.slice(rowIndex * tileCols.value, (rowIndex + 1) * tileCols.value)
+
+const tileVirtualizer = useVirtualizer(computed(() => ({
+  count: tileRowCount.value,
+  getScrollElement: () => tilesScrollRef.value,
+  // Картинка квадратная (ширина плитки) + подпись и кнопки; точную высоту
+  // ряда виртуализатор измерит сам (measureElement)
+  estimateSize: () => {
+    const inner = Math.max(0, tilesWidth.value - TILE_GAP * 2)
+    const w = (inner - TILE_GAP * (tileCols.value - 1)) / tileCols.value
+    return Math.round(w + 150 + TILE_GAP)
+  },
+  paddingEnd: TILE_GAP,
+  overscan: 3,
+})))
+const tileRows = computed(() => tileVirtualizer.value.getVirtualItems())
+const tilesTotalSize = computed(() => tileVirtualizer.value.getTotalSize())
+// Размер/число колонок поменялись — старые измерения рядов уже неверны
+watch([tileCols, tileSize], () => nextTick(() => tileVirtualizer.value.measure()))
+
 function toggleCardSelect(id, checked) {
   if (checked) {
     if (!selectedRowKeys.value.includes(id)) selectedRowKeys.value = [...selectedRowKeys.value, id]
@@ -1121,6 +1350,7 @@ const createCollection = () => {
 onMounted(async () => {
   await loadDirectories()
   await loadArtWorks()
+  restorePreviewFromUrl()
 })
 </script>
 
@@ -1675,6 +1905,9 @@ onMounted(async () => {
 .work-preview {
   display: flex;
   flex-direction: column;
+  /* на всю высоту панели — чтобы кнопки «Закрыть / Редактировать» стояли
+     внизу, даже если описание короткое */
+  flex: 1 0 auto;
 }
 
 .preview-cover {
@@ -1711,6 +1944,8 @@ onMounted(async () => {
   align-items: center;
   text-align: center;
   margin-bottom: 6px;
+  /* отступ до закреплённой панели кнопок, когда текста много */
+  padding-bottom: 14px;
 }
 
 .preview-artist {
@@ -1799,6 +2034,49 @@ onMounted(async () => {
   background: var(--accent-strong) !important;
   border-color: var(--accent-strong) !important;
   box-shadow: none !important;
+}
+
+.preview-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 10px;
+  /* растягиваем на всю ширину панели (у .ant-drawer-body отступы по 24px
+     слева и справа; снизу отступ убран — там эта панель) */
+  margin: auto -24px 0;
+  padding: 12px 24px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.06);
+}
+
+.preview-actions :deep(.ant-btn) {
+  height: 46px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .preview-actions {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+.preview-close-btn {
+  color: var(--text-body);
+  background: var(--bg-elevated);
+  border-color: var(--border);
+}
+
+.preview-close-btn:hover,
+.preview-close-btn:focus {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
 }
 
 /* === Мобильная сетка карточек (вместо таблицы) === */
@@ -1902,6 +2180,122 @@ onMounted(async () => {
   font-size: 13px;
 }
 
+/* === Переключатель «Таблица / Плитка» === */
+.view-switch :deep(.ant-radio-button-wrapper) {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+}
+
+.view-switch :deep(.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)) {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* === Плитка (десктоп) === */
+.tiles-wrap {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tiles-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tiles-sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tiles-sort-label {
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.tiles-size {
+  margin-left: auto;
+}
+
+.tiles-body {
+  height: 70vh;
+  min-height: 420px;
+  overflow-y: auto;
+  background: var(--card-bg, transparent);
+}
+
+.tiles-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: grid;
+  gap: 14px;
+  padding: 14px 14px 0;
+  box-sizing: border-box;
+}
+
+.work-tile {
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.work-tile:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.work-tile-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.work-tile .work-card-name {
+  font-size: 16px;
+}
+
+.work-tile .work-card-artist {
+  font-size: 12px;
+}
+
+.work-tile-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  margin: 2px 0;
+}
+
+.work-tile-line .status-pill {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-tile-imported {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+
+.tiles-wrap :deep(.ant-checkbox-checked .ant-checkbox-inner) {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.tiles-wrap :deep(.ant-checkbox-indeterminate .ant-checkbox-inner::after) {
+  background-color: var(--accent);
+}
+
 /* === Мобильная адаптация === */
 @media (max-width: 768px) {
   .header-content {
@@ -1990,6 +2384,33 @@ onMounted(async () => {
    (даже с :deep()) до его шапки не достают — data-v-атрибут на
    корневой узел drawer'а не попадает. Изолируем через свой класс,
    переданный в root-class-name. */
+/* Drawer телепортируется в body — переменные .pictures-page до него не
+   доходят (из-за этого кнопка «Редактировать» была белой на прозрачном).
+   Задаём те же токены прямо на панели. */
+.preview-drawer {
+  --bg: #f7f5f0;
+  --bg-elevated: #ffffff;
+  --card-bg: #efece4;
+  --text-title: #211f1a;
+  --text-body: #2c2a25;
+  --text-muted: #5a564c;
+  --text-faint: #7c7669;
+  --text-dim: #a29c8c;
+  --accent: #8a6d2f;
+  --accent-strong: #6f581f;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-soft: rgba(0, 0, 0, 0.06);
+  --status-available-bg: rgba(58, 150, 62, 0.1);
+  --status-available-fg: #2f8a35;
+  --status-available-border: rgba(47, 138, 53, 0.3);
+  --status-sold-bg: rgba(196, 62, 62, 0.1);
+  --status-sold-fg: #b43c3c;
+  --status-sold-border: rgba(180, 60, 60, 0.3);
+  --status-default-bg: rgba(138, 109, 47, 0.1);
+  --status-default-fg: #8a6d2f;
+  --status-default-border: rgba(138, 109, 47, 0.3);
+}
+
 .preview-drawer .ant-drawer-header {
   padding: 8px 16px;
   border-bottom: none;
@@ -2001,6 +2422,9 @@ onMounted(async () => {
 
 .preview-drawer .ant-drawer-body {
   padding-top: 4px;
+  padding-bottom: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* .name-search: тоже не scoped — ant-design-vue вешает наш класс прямо

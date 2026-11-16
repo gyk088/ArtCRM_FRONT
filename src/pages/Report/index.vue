@@ -42,6 +42,7 @@
                 <template #addonAfter>%</template>
               </a-input-number>
             </div>
+            <HistoryButton type="report" :id="String(reportId)" />
             <a-button :loading="exportingPdf" :disabled="!data" @click="exportPdf">
               <template #icon><FilePdfOutlined /></template>
               PDF
@@ -235,7 +236,7 @@
                           :min="0"
                           :max="100"
                           :precision="2"
-                          :placeholder="commissionPlaceholder"
+                          :placeholder="rowCommissionPlaceholder(row)"
                           size="small"
                           class="commission-input"
                           :class="{ 'commission-individual': overrides[row.sale_id] !== undefined }"
@@ -299,11 +300,11 @@
                           :min="0"
                           :max="100"
                           :precision="2"
-                          :placeholder="commissionPlaceholder"
+                          :placeholder="rowCommissionPlaceholder(record)"
                           size="small"
                           class="commission-input"
                           :class="{ 'commission-individual': overrides[record.sale_id] !== undefined }"
-                          :title="overrides[record.sale_id] !== undefined ? 'Индивидуальная комиссия этой продажи' : 'Общая комиссия отчёта — введите число, чтобы задать свою'"
+                          :title="overrides[record.sale_id] !== undefined ? 'Индивидуальная комиссия этой продажи' : record.commission_source === 'sale' ? 'Комиссия, заданная для этой продажи в карточке художника — введите число, чтобы задать свою в этом отчёте' : record.commission_source === 'artist' ? 'Комиссия художника по умолчанию (анкета в «Мои художники») — введите число, чтобы задать свою' : 'Общая комиссия отчёта — введите число, чтобы задать свою'"
                           @change="(v) => setOverride(record.sale_id, v)"
                         >
                           <template #addonAfter>%</template>
@@ -375,6 +376,7 @@
 </template>
 
 <script setup>
+import HistoryButton from '@/components/HistoryButton.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
@@ -565,6 +567,13 @@ function applyCommission(r) {
   Object.assign(overrides, r.commission_overrides || {})
 }
 
+// Комиссия продажи (карточка художника → Продажи) и комиссия художника по
+// умолчанию (анкета) важнее общей комиссии отчёта — в пустом поле
+// показываем ту, что реально применена
+const rowCommissionPlaceholder = (row) =>
+  (row?.commission_source === 'artist' || row?.commission_source === 'sale') && row.commission_pct !== null
+    ? String(row.commission_pct).replace('.', ',')
+    : commissionPlaceholder.value
 const commissionPlaceholder = computed(() =>
   commissionPct.value !== null ? String(commissionPct.value).replace('.', ',') : '—'
 )

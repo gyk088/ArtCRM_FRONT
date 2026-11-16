@@ -10,7 +10,7 @@ import { fileUrl } from '@/services/const.js'
 // "зависает" на первой же проблемной картинке. Жёстко ограничиваем каждый
 // шаг по времени, чтобы такая работа просто пропускалась, а не блокировала
 // весь PDF.
-function withTimeout(promise, ms) {
+export function withTimeout(promise, ms) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms)
     promise.then(
@@ -23,7 +23,7 @@ function withTimeout(promise, ms) {
 // Подгружаем обложку как data URL заранее, чтобы избежать "tainted canvas"
 // при кросс-доменной картинке на этапе рендера html2canvas — тот же приём,
 // что и в certificatePdf.js
-async function loadImageAsDataUrl(url) {
+export async function loadImageAsDataUrl(url) {
   try {
     const resp = await withTimeout(fetch(url), 8000)
     if (!resp.ok) throw new Error('Image fetch failed')

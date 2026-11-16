@@ -4,6 +4,7 @@
       <div class="page-header-top">
         <MobileMenuButton />
         <h2 class="page-title">{{ isNewWork ? "Новая работа" : "Редактировать работу" }}</h2>
+        <span v-if="!isNewWork" class="header-history"><HistoryButton type="art" :id="workId" title="История работы и продажи" /></span>
       </div>
       <p class="page-subtitle">{{ form.name || "Без названия" }}</p>
     </div>
@@ -263,7 +264,7 @@
             <!-- Продажа сохраняется сразу (своим запросом), независимо от кнопки «Сохранить» -->
             <WorkSaleCard
               v-if="!isNewWork && workLoaded"
-              :art-id="route.params.id"
+              :art-id="workId"
               :price="form.price"
               :currency="form.currency"
             />
@@ -302,6 +303,7 @@
 
 
 <script setup>
+import HistoryButton from '@/components/HistoryButton.vue'
 import { fileUrl as buildFileUrl } from '@/services/const.js'
 import { ref, reactive, computed, onMounted, defineComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -331,6 +333,11 @@ const artistStore = useArtist()
 const artWorkStore = useArtWork()
 
 const route = useRoute()
+// id работы фиксируем при открытии страницы: справочники грузятся несколько
+// секунд, и если за это время уйти «Назад» (например, в карточку художника
+// /home/artists/:id), route.params.id уже будет чужим — страница запрашивала
+// работу с id художника и показывала ошибку 404.
+const workId = String(route.params.id)
 const router = useRouter()
 const collectionList = ref([]);
 const seriesOptions = ref([])
@@ -356,7 +363,7 @@ const isFilesModalOpen = ref(false)
 const { isMobile } = useIsMobile()
 const uploadTarget = ref('avatar')
 const formRef = ref(null)
-const isNewWork = computed(() => route.params.id === 'new')
+const isNewWork = computed(() => workId === 'new')
 // Удалось ли загрузить редактируемую работу. Пока нет — сохранять нельзя:
 // иначе форма без id ушла бы в POST и создала копию работы вместо обновления.
 const workLoaded = ref(false)
@@ -411,11 +418,13 @@ const getNameById = (id, store, listName) => {
 
 // Загрузка работы для редактирования
 const loadArtWork = async () => {
-  if (route.params.id === 'new') return
+  if (workId === 'new') return
+  // Уже ушли со страницы, пока грузились справочники — работу не запрашиваем
+  if (route.name !== 'edit-work') return
 
   loading.value = true
   try {
-    const work = await artWorkStore.getArtWorkById(route.params.id)
+    const work = await artWorkStore.getArtWorkById(workId)
     if (work) {
       workLoaded.value = true
       Object.assign(form, {
@@ -607,6 +616,11 @@ onMounted(async () => {
   await loadArtistsFromAPI()
   await loadArtWork()
   await ensureOwnArtistSelected()
+  // «Добавить работу» из карточки художника — художник уже выбран
+  if (workId === 'new' && route.query.artist && !form.artist
+    && artistOptions.value.some(o => o.value === route.query.artist)) {
+    form.artist = String(route.query.artist)
+  }
 })
 
 // === ИЗОБРАЖЕНИЯ ===
@@ -944,7 +958,7 @@ const getLocationIdByName = (locationName) => {
 const saveChanges = async () => {
   // Если это редактирование, а работа не загрузилась — не сохраняем
   // (иначе вместо обновления создалась бы новая работа-копия)
-  if (!isNewWork.value && (!workLoaded.value || form.id !== route.params.id)) {
+  if (!isNewWork.value && (!workLoaded.value || form.id !== workId)) {
     message.error('Работа не загрузилась. Обновите страницу и попробуйте снова.')
     return
   }
@@ -985,7 +999,7 @@ const saveChanges = async () => {
 
     let result
     if (!isNewWork.value) {
-      result = await artWorkStore.updateArtWork({ ...workData, id: route.params.id })
+      result = await artWorkStore.updateArtWork({ ...workData, id: workId })
       if (result) {
         message.success('Работа обновлена')
       }
@@ -1039,6 +1053,10 @@ function goBack() {
 .page-header {
   flex-shrink: 0;
   padding: 10px 24px 8px;
+}
+
+.header-history {
+  margin-left: auto;
 }
 
 .page-header-top {

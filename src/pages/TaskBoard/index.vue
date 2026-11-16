@@ -83,6 +83,7 @@
                   </span>
                   <span v-if="task.priority === 'high'" class="prio-chip" title="Высокий приоритет"><FlagFilled /></span>
                   <span v-if="task.description" class="desc-mark" title="Есть описание"><AlignLeftOutlined /></span>
+                  <span v-if="task.artist" class="artist-chip" :title="`Художник: ${task.artist.name}`">{{ task.artist.name }}</span>
                   <span
                     v-if="task.assignee"
                     class="assignee-avatar"
@@ -108,6 +109,7 @@
       :create-defaults="createDefaults"
       :statuses="statuses"
       :assignees="board?.assignees || []"
+      :artists="artistStore.listArtists"
       @saved="onTaskSaved"
       @created="onTaskCreated"
       @deleted="onTaskDeleted"
@@ -151,6 +153,7 @@ import BoardStatusPicker from '@/components/BoardStatusPicker.vue'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
 import TaskModal from '@/components/TaskModal.vue'
 import { useTasks } from '@/stores/tasks.js'
+import { useArtist } from '@/stores/artist.js'
 import { getUser } from '@/services/auth.js'
 import { useIsMobile } from '@/composables/useIsMobile.js'
 import { dueState, formatDue, personName, initials, avatarColor } from '@/utils/tasks.js'
@@ -207,7 +210,12 @@ async function load() {
     loading.value = false
   }
 }
-onMounted(load)
+const artistStore = useArtist()
+onMounted(() => {
+  load()
+  // художник с личным кабинетом каталога художников не ведёт
+  if (getUser()?.role !== 'artist' && !artistStore.listArtists.length) artistStore.getListArtists()
+})
 
 async function saveBoardName() {
   const name = boardName.value.trim()
@@ -619,6 +627,19 @@ async function onDrop(e, statusId) {
 
 .task-card-footer:empty {
   display: none;
+}
+
+.artist-chip {
+  max-width: 140px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(138, 109, 47, 0.12);
+  color: #6f581f;
+  font-size: 12px;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .due-chip {

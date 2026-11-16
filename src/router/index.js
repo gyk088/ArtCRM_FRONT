@@ -161,6 +161,32 @@ const router = createRouter({
             title: 'Отчёт',
           },
       }, {
+        path: 'artists',
+        name: 'artists',
+        component: () => import('@/pages/Artists/index.vue'),
+        meta: {
+            title: 'Мои художники',
+            // у художника с личным кабинетом нет своего каталога художников
+            hiddenRoles: [ROLES.ARTIST],
+          },
+      }, {
+        path: 'artists/:id',
+        name: 'artist',
+        component: () => import('@/pages/Artist/index.vue'),
+        meta: {
+            title: 'Художник',
+            hiddenRoles: [ROLES.ARTIST],
+          },
+      }, {
+        // Портфолио художника (создаётся во вкладке «Портфолио» карточки художника)
+        path: 'portfolio/:id',
+        name: 'portfolio',
+        component: () => import('@/pages/Portfolio/index.vue'),
+        meta: {
+            title: 'Портфолио',
+            hiddenRoles: [ROLES.ARTIST],
+          },
+      }, {
         path: 'profile',
         name: 'profile',
         component: () => import('@/pages/UserConfig/index.vue'),
@@ -173,6 +199,15 @@ const router = createRouter({
         component: () => import('@/pages/Backup/index.vue'),
         meta: {
             title: 'Бекап',
+          },
+      }, {
+        // Журнал изменений галереи — только галерея и Super Admin
+        path: 'history',
+        name: 'history',
+        component: () => import('@/pages/History/index.vue'),
+        meta: {
+            title: 'История изменений',
+            hiddenRoles: [ROLES.MANAGER, ROLES.ARTIST],
           },
       }, {
         path: 'admin',
