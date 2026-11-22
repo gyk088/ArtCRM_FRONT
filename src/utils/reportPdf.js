@@ -55,7 +55,7 @@ const STYLE = `
  * @param {object[]} p.rows - строки ReportService.compute
  * @param {object} p.summary
  */
-export async function downloadReportPdf({ title, subtitle, kpis, warning, currency, rows, summary }) {
+export async function downloadReportPdf({ title, subtitle, kpis, warning, currency, rows, summary, expenses = [] }) {
   const host = document.createElement('div')
   host.style.cssText = 'position: fixed; left: -20000px; top: 0;'
   host.innerHTML = STYLE
@@ -118,7 +118,25 @@ export async function downloadReportPdf({ title, subtitle, kpis, warning, curren
   try {
     await document.fonts.ready
     let tbody = newPage(true)
-    const items = [...rows.map(rowHtml), totalHtml]
+    // Расходы галереи — после продаж, в той же таблице
+    const expenseHtml = expenses.length ? [
+      `<tr class="rp-total"><td colspan="9" style="padding-top:14px">Расходы галереи</td></tr>`,
+      ...expenses.map(e => `
+        <tr>
+          <td>${esc(e.date ? formatDate(e.date) : '—')}</td>
+          <td colspan="2">${esc(e.title)}${e.comment ? `<div class="rp-muted">${esc(e.comment)}</div>` : ''}</td>
+          <td class="num">${esc(formatMoney(e.amount, e.currency))}</td>
+          <td></td>
+          <td class="num">${e.amount_converted !== null ? esc(formatMoney(e.amount_converted, currency)) : '<span class="rp-norate">нет курса</span>'}</td>
+          <td colspan="3"></td>
+        </tr>`),
+      `<tr class="rp-total">
+        <td colspan="5">Итого расходов</td>
+        <td class="num">${esc(formatMoney(summary.expenses_total, currency))}</td>
+        <td colspan="3">галерее после расходов: ${esc(formatMoney(summary.gallery_after_expenses, currency))}</td>
+      </tr>`,
+    ] : []
+    const items = [...rows.map(rowHtml), totalHtml, ...expenseHtml]
     if (!rows.length) items.unshift('<tr><td colspan="9" class="rp-muted" style="text-align:center;padding:16px">Нет продаж под выбранные фильтры</td></tr>')
     for (const html of items) {
       tbody.insertAdjacentHTML('beforeend', html)

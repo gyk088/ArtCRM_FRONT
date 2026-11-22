@@ -6,7 +6,21 @@
     @cancel="close"
   >
     <a-spin :spinning="loadingSale">
-      <a-form v-if="!loadError" layout="vertical" class="sale-form">
+      <a-alert v-if="notice && !sale" type="info" show-icon :message="notice" class="sale-notice" />
+      <!-- Тираж: сколько экземпляров есть, продано, осталось -->
+      <div v-if="summary && showQuantity" class="sale-copies">
+        <span v-if="summary.edition" class="sale-copies-edition">{{ summary.edition }}</span>
+        Экземпляров: <b>{{ summary.total }}</b> · продано <b>{{ summary.sold }}</b> · осталось <b>{{ summary.available }}</b>
+      </div>
+      <a-alert
+        v-if="soldOut"
+        type="warning"
+        show-icon
+        message="Все экземпляры уже проданы"
+        description="Чтобы продать ещё, увеличьте количество экземпляров в карточке работы или отмените одну из продаж."
+        class="sale-notice"
+      />
+      <a-form v-if="!loadError && !soldOut" layout="vertical" class="sale-form">
         <a-form-item label="Дата продажи" required>
           <a-date-picker
             v-model:value="form.sale_date"
@@ -17,11 +31,19 @@
           />
         </a-form-item>
 
+        <a-form-item v-if="showQuantity" label="Количество экземпляров" required>
+          <a-input-number v-model:value="form.quantity" :min="1" :max="maxQuantity" :precision="0" style="width: 160px" />
+          <span class="sale-hint sale-hint-inline">не больше {{ maxQuantity }}</span>
+        </a-form-item>
+
         <!-- У работы есть цена: вводим скидку, цену продажи считаем -->
         <template v-if="useDiscount">
           <div class="sale-price-line">
             <span class="sale-price-label">Цена работы</span>
-            <span>{{ formatMoney(basePrice, baseCurrency) }}</span>
+            <span v-if="quantityNum > 1">
+              {{ formatMoney(unitPrice, baseCurrency) }} × {{ quantityNum }} экз. = <b>{{ formatMoney(basePrice, baseCurrency) }}</b>
+            </span>
+            <span v-else>{{ formatMoney(basePrice, baseCurrency) }}</span>
           </div>
 
           <a-form-item label="Скидка">
@@ -50,12 +72,26 @@
         <div v-else class="sale-row">
           <a-form-item label="Цена продажи" required class="sale-col">
             <a-input-number v-model:value="form.sale_price" :min="0" style="width: 100%" placeholder="0" />
-            <div class="sale-hint">У работы не указана цена — скидку посчитать не от чего</div>
+            <div class="sale-hint">
+              У работы не указана цена — скидку посчитать не от чего<template v-if="quantityNum > 1">. Укажите сумму за все {{ quantityNum }} экз.</template>
+            </div>
           </a-form-item>
           <a-form-item label="Валюта" class="sale-col-narrow">
             <a-select v-model:value="form.currency" :options="currencyOptions" />
           </a-form-item>
         </div>
+
+        <!-- Галерея и её менеджеры: кто из сотрудников продал работу -->
+        <a-form-item v-if="sellerOptions.length > 1" label="Кто продал">
+          <a-select
+            v-model:value="form.sold_by"
+            show-search
+            option-filter-prop="label"
+            :options="sellerOptions"
+            placeholder="Выберите сотрудника"
+          />
+          <div class="sale-hint">По умолчанию — тот, кто оформляет продажу. Попадает в отчёты (фильтр «Кто продал»).</div>
+        </a-form-item>
 
         <a-form-item label="Покупатель">
           <a-select
@@ -80,7 +116,7 @@
       <div class="sale-footer">
         <a-popconfirm
           v-if="sale"
-          title="Отменить продажу? Работа снова станет «в наличии»."
+          :title="showQuantity ? `Отменить эту продажу? ${sale.quantity || 1} экз. вернутся в наличие.` : 'Отменить продажу? Работа снова станет «в наличии».'"
           ok-text="Да"
           cancel-text="Нет"
           @confirm="cancelSale"
@@ -90,7 +126,7 @@
         <span v-else />
         <div class="sale-footer-right">
           <a-button @click="close">Закрыть</a-button>
-          <a-button type="primary" :loading="saving" :disabled="loadingSale || loadError" @click="submit">
+          <a-button type="primary" :loading="saving" :disabled="loadingSale || loadError || soldOut" @click="submit">
             Сохранить
           </a-button>
         </div>
@@ -109,6 +145,7 @@ import dayjs from 'dayjs'
 import { useSale } from '@/stores/sale.js'
 import { useContact } from '@/stores/contact.js'
 import { CURRENCY_SIGNS, formatMoney, formatPct } from '@/utils/money.js'
+import { getUser } from '@/services/auth.js'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -117,6 +154,13 @@ const props = defineProps({
   // Цена и валюта работы — подставляются в новую продажу
   price: { type: [Number, String], default: null },
   currency: { type: String, default: 'RUB' },
+  // Пояснение сверху (например, окно открылось из-за выбора статуса продажи)
+  notice: { type: String, default: '' },
+  // Тираж: изменить конкретную продажу (id) или оформить новую (newSale).
+  // Без них — как раньше: остались экземпляры — новая продажа, иначе
+  // последняя продажа работы.
+  saleId: { type: String, default: null },
+  newSale: { type: Boolean, default: false },
 })
 
 // saved(sale) — продажа создана/изменена; cancelled() — продажа отменена
@@ -146,17 +190,47 @@ const form = reactive({
   currency: 'RUB',
   contact_id: undefined,
   comment: '',
+  quantity: 1,
+  sold_by: undefined,
 })
+
+// «Кто продал»: галерея и её менеджеры (у художника — только он сам, поле скрыто)
+const sellers = ref([])
+const ROLE_LABELS = { gallery: 'галерея', manager: 'менеджер' }
+const sellerOptions = computed(() => {
+  const list = sellers.value.map(u => ({
+    value: u.id,
+    label: `${[u.name, u.surname].filter(Boolean).join(' ') || u.email || 'Без имени'}${ROLE_LABELS[u.role] ? ` (${ROLE_LABELS[u.role]})` : ''}`,
+  }))
+  // продавец продажи мог уйти из галереи — всё равно показываем его
+  const current = sale.value?.sold_by
+  if (current && !list.some(o => o.value === current.id)) {
+    list.push({ value: current.id, label: [current.name, current.surname].filter(Boolean).join(' ') || 'Сотрудник' })
+  }
+  return list
+})
+
+// Экземпляры работы: { total, sold, available, edition, sales }
+const summary = ref(null)
+// Количество показываем, если у работы несколько экземпляров
+const showQuantity = computed(() => (summary.value?.total || 1) > 1 || (sale.value?.quantity || 1) > 1)
+// Можно продать: остаток (+ экземпляры этой продажи, если её меняем)
+const maxQuantity = computed(() => Math.max((summary.value?.available || 0) + (sale.value?.quantity || 0), 1))
+// новая продажа, а продавать нечего
+const soldOut = computed(() => !!summary.value && !sale.value && summary.value.available <= 0)
 
 const toNumber = (v) => (v === null || v === undefined || v === '' ? null : Number(v))
 const round2 = (n) => Math.round(n * 100) / 100
 
-// Цена, от которой считается скидка: зафиксированная в продаже, иначе
-// текущая цена работы
-const basePrice = computed(() => {
-  const fromSale = toNumber(sale.value?.list_price)
-  return fromSale !== null ? fromSale : toNumber(props.price)
+const quantityNum = computed(() => (showQuantity.value ? Math.max(Number(form.quantity) || 1, 1) : 1))
+// Цена за экземпляр: зафиксированная в продаже, иначе текущая цена работы
+const unitPrice = computed(() => {
+  const s = sale.value
+  if (s?.list_price != null) return toNumber(s.unit_price) ?? round2(toNumber(s.list_price) / (s.quantity || 1))
+  return toNumber(props.price)
 })
+// Цена, от которой считается скидка, — за все экземпляры продажи
+const basePrice = computed(() => (unitPrice.value === null ? null : round2(unitPrice.value * quantityNum.value)))
 const baseCurrency = computed(() =>
   (sale.value?.list_price != null ? sale.value.currency : props.currency) || 'RUB'
 )
@@ -216,21 +290,25 @@ function fillForm() {
     // тип ставим первым: watch пересчитает старое значение, а ниже его перезапишем
     form.discount_type = discountType
     Object.assign(form, {
+      quantity: s.quantity || 1,
       sale_date: s.sale_date,
       discount_value: discountValue,
       sale_price: s.sale_price,
       currency: s.currency,
       contact_id: s.contact?.id || undefined,
+      sold_by: s.sold_by?.id || getUser()?.id,
       comment: s.comment || '',
     })
   } else {
     form.discount_type = 'pct'
     Object.assign(form, {
+      quantity: 1,
       sale_date: dayjs().format('YYYY-MM-DD'),
       discount_value: null,
       sale_price: toNumber(props.price),
       currency: props.currency || 'RUB',
       contact_id: undefined,
+      sold_by: getUser()?.id,
       comment: '',
     })
   }
@@ -241,10 +319,17 @@ async function load() {
   loadError.value = false
   fillForm()
   if (!contactStore.listContacts.length) contactStore.getListContacts()
+  saleStore.getSellers().then(list => { sellers.value = list || [] })
 
+  summary.value = null
   loadingSale.value = true
   try {
-    sale.value = await saleStore.getSaleByArtId(props.artId)
+    const data = await saleStore.getSalesByArtId(props.artId)
+    summary.value = data
+    const sales = data?.sales || []
+    if (props.saleId) sale.value = sales.find(x => x.id === props.saleId) || null
+    else if (props.newSale) sale.value = null
+    else sale.value = data?.available > 0 ? null : (sales[0] || null)
     fillForm()
   } catch {
     // ошибка уже показана в сторе; сохранять нельзя, пока неизвестно,
@@ -277,9 +362,22 @@ async function submit() {
     message.warning('Укажите дату продажи')
     return
   }
+  if (showQuantity.value) {
+    const q = Number(form.quantity)
+    if (!Number.isInteger(q) || q < 1) {
+      message.warning('Укажите количество экземпляров')
+      return
+    }
+    if (q > maxQuantity.value) {
+      message.warning(`Столько экземпляров нет — можно не больше ${maxQuantity.value}`)
+      return
+    }
+  }
   const common = {
+    ...(showQuantity.value ? { quantity: Number(form.quantity) } : {}),
     sale_date: form.sale_date,
     contact_id: form.contact_id || null,
+    ...(sellerOptions.value.length > 1 && form.sold_by ? { sold_by: form.sold_by } : {}),
     comment: form.comment?.trim() || null,
   }
   let payload
@@ -317,9 +415,11 @@ async function submit() {
 async function cancelSale() {
   cancelling.value = true
   try {
-    if (await saleStore.cancelSale(sale.value)) {
+    const result = await saleStore.cancelSale(sale.value)
+    if (result) {
       message.success('Продажа отменена')
-      emit('cancelled')
+      // result.art_status — статус работы после отмены (мог вернуться прежний)
+      emit('cancelled', result)
       close()
     }
   } finally {
@@ -330,6 +430,33 @@ async function cancelSale() {
 </script>
 
 <style scoped>
+.sale-copies {
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #5a564c;
+  background: #faf8f3;
+  border: 1px solid #ece6d8;
+  border-radius: 8px;
+}
+
+.sale-copies-edition {
+  margin-right: 8px;
+  padding: 1px 8px;
+  font-size: 12px;
+  color: #6f581f;
+  background: #f1eadb;
+  border-radius: 10px;
+}
+
+.sale-hint-inline {
+  margin-left: 10px;
+}
+
+.sale-notice {
+  margin-bottom: 14px;
+}
+
 .sale-row {
   display: flex;
   gap: 12px;

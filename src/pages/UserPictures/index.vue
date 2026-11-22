@@ -101,7 +101,7 @@
             <div class="work-card-artist">{{ getArtistName(record.artist) || 'Не указан' }}</div>
             <TagChips :ids="record.tags" small :max="3" class="work-card-tags" />
             <div v-if="record.price" class="work-card-price">{{ formatPrice(record.price) }} {{ getCurrencySymbol(record.currency) }}</div>
-            <span v-if="record.sale" class="sold-pill" :title="saleTitle(record.sale)">Продана</span>
+            <span v-if="record.sale" class="sold-pill" :title="saleTitle(record.sale)">{{ soldLabel(record) }}</span>
           </div>
 
           <div class="work-card-actions" @click.stop>
@@ -114,7 +114,7 @@
             <button
               class="icon-btn icon-btn-sale"
               :class="{ 'icon-btn-sale-done': record.sale }"
-              :title="record.sale ? `${saleTitle(record.sale)} — изменить` : 'Отметить как проданную'"
+              :title="saleButtonTitle(record)"
               @click="openSaleModal(record)"
             >
               <DollarOutlined />
@@ -326,7 +326,7 @@
                   v-if="sortedData[virtualRow.index].sale"
                   class="sold-pill"
                   :title="saleTitle(sortedData[virtualRow.index].sale)"
-                >Продана</span>
+                >{{ soldLabel(sortedData[virtualRow.index]) }}</span>
               </template>
               <template v-else-if="col.dataIndex === 'actions'">
                 <button class="icon-btn icon-btn-edit" title="Редактировать" @click.stop="openEditPage(sortedData[virtualRow.index])">
@@ -342,7 +342,7 @@
                 <button
                   class="icon-btn icon-btn-sale"
                   :class="{ 'icon-btn-sale-done': sortedData[virtualRow.index].sale }"
-                  :title="sortedData[virtualRow.index].sale ? `${saleTitle(sortedData[virtualRow.index].sale)} — изменить` : 'Отметить как проданную'"
+                  :title="saleButtonTitle(sortedData[virtualRow.index])"
                   @click.stop="openSaleModal(sortedData[virtualRow.index])"
                 >
                   <DollarOutlined />
@@ -448,7 +448,7 @@
                     :class="statusPillClass(record.status)"
                     :style="getStatusColorStyle(record.status)"
                   >{{ getStatusName(record.status) }}</span>
-                  <span v-if="record.sale" class="sold-pill" :title="saleTitle(record.sale)">Продана</span>
+                  <span v-if="record.sale" class="sold-pill" :title="saleTitle(record.sale)">{{ soldLabel(record) }}</span>
                 </div>
                 <div class="work-card-price">
                   <template v-if="record.price">{{ formatPrice(record.price) }} {{ getCurrencySymbol(record.currency) }}</template>
@@ -466,7 +466,7 @@
                 <button
                   class="icon-btn icon-btn-sale"
                   :class="{ 'icon-btn-sale-done': record.sale }"
-                  :title="record.sale ? `${saleTitle(record.sale)} — изменить` : 'Отметить как проданную'"
+                  :title="saleButtonTitle(record)"
                   @click="openSaleModal(record)"
                 >
                   <DollarOutlined />
@@ -488,6 +488,7 @@
       :work-name="saleWork?.name"
       :price="saleWork?.price"
       :currency="saleWork?.currency"
+      :notice="saleNotice"
     />
 
     <!-- Быстрый просмотр работы (без редактирования) -->
@@ -580,6 +581,7 @@ import { Modal, message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import CertificatePreviewModal from '@/components/CertificatePreviewModal.vue'
 import SaleModal from '@/components/SaleModal.vue'
+import { soldStatusNotice } from '@/utils/money.js'
 import { useArtWork } from '@/stores/artWork.js'
 import { useMedia } from '@/stores/media.js'
 import { useSerias } from '@/stores/seria.js'
@@ -960,7 +962,8 @@ const filteredData = computed(() => {
   if (filterSold.value === 'sold') {
     result = result.filter(item => item.sale)
   } else if (filterSold.value === 'available') {
-    result = result.filter(item => !item.sale)
+    // в наличии — остались экземпляры (у тиража часть может быть продана)
+    result = result.filter(item => availableOf(item) > 0)
   }
 
   return result
@@ -1013,10 +1016,29 @@ const handleRowClick = (event, record) => {
 // обновляется сама — стор продаж синхронизирует work.sale в списке работ.
 const saleModalOpen = ref(false)
 const saleWork = ref(null)
+// пояснение в окне, если его открыл выбор «статуса продажи»
+const saleNotice = ref('')
 
-function openSaleModal(record) {
+function openSaleModal(record, notice = '') {
   saleWork.value = record
+  saleNotice.value = notice
   saleModalOpen.value = true
+}
+
+// Экземпляров у работы (тираж); уникальная — 1
+function copiesOf(w) { return w?.quantity ?? 1 }
+// осталось экземпляров (старый ответ сервера без available — по наличию продажи)
+function availableOf(w) { return w?.available ?? (w?.sale ? 0 : copiesOf(w)) }
+
+// Метка в таблице: «Продана» или у тиража «Продано 2 из 5»
+function soldLabel(w) {
+  return copiesOf(w) > 1 ? `Продано ${w.sold_count ?? 0} из ${copiesOf(w)}` : 'Продана'
+}
+
+function saleButtonTitle(w) {
+  if (!w?.sale) return 'Отметить как проданную'
+  if (availableOf(w) > 0) return `${soldLabel(w)} — оформить продажу ещё (осталось ${availableOf(w)})`
+  return `${saleTitle(w.sale)} — изменить`
 }
 
 // Короткая подпись продажи: «Продана 12.10.2026 за 900 $»
@@ -1160,6 +1182,14 @@ function tagNames(record) {
 
 const handleFieldChange = async (record, field, value) => {
   if (value === record[field] || isCellUpdating(record, field)) return
+
+  // «Статус продажи» у непроданной работы — сначала оформление продажи;
+  // статус поставит сервер, когда продажа сохранится
+  const sold = statusesStore.soldStatus
+  if (field === 'status' && sold && value === sold.id && availableOf(record) > 0) {
+    openSaleModal(record, soldStatusNotice(sold.name))
+    return
+  }
 
   updatingCell.value = { id: record.id, field }
   try {

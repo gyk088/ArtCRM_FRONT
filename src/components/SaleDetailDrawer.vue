@@ -24,6 +24,7 @@
       <!-- Сделка -->
       <div class="sd-section">
         <div class="sd-row"><span>Дата продажи</span><b>{{ formatDate(sale.sale_date) }}</b></div>
+        <div v-if="(sale.quantity || 1) > 1" class="sd-row"><span>Экземпляров</span><b>{{ sale.quantity }}</b></div>
         <div class="sd-row">
           <span>Покупатель</span>
           <router-link v-if="sale.contact" :to="`/home/contacts/${sale.contact.id}`">{{ sale.contact.name }}</router-link>
@@ -98,6 +99,7 @@
     <SaleModal
       v-model:open="saleModalOpen"
       :art-id="sale?.art?.id"
+      :sale-id="sale?.id"
       :work-name="sale?.art?.name"
       :price="sale?.list_price"
       :currency="sale?.currency"

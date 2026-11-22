@@ -26,6 +26,7 @@
             <div class="hd-line">
               <b>{{ actorName(item.actor) }}</b> {{ actionText(item.action) }}
             </div>
+            <HistoryChanges :changes="item.meta?.changes" />
             <div class="hd-when">{{ formatWhen(item.ctime) }}</div>
           </div>
         </li>
@@ -35,10 +36,12 @@
 </template>
 
 <script setup>
-// Кнопка «История» в карточке: кто и когда создавал / менял / удалял запись
+// Кнопка «История» в карточке: кто и когда создавал / менял / удалял запись;
+// у работы — ещё «было → стало» для цены, валюты, статуса и художника
 import { ref, watch } from 'vue'
 import { HistoryOutlined } from '@ant-design/icons-vue'
 import { useHistory } from '@/stores/history.js'
+import HistoryChanges from '@/components/HistoryChanges.vue'
 import { useIsMobile } from '@/composables/useIsMobile.js'
 import { actionText, actorName, formatWhen, ACTION_COLORS } from '@/utils/history.js'
 

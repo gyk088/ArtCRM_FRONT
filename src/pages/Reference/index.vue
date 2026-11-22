@@ -55,6 +55,7 @@
           delete-action="deleteStatus"
           singular-label="статус"
           has-color
+          has-sold-flag
         />
       </a-tab-pane>
 

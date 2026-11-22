@@ -54,8 +54,23 @@
           </div>
         </div>
 
+        <!-- Отчёт «выбранные работы»: вместо фильтров — выбор работ -->
+        <section v-if="isManual" class="card manual-card">
+          <div class="card-heading-row">
+            <div class="card-heading">Работы в отчёте · {{ filters.works.length }}</div>
+            <a-button type="primary" class="manual-pick-btn" @click="pickerOpen = true">
+              <template #icon><AppstoreAddOutlined /></template>
+              Выбрать работы
+            </a-button>
+          </div>
+          <p class="manual-hint">
+            В отчёт входят только отмеченные вами проданные работы. Добавить или убрать работы — кнопка «Выбрать работы»,
+            там есть фильтры по художнику, серии, покупателю, периоду продажи и другие.
+          </p>
+        </section>
+
         <!-- Фильтры -->
-        <section class="card">
+        <section v-else class="card">
           <!-- На телефоне фильтры свёрнуты, чтобы итоги были видны сразу -->
           <button v-if="isMobile" type="button" class="filters-toggle" @click="filtersOpen = !filtersOpen">
             <span class="card-heading">Фильтры</span>
@@ -158,6 +173,38 @@
           description="Задайте курс выше — эти продажи войдут в итог. В таблице они показаны без пересчёта."
         />
 
+        <!-- Расходы галереи (общие): уменьшают доход галереи, художникам — без изменений -->
+        <section class="card expenses-card">
+          <div class="card-heading-row">
+            <div class="card-heading">Расходы галереи · {{ expenses.length }}</div>
+            <a-button size="small" @click="addExpense"><PlusOutlined /> Добавить расход</a-button>
+          </div>
+          <p v-if="!expenses.length" class="manual-hint">
+            Аренда стенда, реклама, доставка, печать каталога… Расходы вычитаются из дохода галереи (комиссии) —
+            суммы к выплате художникам не меняются. Расход в другой валюте пересчитывается по курсам отчёта.
+          </p>
+          <div v-else class="expenses-list">
+            <div v-for="(e, i) in expenses" :key="e.key" class="expense-row">
+              <a-date-picker v-model:value="e.date" value-format="YYYY-MM-DD" format="DD.MM.YYYY" placeholder="Дата" class="exp-date" />
+              <a-input v-model:value="e.title" :maxlength="300" placeholder="Расход, например «Аренда стенда»" class="exp-title" :status="e.title.trim() ? '' : 'warning'" />
+              <a-input-number v-model:value="e.amount" :min="0" :precision="2" placeholder="Сумма" class="exp-amount" />
+              <a-select v-model:value="e.currency" :options="CURRENCY_OPTIONS" class="exp-currency" />
+              <a-input v-model:value="e.comment" :maxlength="1000" placeholder="Комментарий" class="exp-comment" />
+              <a-popconfirm title="Удалить расход?" ok-text="Удалить" cancel-text="Отмена" @confirm="expenses.splice(i, 1)">
+                <a-button type="text" danger class="exp-del"><DeleteOutlined /></a-button>
+              </a-popconfirm>
+            </div>
+            <div v-if="data" class="expenses-total">
+              Итого расходов: <b>{{ formatMoney(summary.expenses_total, currency) }}</b>
+              <span class="exp-sep">·</span>
+              доход галереи после расходов: <b :class="{ 'exp-negative': summary.gallery_after_expenses < 0 }">{{ formatMoney(summary.gallery_after_expenses, currency) }}</b>
+              <span v-if="summary.expenses_missing_rates?.length" class="exp-warn">
+                · без курса не вошли: {{ summary.expenses_missing_rates.map(m => `${m.currency} — ${m.count}`).join(', ') }} (задайте курс выше)
+              </span>
+            </div>
+          </div>
+        </section>
+
         <!-- Сводка -->
         <a-spin :spinning="computing && !data">
           <div v-if="data" class="kpi-grid">
@@ -193,6 +240,18 @@
               <div class="kpi-value">{{ formatMoney(summary.net_total, currency) }}</div>
               <div class="kpi-hint">художникам после комиссии</div>
             </div>
+            <template v-if="summary.expenses_count">
+              <div class="kpi">
+                <div class="kpi-label">Расходы галереи</div>
+                <div class="kpi-value">{{ formatMoney(summary.expenses_total, currency) }}</div>
+                <div class="kpi-hint">{{ summary.expenses_count }} {{ expensesWord(summary.expenses_count) }}</div>
+              </div>
+              <div class="kpi" :class="{ 'kpi-negative': summary.gallery_after_expenses < 0 }">
+                <div class="kpi-label">Галерее после расходов</div>
+                <div class="kpi-value">{{ formatMoney(summary.gallery_after_expenses, currency) }}</div>
+                <div class="kpi-hint">комиссия − расходы</div>
+              </div>
+            </template>
             <div class="kpi kpi-paid">
               <div class="kpi-label">Выплачено</div>
               <div class="kpi-value">{{ formatMoney(summary.paid_total, currency) }}</div>
@@ -212,7 +271,7 @@
                     <img v-if="row.avatar_url" v-thumb="{ url: row.avatar_url, thumb_url: row.avatar_thumb_url }" class="m-sale-img" />
                     <div v-else class="m-sale-img m-sale-img-empty"><PictureOutlined /></div>
                     <div class="m-sale-body">
-                      <div class="m-sale-name">{{ row.art_name }}</div>
+                      <div class="m-sale-name">{{ row.art_name }}<span v-if="(row.quantity || 1) > 1" class="qty-badge">× {{ row.quantity }} экз.</span></div>
                       <div class="m-sale-sub">{{ formatDate(row.sale_date) }} · {{ row.artist?.name || 'Художник не указан' }}</div>
                       <div class="m-sale-prices">
                         <b v-if="row.sale_price_converted !== null">{{ formatMoney(row.sale_price_converted, currency) }}</b>
@@ -279,7 +338,7 @@
                         <img v-if="record.avatar_url" v-thumb="{ url: record.avatar_url, thumb_url: record.avatar_thumb_url }" class="work-thumb" />
                         <div v-else class="work-thumb work-thumb-empty"><PictureOutlined /></div>
                         <div class="work-cell-text">
-                          <div class="work-name">{{ record.art_name }}</div>
+                          <div class="work-name">{{ record.art_name }}<span v-if="(record.quantity || 1) > 1" class="qty-badge">× {{ record.quantity }} экз.</span></div>
                           <div class="work-artist">{{ record.artist?.name || 'Художник не указан' }}</div>
                         </div>
                       </div>
@@ -372,16 +431,20 @@
         </a-spin>
       </template>
     </a-spin>
+
+    <SoldWorksPicker v-model:open="pickerOpen" :value="filters.works" @save="saveManualWorks" />
   </div>
 </template>
 
 <script setup>
 import HistoryButton from '@/components/HistoryButton.vue'
+import SoldWorksPicker from '@/components/SoldWorksPicker.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
   ArrowLeftOutlined, DownloadOutlined, LoadingOutlined, PictureOutlined, DownOutlined, CloseOutlined, FilePdfOutlined,
+  AppstoreAddOutlined, PlusOutlined, DeleteOutlined,
 } from '@ant-design/icons-vue'
 import { useIsMobile } from '@/composables/useIsMobile.js'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
@@ -409,6 +472,7 @@ const contactStore = useContact()
 const reportId = computed(() => route.params.id)
 
 const EMPTY_FILTERS = () => ({
+  works: [],
   date_from: null, date_to: null,
   artists: [], series: [], media: [], contacts: [], sold_by: [], currencies: [],
   discount: 'any', discount_min: null, discount_max: null, price_min: null, price_max: null,
@@ -416,6 +480,13 @@ const EMPTY_FILTERS = () => ({
 })
 
 const report = ref(null)
+// Отчёт «выбранные работы» (type manual): работы — filters.works
+const isManual = computed(() => report.value?.type === 'manual')
+const pickerOpen = ref(false)
+function saveManualWorks(ids) {
+  filters.works = ids
+  message.success(ids.length ? `В отчёте работ: ${ids.length}` : 'Работы убраны из отчёта')
+}
 const name = ref('')
 const currency = ref('BYN')
 const filters = reactive(EMPTY_FILTERS())
@@ -425,6 +496,31 @@ const rates = reactive({})
 // ({ [sale_id]: pct }) — см. ReportService на бэкенде
 const commissionPct = ref(null)
 const overrides = reactive({})
+// Общие расходы галереи: { key, date, title, amount, currency, comment }
+const expenses = reactive([])
+let expenseKey = 0
+const toExpenseRow = (e) => ({
+  key: ++expenseKey,
+  date: e.date || null,
+  title: e.title || '',
+  amount: e.amount ?? null,
+  currency: e.currency || currency.value,
+  comment: e.comment || '',
+})
+function addExpense() {
+  expenses.push(toExpenseRow({ date: new Date().toISOString().slice(0, 10), currency: currency.value }))
+}
+const expensesWord = (n) => {
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return 'расход'
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'расхода'
+  return 'расходов'
+}
+// на сервер — только заполненные строки (без названия или суммы — ещё вводятся)
+const cleanExpenses = () => expenses
+  .filter(e => e.title.trim() && e.amount !== null && e.amount !== undefined && e.amount !== '')
+  .map(e => ({ date: e.date || null, title: e.title.trim(), amount: Number(e.amount), currency: e.currency, comment: e.comment?.trim() || null }))
 const data = ref(null)
 
 const loadingReport = ref(false)
@@ -447,6 +543,7 @@ function applyReport(r) {
   for (const key of Object.keys(rates)) delete rates[key]
   Object.assign(rates, r.rates || {})
   applyCommission(r)
+  expenses.splice(0, expenses.length, ...(r.expenses || []).map(toExpenseRow))
   // снимаем флаг после того, как отработают вотчеры этого тика
   setTimeout(() => { applyingServer = false })
 }
@@ -476,6 +573,11 @@ onMounted(async () => {
   }
   applyReport(r)
   loadData()
+  // только что созданный отчёт «выбрать работы» — сразу открываем выбор
+  if (r.type === 'manual' && route.query.pick) {
+    pickerOpen.value = true
+    router.replace({ query: { ...route.query, pick: undefined } })
+  }
 
   // справочники для фильтров
   if (!artistStore.listArtists.length) artistStore.getListArtists()
@@ -539,6 +641,19 @@ const cleanFilters = () => JSON.parse(JSON.stringify(filters))
 watch(filters, () => {
   if (applyingServer) return
   scheduleSave({ filters: cleanFilters() })
+}, { deep: true })
+
+let lastExpensesJson = null
+watch(expenses, () => {
+  if (applyingServer) {
+    lastExpensesJson = JSON.stringify(cleanExpenses())
+    return
+  }
+  const clean = cleanExpenses()
+  const json = JSON.stringify(clean)
+  if (json === lastExpensesJson) return // правят строку, которая ещё не заполнена
+  lastExpensesJson = json
+  scheduleSave({ expenses: clean }, 800)
 }, { deep: true })
 
 watch(rates, () => {
@@ -731,7 +846,7 @@ const salesColumns = computed(() => [
   { title: 'Художнику', key: 'net', width: 120, align: 'right', sorter: (a, b) => (a.net_converted ?? -1) - (b.net_converted ?? -1) },
   { title: 'Расчёт', key: 'paid', width: 80, align: 'center', sorter: (a, b) => Number(a.artist_paid) - Number(b.artist_paid) },
   { title: 'Покупатель', key: 'buyer', width: 150 },
-  { title: 'Оформил(а)', key: 'sold_by', width: 140 },
+  { title: 'Продал(а)', key: 'sold_by', width: 140 },
 ])
 
 function groupColumns(firstTitle) {
@@ -840,11 +955,12 @@ async function exportPdf() {
       : (filters.date_from || filters.date_to
         ? `${filters.date_from ? formatDate(filters.date_from) : 'с начала'} — ${filters.date_to ? formatDate(filters.date_to) : 'по сегодня'}`
         : 'всё время')
+    // у отчёта «выбранные работы» периода и фильтров нет — только выбранные работы
     const subtitle = [
-      `Период: ${period}`,
+      isManual.value ? `Выбранные работы: ${filters.works.length}` : `Период: ${period}`,
       `валюта отчёта: ${cur}`,
       commissionPct.value !== null ? `комиссия галереи: ${formatPct(commissionPct.value)}` : 'комиссия не задана',
-      hasActiveFilters.value ? 'применены фильтры' : '',
+      !isManual.value && hasActiveFilters.value ? 'применены фильтры' : '',
     ].filter(Boolean).join(' · ')
     const missing = (s.missing_rates || []).map(m => `${m.currency} — ${m.count}`).join(', ')
     await downloadReportPdf({
@@ -860,8 +976,13 @@ async function exportPdf() {
         { label: 'Сумма скидок', value: formatMoney(s.discount_amount, cur) },
         { label: 'Комиссия галереи', value: formatMoney(s.commission_total, cur) },
         { label: 'К выплате', value: formatMoney(s.net_total, cur), hint: 'художникам после комиссии' },
+        ...(s.expenses_count ? [
+          { label: 'Расходы галереи', value: formatMoney(s.expenses_total, cur) },
+          { label: 'Галерее после расходов', value: formatMoney(s.gallery_after_expenses, cur), hint: 'комиссия − расходы' },
+        ] : []),
         { label: 'Выплачено', value: formatMoney(s.paid_total, cur), hint: s.unpaid_total > 0 ? `осталось ${formatMoney(s.unpaid_total, cur)}` : 'рассчитались полностью' },
       ],
+      expenses: data.value.expenses || [],
       rows: data.value.rows,
       summary: s,
     })
@@ -886,6 +1007,18 @@ async function exportXlsx() {
 </script>
 
 <style scoped>
+/* тираж: сколько экземпляров в продаже */
+.qty-badge {
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6f581f;
+  background: #f1eadb;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
 .report-page {
   --bg: #f7f5f0;
   --bg-elevated: #ffffff;
@@ -979,12 +1112,88 @@ async function exportXlsx() {
   margin-bottom: 12px;
 }
 
+.expenses-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.expense-row {
+  display: grid;
+  grid-template-columns: 140px minmax(160px, 2fr) 130px 110px minmax(120px, 1.5fr) 36px;
+  gap: 8px;
+  align-items: center;
+}
+
+.exp-date,
+.exp-amount,
+.exp-currency {
+  width: 100%;
+}
+
+.expenses-total {
+  padding-top: 8px;
+  margin-top: 2px;
+  border-top: 1px dashed var(--border, rgba(0, 0, 0, 0.08));
+  font-size: 13px;
+  color: var(--text-body, #2c2a25);
+}
+
+.exp-sep {
+  margin: 0 6px;
+  color: var(--text-faint, #7c7669);
+}
+
+.exp-negative,
+.kpi-negative .kpi-value {
+  color: #b43c3c;
+}
+
+.exp-warn {
+  color: #b4441c;
+}
+
+@media (max-width: 900px) {
+  .expense-row {
+    grid-template-columns: 1fr 1fr;
+    padding: 10px;
+    border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+    border-radius: 10px;
+  }
+
+  .exp-title,
+  .exp-comment {
+    grid-column: 1 / -1;
+  }
+
+  .exp-del {
+    justify-self: end;
+    grid-column: 2;
+  }
+}
+
+.manual-card .card-heading-row {
+  margin-bottom: 6px;
+}
+
+.manual-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-faint, #7c7669);
+}
+
+.manual-pick-btn {
+  background: var(--accent, #8a6d2f);
+  border-color: var(--accent, #8a6d2f);
+}
+
 .card-heading-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
   flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 
 .period-row {

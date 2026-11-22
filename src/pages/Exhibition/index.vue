@@ -269,7 +269,7 @@
           </a-form-item>
 
           <template v-if="form.displayCurrency">
-            <a-form-item label="Курс (умножается на цену работы)">
+            <a-form-item label="Курс (умножается на цену работы)" extra="Работы, уже заведённые в этой валюте, не пересчитываются">
               <a-input-number
                 id="exhibitionCurrencyRate"
                 name="exhibitionCurrencyRate"
@@ -916,8 +916,15 @@ async function handleExportPdf() {
   exportingPdf.value = true
   exportProgress.value = ''
   try {
+    // свежие цены работ с сервера (в браузере мог остаться старый список)
+    await artWorkStore.getListArtWorks()
+    worksTable.value = artWorkStore.listArtWorks
     await downloadCatalogPdf(form.name, selectedWorksData.value, {
       visibleFields: form.visibleFields,
+      // пересчёт цен в валюту показа — как на публичной странице
+      priceDisplay: form.displayCurrency
+        ? { currency: form.displayCurrency, rate: form.currencyRate, rounding: form.currencyRounding }
+        : null,
       resolveNames: (work) => ({
         artist: getArtistName(work.artist),
         seria: getSeriaName(work.seria),

@@ -43,6 +43,7 @@
                 <span v-else class="hj-name hj-name-plain">{{ item.entity_name || 'Без названия' }}</span>
                 <span v-if="item.entity_deleted && item.action !== 'delete'" class="hj-deleted">удалено</span>
               </div>
+              <HistoryChanges :changes="item.meta?.changes" />
             </div>
           </div>
         </template>
@@ -59,6 +60,7 @@
 // Журнал изменений галереи: все действия галереи и её менеджеров (см. ChangeLogService)
 import { computed, onMounted, ref, watch } from 'vue'
 import MobileMenuButton from '@/components/MobileMenuButton.vue'
+import HistoryChanges from '@/components/HistoryChanges.vue'
 import { useHistory } from '@/stores/history.js'
 import { ENTITY_LABELS, ACTION_COLORS, actionText, actorName, entityLink } from '@/utils/history.js'
 

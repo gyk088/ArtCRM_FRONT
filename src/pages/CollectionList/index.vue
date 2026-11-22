@@ -763,6 +763,10 @@ async function importWorksFromCollection(sourceWorks) {
       status: statusId,
       artist: artistId,
       price: sourceWork.price,
+      // без валюты цена в USD/EUR стала бы рублёвой
+      ...(sourceWork.currency ? { currency: sourceWork.currency } : {}),
+      // тираж — подпись работы; количество экземпляров не копируем (это чужой запас)
+      ...(sourceWork.edition ? { edition: sourceWork.edition } : {}),
       avatar_id: copiedAvatar?.id || null,
       images: copiedImages.filter(Boolean),
       imported: true,

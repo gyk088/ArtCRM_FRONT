@@ -20,6 +20,8 @@ export const useStatuses = defineStore('statuses', {
       return state.listStatuses.find(item => item.id === id)
     },
     totalStatuses: (state) => state.listStatuses.length,
+    // Статус продажи (галочка «При продаже» в справочнике) — или null
+    soldStatus: (state) => state.listStatuses.find(item => item.is_sold) || null,
   },
 
   actions: {

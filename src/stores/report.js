@@ -94,6 +94,18 @@ export const useReport = defineStore('report', {
     },
 
     /** GET /api/v1/reports/:id/data — строки, сводка, разбивки */
+    /** GET /api/v1/reports/sold-works — проданные работы для отчёта «выбранные работы» */
+    async getSoldWorks() {
+      try {
+        const resp = await apiClient.get('/api/v1/reports/sold-works')
+        return resp.data || []
+      } catch (e) {
+        console.error('Error fetching sold works:', e)
+        notifyServerError('Не удалось загрузить проданные работы')
+        return null
+      }
+    },
+
     async getReportData(id) {
       try {
         const resp = await apiClient.get(`/api/v1/reports/${id}/data`)

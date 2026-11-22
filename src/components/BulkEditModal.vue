@@ -25,6 +25,14 @@
           class="bulk-control"
         />
       </div>
+      <a-alert
+        v-if="soldStatusPicked"
+        type="warning"
+        show-icon
+        class="bulk-sold-warn"
+        :message="`«${statusesStore.soldStatus.name}» — статус продажи`"
+        description="Здесь статус поменяется, но продажи не оформятся: работы не попадут в отчёты о продажах. Чтобы оформить продажу, выберите этот статус у каждой работы отдельно — откроется окно продажи."
+      />
 
       <!-- Теги -->
       <div class="bulk-row bulk-row-top">
@@ -153,6 +161,10 @@ watch(tagIds, (v) => { if (v.length) enabled.tags = true })
 watch(tagMode, () => { enabled.tags = true })
 watch(pricePct, (v) => { if (v !== null && v !== undefined) enabled.price = true })
 
+// выбран «статус продажи» — предупреждаем: массово продажи не оформляются
+const soldStatusPicked = computed(() => enabled.status && !!values.status
+  && values.status === statusesStore.soldStatus?.id)
+
 const tagModeHint = computed(() => ({
   add: 'Выбранные теги добавятся к уже стоящим',
   remove: 'Выбранные теги снимутся, остальные останутся',
@@ -228,6 +240,10 @@ async function apply() {
 </script>
 
 <style scoped>
+.bulk-sold-warn {
+  margin: -2px 0 4px;
+}
+
 .bulk-hint {
   margin: 0 0 16px;
   font-size: 13px;

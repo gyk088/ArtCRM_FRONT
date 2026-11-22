@@ -259,14 +259,37 @@
                   </a-input-group>
                 </a-form-item>
               </div>
+
+              <!-- Тираж: подпись + сколько экземпляров есть на продажу -->
+              <div class="field-row">
+                <a-form-item label="Тираж" class="field-half">
+                  <a-input v-model:value="form.edition" placeholder="Например, 3/30, AP или тираж 30" :maxlength="100" allow-clear />
+                </a-form-item>
+                <a-form-item label="Экземпляров на продажу" class="field-half">
+                  <a-input-number
+                    v-model:value="form.quantity"
+                    :min="1"
+                    :precision="0"
+                    placeholder="1 — уникальная работа"
+                    style="width: 100%"
+                  />
+                </a-form-item>
+              </div>
+              <p class="qty-hint">
+                Стоимость указывается за один экземпляр. Если экземпляров несколько, каждую продажу оформляйте
+                с количеством — цена посчитается как стоимость × количество, а работа будет «продана», когда
+                проданы все экземпляры.
+              </p>
             </section>
 
             <!-- Продажа сохраняется сразу (своим запросом), независимо от кнопки «Сохранить» -->
             <WorkSaleCard
               v-if="!isNewWork && workLoaded"
+              ref="saleCardRef"
               :art-id="workId"
               :price="form.price"
               :currency="form.currency"
+              @status-changed="(status) => (form.status = status)"
             />
 
             <div class="buttons-wrapper">
@@ -305,7 +328,7 @@
 <script setup>
 import HistoryButton from '@/components/HistoryButton.vue'
 import { fileUrl as buildFileUrl } from '@/services/const.js'
-import { ref, reactive, computed, onMounted, defineComponent } from 'vue'
+import { ref, reactive, computed, onMounted, defineComponent, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PlusOutlined, DownloadOutlined, CloseOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
@@ -399,6 +422,8 @@ const form = reactive({
   artist: null,
   price: '',
   currency: 'RUB',
+  edition: '',
+  quantity: null,
   collections: [],
   images: []
 })
@@ -415,6 +440,23 @@ const getNameById = (id, store, listName) => {
   const item = store[listName]?.find(i => i.id === id)
   return item ? item.name : id
 }
+
+// Выбрали «статус продажи» у непроданной работы — вместо смены статуса
+// открываем оформление продажи: статус поставит сервер, когда продажа
+// сохранится; закрыли окно — статус остаётся прежним
+const saleCardRef = ref(null)
+watch(() => form.status, (value, prev) => {
+  const sold = statusesStore.soldStatus
+  if (!value || !sold || value !== sold.id || value === prev) return
+  if (isNewWork.value) {
+    message.info(`«${sold.name}» — статус продажи. Сохраните работу, затем оформите продажу в блоке «Продажа».`)
+    return
+  }
+  // только когда точно известно, что работа не продана (при загрузке страницы — пропускаем)
+  if (saleCardRef.value?.isSold() !== false) return
+  form.status = prev ?? null
+  saleCardRef.value.openForStatus(sold.name)
+})
 
 // Загрузка работы для редактирования
 const loadArtWork = async () => {
@@ -442,6 +484,8 @@ const loadArtWork = async () => {
         artist: work.artist || null,
         price: work.price || '',
         currency: work.currency || 'RUB',
+        edition: work.edition || '',
+        quantity: work.quantity ?? null,
         collections: work.collections || [],
         images: work.images || [],
         avatar: work.avatar || null
@@ -970,6 +1014,12 @@ const saveChanges = async () => {
     message.warning('Проверьте обязательные поля')
     return
   }
+  // экземпляров не может быть меньше, чем уже продано
+  const soldCount = saleCardRef.value?.soldCount?.() || 0
+  if (soldCount > (Number(form.quantity) || 1)) {
+    message.warning(`Уже продано ${soldCount} экз. — экземпляров не может быть меньше. Сначала отмените лишние продажи.`)
+    return
+  }
 
   loading.value = true
   try {
@@ -990,6 +1040,8 @@ const saveChanges = async () => {
       artist: form.artist ?? null,
       price: form.price ? parseFloat(form.price) : null,
       currency: form.currency,
+      edition: form.edition?.trim() || null,
+      quantity: form.quantity ? Number(form.quantity) : null,
       avatar_id: form.avatar?.id || null,
       images: form.images,
     }
@@ -1234,6 +1286,13 @@ function goBack() {
 
 .status-select :deep(.ant-select-selector:hover) {
   border-color: var(--accent) !important;
+}
+
+.qty-hint {
+  margin: -6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-faint, #7c7669);
 }
 
 .price-group {

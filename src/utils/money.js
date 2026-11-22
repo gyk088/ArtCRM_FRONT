@@ -35,3 +35,8 @@ export function formatMonth(value) {
   const [y, m] = String(value).split('-')
   return `${MONTHS[Number(m) - 1] || m} ${y}`
 }
+
+// Пояснение в окне продажи, когда его открыл выбор «статуса продажи»
+export const soldStatusNotice = (statusName) =>
+  `«${statusName}» — статус продажи. Заполните данные о продаже, и статус поставится автоматически. `
+  + 'Если закрыть окно без сохранения, статус работы останется прежним.'

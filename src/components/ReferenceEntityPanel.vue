@@ -20,6 +20,26 @@
       </a-button>
     </div>
 
+    <div v-if="hasSoldFlag" class="ref-sold-hint">
+      <div class="ref-sold-hint-title"><CheckSquareOutlined /> Статус продажи</div>
+      <p>
+        Отметьте галочкой в колонке «При продаже» статус, который работа будет получать
+        <b>автоматически</b>, как только вы отметите её проданной (кнопка «Отметить как проданную»).
+        Например, «Продано».
+      </p>
+      <ul>
+        <li>Галочка может стоять <b>только у одного</b> статуса: отметите другой — с прежнего она снимется сама.</li>
+        <li>Если продажу отменить, работе вернётся статус, который был у неё до продажи.</li>
+        <li>Нет галочки ни у одного статуса — при продаже статус работы не меняется.</li>
+        <li>Уже проданные работы не меняются — правило действует для новых продаж.</li>
+      </ul>
+      <div class="ref-sold-current">
+        Сейчас:
+        <b v-if="soldItem">«{{ soldItem.name }}»</b>
+        <span v-else>не выбран</span>
+      </div>
+    </div>
+
     <a-table :data-source="items" :columns="columns" :loading="store.loading" row-key="id" size="middle">
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'color'">
@@ -30,6 +50,16 @@
             title="Изменить цвет"
             @change="handleColorChange(record, $event.target.value)"
           />
+        </template>
+
+        <template v-else-if="column.dataIndex === 'is_sold'">
+          <a-tooltip :title="record.is_sold ? 'Снять: при продаже статус меняться не будет' : 'Ставить этот статус работе при продаже'">
+            <a-checkbox
+              :checked="!!record.is_sold"
+              :disabled="soldSaving"
+              @change="handleSoldToggle(record, $event.target.checked)"
+            />
+          </a-tooltip>
         </template>
 
         <template v-else-if="column.dataIndex === 'name'">
@@ -43,7 +73,10 @@
             @keyup.esc="cancelEdit"
             @blur="handleSaveEdit(record)"
           />
-          <span v-else>{{ record.name }}</span>
+          <span v-else>
+            {{ record.name }}
+            <a-tag v-if="hasSoldFlag && record.is_sold" color="green" class="ref-sold-tag">ставится при продаже</a-tag>
+          </span>
         </template>
 
         <template v-else-if="column.dataIndex === 'actions'">
@@ -77,7 +110,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, CheckSquareOutlined } from '@ant-design/icons-vue'
 import { getUser } from '@/services/auth.js'
 
 const props = defineProps({
@@ -92,6 +125,8 @@ const props = defineProps({
   singularLabel: { type: String, required: true },
   // Только для статусов — показывает колонку/пикер цвета
   hasColor: { type: Boolean, default: false },
+  // Только для статусов работ — галочка «статус продажи» (ставится работе при продаже)
+  hasSoldFlag: { type: Boolean, default: false },
 })
 
 const DEFAULT_COLOR = '#8a6d2f'
@@ -99,10 +134,31 @@ const DEFAULT_COLOR = '#8a6d2f'
 const columns = computed(() => [
   ...(props.hasColor ? [{ title: 'Цвет', dataIndex: 'color', key: 'color', width: 70 }] : []),
   { title: 'Название', dataIndex: 'name', key: 'name' },
+  ...(props.hasSoldFlag ? [{ title: 'При продаже', dataIndex: 'is_sold', key: 'is_sold', width: 110, align: 'center' }] : []),
   { title: 'Действия', dataIndex: 'actions', key: 'actions', width: 120 },
 ])
 
 const items = computed(() => props.store[props.listField] || [])
+const soldItem = computed(() => items.value.find(i => i.is_sold))
+
+// Статус продажи — только один: сервер сам снимает галочку с прежнего,
+// поэтому после сохранения перечитываем список
+const soldSaving = ref(false)
+async function handleSoldToggle(record, checked) {
+  soldSaving.value = true
+  try {
+    const result = await props.store[props.updateAction]({ id: record.id, is_sold: checked })
+    if (!result) return
+    await props.store[props.loadAction]()
+    // сообщение — по тому, что реально сохранилось на сервере
+    const saved = !!items.value.find(i => i.id === record.id)?.is_sold
+    if (saved !== checked) message.warning('Не удалось сохранить отметку — попробуйте позже')
+    else if (checked) message.success(`Теперь при продаже работа будет получать статус «${record.name}»`)
+    else message.info('Статус продажи не выбран — при продаже статус работы меняться не будет')
+  } finally {
+    soldSaving.value = false
+  }
+}
 
 onMounted(() => {
   props.store[props.loadAction]()
@@ -203,6 +259,48 @@ async function handleDelete(record) {
 .ref-color-input::-webkit-color-swatch {
   border: none;
   border-radius: 4px;
+}
+
+.ref-sold-hint {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-body, #2c2a25);
+  background: #faf8f3;
+  border: 1px solid rgba(138, 109, 47, 0.25);
+  border-radius: 10px;
+}
+
+.ref-sold-hint-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-weight: 600;
+  color: var(--accent-strong, #6f581f);
+}
+
+.ref-sold-hint p {
+  margin: 0 0 6px;
+}
+
+.ref-sold-hint ul {
+  margin: 0 0 6px;
+  padding-left: 18px;
+}
+
+.ref-sold-current {
+  color: var(--text-faint, #7c7669);
+}
+
+.ref-sold-current b {
+  color: var(--text-title, #211f1a);
+}
+
+.ref-sold-tag {
+  margin-left: 6px;
+  font-size: 11px;
 }
 
 .ref-empty {

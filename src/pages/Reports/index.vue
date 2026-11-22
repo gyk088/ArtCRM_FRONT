@@ -28,7 +28,8 @@
             <span class="report-currency">{{ report.currency }}</span>
           </div>
           <div class="report-card-meta">
-            <div>Период: {{ periodText(report.filters) }}</div>
+            <div v-if="report.type === 'manual'">Выбранные работы: {{ (report.filters?.works || []).length }}</div>
+            <div v-else>Период: {{ periodText(report.filters) }}</div>
             <div v-if="report.owner && report.user_id !== currentUserId">Автор: {{ ownerName(report.owner) }}</div>
             <div>Изменён: {{ formatDateTime(report.utime) }}</div>
           </div>
@@ -60,6 +61,18 @@
       @ok="create"
     >
       <a-form layout="vertical">
+        <a-form-item label="Тип отчёта">
+          <a-radio-group v-model:value="createForm.type" class="type-choice">
+            <a-radio value="sales">
+              <b>По фильтрам</b>
+              <div class="hint">Все продажи за период, по художникам, сериям, покупателям…</div>
+            </a-radio>
+            <a-radio value="manual">
+              <b>Выбрать работы</b>
+              <div class="hint">Вы сами отмечаете проданные работы, которые войдут в отчёт</div>
+            </a-radio>
+          </a-radio-group>
+        </a-form-item>
         <a-form-item label="Название" required>
           <a-input v-model:value="createForm.name" :maxlength="200" placeholder="Например, «Продажи 2026»" @press-enter="create" />
         </a-form-item>
@@ -67,7 +80,7 @@
           <a-select v-model:value="createForm.currency" :options="CURRENCY_OPTIONS" />
           <div class="hint">Все суммы будут пересчитаны в эту валюту. Курсы зададите в самом отчёте.</div>
         </a-form-item>
-        <a-form-item label="Период">
+        <a-form-item v-if="createForm.type === 'sales'" label="Период">
           <a-select v-model:value="createForm.preset" :options="periodPresetOptions" />
         </a-form-item>
       </a-form>
@@ -76,7 +89,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
@@ -99,7 +112,14 @@ onMounted(() => {
 
 const createOpen = ref(false)
 const creating = ref(false)
-const createForm = reactive({ name: '', currency: 'BYN', preset: 'this_year' })
+const createForm = reactive({ name: '', currency: 'BYN', preset: 'this_year', type: 'sales' })
+
+// Сменили тип — подставляем подходящее название, если его ещё не правили
+const DEFAULT_NAMES = () => ({ sales: `Продажи ${dayjs().format('YYYY')}`, manual: 'Отчёт по выбранным работам' })
+watch(() => createForm.type, (type, prev) => {
+  const names = DEFAULT_NAMES()
+  if (!createForm.name.trim() || createForm.name === names[prev]) createForm.name = names[type]
+})
 
 function openCreate() {
   const last = reportStore.listReports[0]
@@ -107,6 +127,7 @@ function openCreate() {
     name: `Продажи ${dayjs().format('YYYY')}`,
     currency: last?.currency || 'BYN',
     preset: 'this_year',
+    type: 'sales',
   })
   createOpen.value = true
 }
@@ -118,15 +139,18 @@ async function create() {
   }
   creating.value = true
   try {
-    const [date_from, date_to] = presetRange(createForm.preset)
+    const manual = createForm.type === 'manual'
+    const [date_from, date_to] = manual ? [null, null] : presetRange(createForm.preset)
     const report = await reportStore.createReport({
       name: createForm.name.trim(),
+      type: createForm.type,
       currency: createForm.currency,
-      filters: { date_from, date_to },
+      filters: manual ? { works: [] } : { date_from, date_to },
     })
     if (report) {
       createOpen.value = false
-      router.push({ name: 'report', params: { id: report.id } })
+      // отчёт «выбрать работы» — сразу открываем выбор работ
+      router.push({ name: 'report', params: { id: report.id }, query: manual ? { pick: '1' } : {} })
     }
   } finally {
     creating.value = false
@@ -307,6 +331,22 @@ function formatDateTime(value) {
   max-width: 460px;
   margin: 0 auto 16px;
   color: var(--text-muted);
+}
+
+.type-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.type-choice :deep(.ant-radio-wrapper) {
+  align-items: flex-start;
+  margin: 0;
+}
+
+.type-choice .hint {
+  margin-top: 0;
+  font-weight: 400;
 }
 
 .hint {

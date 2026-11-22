@@ -60,16 +60,28 @@ export async function loadImageAsDataUrl(url) {
 
 const CURRENCY_SYMBOLS = { RUB: '₽', BYN: 'Br', USD: '$', EUR: '€' }
 
-function formatPrice(price, currency) {
-  if (!price) return ''
-  const symbol = CURRENCY_SYMBOLS[currency] || CURRENCY_SYMBOLS.RUB
-  return `${new Intl.NumberFormat('ru-RU').format(price)} ${symbol}`
+// Цена — как на публичной странице ссылки/выставки: если задана валюта
+// показа (display) — пересчёт по курсу и округлению ссылки; работа, уже
+// заведённая в валюте показа, не пересчитывается.
+function formatPrice(price, currency, display = null) {
+  const num = Number(price)
+  if (!price || Number.isNaN(num)) return ''
+  let value = num
+  let cur = currency || 'RUB'
+  if (display?.currency && cur !== display.currency) {
+    const rate = Number(display.rate) > 0 ? Number(display.rate) : 1
+    const step = Number(display.rounding) > 0 ? Number(display.rounding) : 1
+    value = Math.round((num * rate) / step) * step
+    cur = display.currency
+  }
+  const symbol = CURRENCY_SYMBOLS[cur] || CURRENCY_SYMBOLS.RUB
+  return `${new Intl.NumberFormat('ru-RU').format(value)} ${symbol}`
 }
 
 // Одна страница каталога — работа. Контейнер 700×985px подогнан под A4
 // (700/210 ≈ 985/297), как в certificatePdf.js, поэтому ровно одна
 // страница на работу без переполнения.
-async function renderWorkPage(work, { visibleFields, names }) {
+async function renderWorkPage(work, { visibleFields, names, priceDisplay }) {
   const isVisible = (key) => visibleFields[key] !== false
 
   let imageDataUrl = null
@@ -121,7 +133,7 @@ async function renderWorkPage(work, { visibleFields, names }) {
       ${rows.map(([label, value]) => `
         <div style="font-size: 12px; color: #333333; padding: 1px 0;">${escapeHtml(label)}: ${escapeHtml(String(value))}</div>
       `).join('')}
-      ${isVisible('price') && work.price ? `<div style="font-size: 15px; font-weight: 700; color: #000000; margin-top: 10px;">${escapeHtml(formatPrice(work.price, work.currency))}</div>` : ''}
+      ${isVisible('price') && work.price ? `<div style="font-size: 15px; font-weight: 700; color: #000000; margin-top: 10px;">${escapeHtml(formatPrice(work.price, work.currency, priceDisplay))}</div>` : ''}
     </div>
   `
 
@@ -150,7 +162,7 @@ async function renderWorkPage(work, { visibleFields, names }) {
  * @param {(work: object) => {artist, seria, media, location, status}} options.resolveNames
  * @param {(current: number, total: number) => void} options.onProgress - для индикации в UI (иначе много работ выглядит как зависание)
  */
-export async function downloadCatalogPdf(title, works, { visibleFields = {}, resolveNames, onProgress } = {}) {
+export async function downloadCatalogPdf(title, works, { visibleFields = {}, resolveNames, onProgress, priceDisplay = null } = {}) {
   if (!works.length) {
     message.warning('Нет работ для выгрузки')
     return
@@ -172,7 +184,7 @@ export async function downloadCatalogPdf(title, works, { visibleFields = {}, res
       try {
         // Рендер одной страницы (включая подгрузку картинки) тоже ограничен
         // по времени — сбой на одной работе не должен вешать весь каталог.
-        canvas = await withTimeout(renderWorkPage(work, { visibleFields, names }), 20000)
+        canvas = await withTimeout(renderWorkPage(work, { visibleFields, names, priceDisplay }), 20000)
       } catch (error) {
         console.error('Пропускаем работу в каталоге:', work?.name, error)
         skipped++

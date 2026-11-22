@@ -77,7 +77,7 @@
           <div class="aw-img">
             <img v-if="w.avatar && w.avatar.url" v-thumb="w.avatar" loading="lazy" alt="" />
             <PictureOutlined v-else class="aw-img-empty" />
-            <span v-if="w.sale" class="aw-sold">продано</span>
+            <span v-if="w.sale" class="aw-sold">{{ (w.quantity ?? 1) > 1 ? `продано ${w.sold_count ?? 0} из ${w.quantity}` : 'продано' }}</span>
           </div>
           <div class="aw-body">
             <div class="aw-name" :title="w.name">{{ w.name || 'Без названия' }}</div>
@@ -96,7 +96,7 @@
             <button
               class="aw-btn aw-btn-sale"
               :class="{ 'aw-btn-sale-done': w.sale }"
-              :title="w.sale ? 'Продажа — изменить' : 'Отметить как проданную'"
+              :title="!w.sale ? 'Отметить как проданную' : availableOf(w) > 0 ? `Оформить продажу ещё (осталось ${availableOf(w)})` : 'Продажа — изменить'"
               @click="openSale(w)"
             ><DollarOutlined /></button>
           </div>
@@ -190,6 +190,8 @@ const fTags = ref([])
 const fPriceFrom = ref(null)
 const fPriceTo = ref(null)
 const fSold = ref(null)
+// осталось экземпляров (тираж); уникальная работа — 1
+function availableOf(w) { return w?.available ?? (w?.sale ? 0 : (w?.quantity ?? 1)) }
 const filtersOpen = ref(false)
 const SOLD_OPTIONS = [
   { label: 'В наличии', value: 'available' },
@@ -235,7 +237,8 @@ const filtered = computed(() => {
     if (fPriceFrom.value != null && !(Number(w.price) >= fPriceFrom.value)) return false
     if (fPriceTo.value != null && !(Number(w.price) <= fPriceTo.value)) return false
     if (fSold.value === 'sold' && !w.sale) return false
-    if (fSold.value === 'available' && w.sale) return false
+    // в наличии — остались экземпляры (у тиража часть может быть продана)
+    if (fSold.value === 'available' && availableOf(w) <= 0) return false
     return true
   })
 })
