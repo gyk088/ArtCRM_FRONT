@@ -931,6 +931,8 @@ async function handleExportPdf() {
         media: getMediaName(work.media),
         location: getLocationName(work.location),
         status: getStatusName(work.status),
+        // цвет статуса — для плашки в PDF, как на публичной странице
+        statusColor: statusesStore.listStatuses.find(s => s.id === work.status)?.color || null,
       }),
       onProgress: (current, total) => { exportProgress.value = `${current} / ${total}` },
     })

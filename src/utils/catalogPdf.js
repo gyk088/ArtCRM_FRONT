@@ -2,6 +2,22 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import { message } from 'ant-design-vue'
 import { escapeHtml } from './textPdf.js'
+
+// Строка «Статус: …» — плашкой цвета статуса, как на публичной странице
+// (текст и рамка цветом статуса, заливка — тот же цвет на 12%)
+function statusLine(name, color) {
+  const hex = /^#[0-9a-f]{6}$/i.test(color || '') ? color : null
+  if (!hex) {
+    return `<div style="font-size: 12px; color: #333333; padding: 1px 0;">Статус: ${escapeHtml(String(name))}</div>`
+  }
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `<div style="font-size: 12px; color: #333333; padding: 3px 0;">Статус:
+    <span style="display: inline-block; margin-left: 4px; padding: 1px 9px; border-radius: 999px;
+      border: 1px solid ${hex}; background: rgba(${r}, ${g}, ${b}, 0.12); color: ${hex}; font-weight: 600;">${escapeHtml(String(name))}</span>
+  </div>`
+}
 import { fileUrl } from '@/services/const.js'
 
 // fetch()/<img> не имеют встроенного таймаута — если файл недоступен, но
@@ -100,8 +116,10 @@ async function renderWorkPage(work, { visibleFields, names, priceDisplay }) {
     isVisible('seria') && names.seria ? ['Серия', names.seria] : null,
     isVisible('media') && names.media ? ['Медиа', names.media] : null,
     isVisible('location') && names.location ? ['Локация', names.location] : null,
-    isVisible('status') && names.status ? ['Статус', names.status] : null,
   ].filter(Boolean)
+  // Статус — цветной плашкой, как на публичной странице ссылки (цвет из
+  // «Справочник → Статусы»); без цвета — обычным текстом
+  const statusHtml = isVisible('status') && names.status ? statusLine(names.status, names.statusColor) : ''
 
   const container = document.createElement('div')
   container.style.cssText = `
@@ -133,6 +151,7 @@ async function renderWorkPage(work, { visibleFields, names, priceDisplay }) {
       ${rows.map(([label, value]) => `
         <div style="font-size: 12px; color: #333333; padding: 1px 0;">${escapeHtml(label)}: ${escapeHtml(String(value))}</div>
       `).join('')}
+      ${statusHtml}
       ${isVisible('price') && work.price ? `<div style="font-size: 15px; font-weight: 700; color: #000000; margin-top: 10px;">${escapeHtml(formatPrice(work.price, work.currency, priceDisplay))}</div>` : ''}
     </div>
   `

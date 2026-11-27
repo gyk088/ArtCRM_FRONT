@@ -1,5 +1,5 @@
 <template>
-  <div class="file-uploader">
+  <div ref="rootRef" class="file-uploader">
 
     <!-- 🧭 Панель: путь / новая папка + поиск -->
     <div class="toolbar">
@@ -184,12 +184,40 @@
     <!-- 🟢 Файлы -->
     <div class="section-title">{{ currentFolder ? "Файлы в папке" : "Файлы" }}</div>
 
-    <div v-if="filteredFiles.length" class="files-grid">
+    <!-- Массовое перемещение: отметить файлы → выбрать папку → «Переместить» -->
+    <div v-if="filteredFiles.length" class="bulk-bar" :class="{ 'bulk-bar-active': selectedIds.length }">
+      <a-checkbox
+        :checked="allSelected"
+        :indeterminate="someSelected"
+        @change="toggleAll($event.target.checked)"
+      >
+        {{ selectedIds.length ? `Выбрано: ${selectedIds.length}` : 'Выбрать файлы' }}
+      </a-checkbox>
+      <template v-if="selectedIds.length">
+        <a-tree-select
+          v-model:value="bulkTarget"
+          :tree-data="folderTree"
+          tree-default-expand-all
+          show-search
+          tree-node-filter-prop="title"
+          placeholder="В какую папку"
+          class="bulk-target"
+          :dropdown-style="{ maxHeight: '360px', overflow: 'auto' }"
+        />
+        <a-button type="primary" size="small" class="bulk-move-btn" :disabled="!bulkTarget" :loading="bulkMoving" @click="moveSelected">
+          Переместить
+        </a-button>
+        <a-button type="link" size="small" @click="clearSelection">Снять выбор</a-button>
+      </template>
+      <span v-else class="bulk-hint">— чтобы переместить несколько сразу</span>
+    </div>
+
+    <div v-if="filteredFiles.length" class="files-grid" :class="{ selecting: selectedIds.length }">
       <div
         v-for="item in filteredFiles"
         :key="item.id"
         class="file-card"
-        :class="{ dragging: draggingFileId === item.id, 'reorder-over': reorderOverFileId === item.id }"
+        :class="{ dragging: draggingFileId === item.id, 'reorder-over': reorderOverFileId === item.id, selected: selectedSet.has(item.id) }"
         :draggable="!search"
         @dragstart="handleDragStart($event, item)"
         @dragend="handleDragEnd"
@@ -197,6 +225,12 @@
         @dragleave="handleFileReorderDragLeave(item.id)"
         @drop.stop="handleFileReorderDrop(item.id)"
       >
+        <a-checkbox
+          class="file-select"
+          :checked="selectedSet.has(item.id)"
+          @click.stop
+          @change="toggleFile(item.id, $event.target.checked)"
+        />
         <div class="file-thumb" @click.stop>
           <FileView :file="item">
             <!-- Действия в полном просмотре — те же, что у карточки файла -->
@@ -320,7 +354,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, defineProps, defineEmits, h } from "vue"
+import { ref, computed, onMounted, nextTick, defineProps, defineEmits, h, watch } from "vue"
 import { message, Modal } from "ant-design-vue"
 import {
   FolderFilled,
@@ -345,6 +379,7 @@ import { useArtWork } from "@/stores/artWork.js"
 import { useCollection } from "@/stores/collection.js"
 import { useExhibition } from "@/stores/exhibition.js"
 import FileView from "./FileView.vue"
+import { useDragAutoScroll } from "@/composables/useDragAutoScroll.js"
 import { downloadFile } from "@/utils/downloadFile.js"
 
 const emit = defineEmits(["select"])
@@ -615,7 +650,75 @@ const draggingFolderId = ref(null)
 const dragOverTarget = ref(null) // id папки или "root" — подсветка папки-цели
 const reorderOverFileId = ref(null) // id файла, над которым сейчас держат перетаскиваемый файл
 
+// Пока тащим — подвели к краю, и область сама прокручивается
+const rootRef = ref(null)
+const autoScroll = useDragAutoScroll(rootRef)
+
+// === Выбор нескольких файлов и перемещение в папку одним действием ===
+const selectedIds = ref([])
+const selectedSet = computed(() => new Set(selectedIds.value))
+const allSelected = computed(() => filteredFiles.value.length > 0 && filteredFiles.value.every(f => selectedSet.value.has(f.id)))
+const someSelected = computed(() => !allSelected.value && filteredFiles.value.some(f => selectedSet.value.has(f.id)))
+function toggleFile(id, checked) {
+  selectedIds.value = checked ? [...new Set([...selectedIds.value, id])] : selectedIds.value.filter(x => x !== id)
+}
+function toggleAll(checked) {
+  const ids = filteredFiles.value.map(f => f.id)
+  selectedIds.value = checked
+    ? [...new Set([...selectedIds.value, ...ids])]
+    : selectedIds.value.filter(id => !ids.includes(id))
+}
+function clearSelection() {
+  selectedIds.value = []
+  bulkTarget.value = undefined
+}
+
+// Дерево папок для выбора: «Все файлы» и все папки с вложенностью
+const ROOT_KEY = '__root__'
+const folderTree = computed(() => {
+  const build = (parentId) => folders.value
+    .filter(f => (f.parent_id || null) === parentId)
+    .map(f => ({ title: f.name, value: f.id, key: f.id, children: build(f.id) }))
+  return [{ title: 'Все файлы (без папки)', value: ROOT_KEY, key: ROOT_KEY }, ...build(null)]
+})
+const bulkTarget = ref(undefined)
+const bulkMoving = ref(false)
+// перешли в другую папку — выбор сбрасываем
+watch(() => fileStore.currentFolderId, () => clearSelection())
+
+// Переместить файлы ids в папку target (null — во «Все файлы»)
+async function moveFiles(ids, target) {
+  let moved = 0
+  for (const id of ids) {
+    const file = files.value.find(f => f.id === id)
+    if ((file?.folder_id || null) === target) { moved++; continue }
+    try {
+      await fileStore.moveFileToFolder(id, target)
+      moved++
+    } catch {
+      // ошибка уже показана через notifyServerError в сторе
+    }
+  }
+  return moved
+}
+
+async function moveSelected() {
+  if (!bulkTarget.value || !selectedIds.value.length) return
+  const target = bulkTarget.value === ROOT_KEY ? null : bulkTarget.value
+  const ids = [...selectedIds.value]
+  bulkMoving.value = true
+  try {
+    const moved = await moveFiles(ids, target)
+    const name = target ? folders.value.find(f => f.id === target)?.name : 'Все файлы'
+    if (moved) message.success(`Перемещено файлов: ${moved} → «${name}»`)
+    clearSelection()
+  } finally {
+    bulkMoving.value = false
+  }
+}
+
 const handleDragStart = (event, item) => {
+  autoScroll.start()
   draggingFileId.value = item.id
   draggingFolderId.value = null
   event.dataTransfer.effectAllowed = "move"
@@ -623,6 +726,7 @@ const handleDragStart = (event, item) => {
 }
 
 const handleDragEnd = () => {
+  autoScroll.stop()
   draggingFileId.value = null
   dragOverTarget.value = null
   dropZone.value = null
@@ -630,6 +734,7 @@ const handleDragEnd = () => {
 }
 
 const handleFolderDragStart = (event, folder) => {
+  autoScroll.start()
   draggingFolderId.value = folder.id
   draggingFileId.value = null
   event.dataTransfer.effectAllowed = "move"
@@ -637,6 +742,7 @@ const handleFolderDragStart = (event, folder) => {
 }
 
 const handleFolderDragEnd = () => {
+  autoScroll.stop()
   draggingFolderId.value = null
   dragOverTarget.value = null
   dropZone.value = null
@@ -695,6 +801,7 @@ const handleFileReorderDragLeave = (targetId) => {
 }
 
 const handleFileReorderDrop = async (targetId) => {
+  autoScroll.stop()
   const sourceId = draggingFileId.value
   reorderOverFileId.value = null
   draggingFileId.value = null
@@ -732,6 +839,7 @@ const handleDownload = async (item) => {
 }
 
 const handleDropOnFolder = async (target) => {
+  autoScroll.stop()
   const fileId = draggingFileId.value
   const folderId = draggingFolderId.value
   const zone = dropZone.value
@@ -786,6 +894,14 @@ const handleDropOnFolder = async (target) => {
   }
 
   if (!fileId) return
+
+  // тащили один из отмеченных файлов — переносим все отмеченные
+  if (selectedSet.value.has(fileId) && selectedIds.value.length > 1) {
+    const moved = await moveFiles([...selectedIds.value], target === "root" ? null : target)
+    if (moved) message.success(target === "root" ? `Перемещено в «Все файлы»: ${moved}` : `Перемещено в папку: ${moved}`)
+    clearSelection()
+    return
+  }
 
   try {
     await fileStore.moveFileToFolder(fileId, target === "root" ? null : target)
@@ -1125,6 +1241,80 @@ const removeFile = async (item) => {
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
+}
+
+/* Панель выбора файлов (массовое перемещение) */
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.bulk-bar-active {
+  padding: 6px 10px;
+  background: #f6f1e4;
+  border: 1px solid rgba(138, 109, 47, 0.25);
+  border-radius: 8px;
+}
+
+.bulk-hint {
+  color: var(--text-faint, #7c7669);
+  font-size: 12px;
+}
+
+/* Текст кнопки всегда белый; пока папка не выбрана — кнопка полупрозрачная */
+.bulk-move-btn.ant-btn,
+.bulk-move-btn.ant-btn:disabled,
+.bulk-move-btn.ant-btn:disabled:hover {
+  color: #fff;
+  background: var(--accent, #8a6d2f);
+  border-color: var(--accent, #8a6d2f);
+}
+
+.bulk-move-btn.ant-btn:disabled {
+  opacity: 0.5;
+}
+
+.bulk-target {
+  flex: 1 1 140px;
+  min-width: 130px;
+  max-width: 210px;
+}
+
+/* Галочка выбора — видна при наведении или когда файлы уже выбираются */
+.file-select {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  display: flex;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.file-card:hover .file-select,
+.file-card.selected .file-select,
+.files-grid.selecting .file-select {
+  opacity: 1;
+}
+
+/* сенсорные экраны: наведения нет — галочки видны всегда */
+@media (hover: none) {
+  .file-select {
+    opacity: 1;
+  }
+}
+
+.file-card.selected,
+.file-card.selected:hover {
+  border-color: var(--accent, #8a6d2f);
+  box-shadow: 0 0 0 1px var(--accent, #8a6d2f);
 }
 
 .folder-card,

@@ -1,5 +1,5 @@
 <template>
-  <div class="collection-page">
+  <div ref="pageRef" class="collection-page">
     <div class="collection-header">
       <div class="header-heading">
         <div class="header-heading-top">
@@ -313,6 +313,7 @@
 
 <script setup>
 import { ref, onMounted, computed, nextTick, h } from 'vue';
+import { useDragAutoScroll } from '@/composables/useDragAutoScroll.js';
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { ImportOutlined, CopyOutlined, DeleteOutlined, PlusOutlined, FolderOpenOutlined, FolderFilled, FolderAddOutlined, ArrowLeftOutlined, EditOutlined, ExclamationCircleOutlined, PictureOutlined, SearchOutlined, EyeOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons-vue'
@@ -503,7 +504,12 @@ const draggingFolderId = ref(null)
 const folderDragOverTarget = ref(null) // id папки или "root" — подсветка папки-цели
 const reorderOverCollectionId = ref(null)
 
+// Пока тащим — подвели к краю, и страница сама прокручивается
+const pageRef = ref(null)
+const autoScroll = useDragAutoScroll(pageRef)
+
 const handleCollectionDragStart = (event, collection) => {
+  autoScroll.start()
   draggingCollectionId.value = collection.id
   draggingFolderId.value = null
   event.dataTransfer.effectAllowed = 'move'
@@ -511,12 +517,14 @@ const handleCollectionDragStart = (event, collection) => {
 }
 
 const handleCollectionDragEnd = () => {
+  autoScroll.stop()
   draggingCollectionId.value = null
   folderDragOverTarget.value = null
   reorderOverCollectionId.value = null
 }
 
 const handleFolderDragStart = (event, folder) => {
+  autoScroll.start()
   draggingFolderId.value = folder.id
   draggingCollectionId.value = null
   event.dataTransfer.effectAllowed = 'move'
@@ -524,6 +532,7 @@ const handleFolderDragStart = (event, folder) => {
 }
 
 const handleFolderDragEnd = () => {
+  autoScroll.stop()
   draggingFolderId.value = null
   folderDragOverTarget.value = null
 }
@@ -552,6 +561,7 @@ const handleCollectionReorderDragLeave = (targetId) => {
 }
 
 const handleCollectionReorderDrop = async (targetId) => {
+  autoScroll.stop()
   const sourceId = draggingCollectionId.value
   reorderOverCollectionId.value = null
   draggingCollectionId.value = null
@@ -572,6 +582,7 @@ const handleCollectionReorderDrop = async (targetId) => {
 
 // Бросили ссылку или папку на папку/хлебную крошку/«Все ссылки»
 const handleDropOnFolder = async (target) => {
+  autoScroll.stop()
   const collectionId = draggingCollectionId.value
   const folderId = draggingFolderId.value
   draggingCollectionId.value = null
