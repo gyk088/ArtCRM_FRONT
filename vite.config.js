@@ -3,6 +3,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
+import { VitePWA } from 'vite-plugin-pwa'
 import childProcess from "child_process"
 let { version } = require("./package.json");
 
@@ -26,6 +27,74 @@ export default defineConfig(({mode}) => {
     plugins: [
       vue(),
       vueDevTools(),
+      // PWA: установка на телефон/компьютер и запуск без интернета.
+      // Service worker хранит интерфейс (precache), картинки и шрифты.
+      // Ответы API он НЕ кеширует — данные для офлайна хранит само
+      // приложение (src/offline/), чтобы стирать их при выходе из аккаунта.
+      VitePWA({
+        registerType: 'prompt', // новая версия — спрашиваем, а не перезагружаем посреди работы
+        injectRegister: false, // регистрируем сами (src/offline/pwa.js)
+        includeAssets: ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png'],
+        manifest: {
+          name: 'ArtCRM',
+          short_name: 'ArtCRM',
+          description: 'Работы, ссылки, продажи и клиенты галереи',
+          lang: 'ru',
+          start_url: '/home/dashboard',
+          scope: '/',
+          display: 'standalone',
+          background_color: '#16151a',
+          theme_color: '#16151a',
+          icons: [
+            { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+            { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+            { src: '/maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          ],
+        },
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+          cleanupOutdatedCaches: true,
+          // при первой установке сразу управлять открытой страницей (офлайн
+          // работает без перезагрузки); обновления всё равно ждут «Обновить»
+          clientsClaim: true,
+          navigateFallback: '/index.html',
+          // Это не страницы приложения: API, файлы и публичные страницы
+          // ссылок/выставок/портфолио (их рендерит бэкенд)
+          navigateFallbackDenylist: [/^\/api\//, /^\/files\//, /^\/static\//, /^\/collection\//, /^\/exhibition\//, /^\/portfolio\//],
+          runtimeCaching: [
+            {
+              // миниатюры работ — их много и они маленькие
+              urlPattern: ({ url }) => url.pathname.startsWith('/files/thumbs/'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'artcrm-thumbs',
+                expiration: { maxEntries: 5000, maxAgeSeconds: 90 * 24 * 3600 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              // полные изображения — только те, что открывали
+              urlPattern: ({ url, request }) => url.pathname.startsWith('/files/') && request.destination === 'image',
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'artcrm-images',
+                expiration: { maxEntries: 600, maxAgeSeconds: 60 * 24 * 3600, purgeOnQuotaError: true },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              urlPattern: ({ url }) => url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com',
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'artcrm-fonts',
+                expiration: { maxEntries: 30, maxAgeSeconds: 365 * 24 * 3600 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+          ],
+        },
+      }),
     ],
     resolve: {
       alias: {

@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { getToken, logout } from '@/services/auth.js'
 import { API_BASE_URL } from '@/services/const.js'
+import { installApiCache } from '@/offline/apiCache.js'
 
 const apiClient = axios.create({
   timeout: 100000,
@@ -32,5 +33,8 @@ apiClient.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+// Без интернета — ответы GET из сохранённого на устройстве (src/offline/)
+installApiCache(apiClient)
 
 export default apiClient

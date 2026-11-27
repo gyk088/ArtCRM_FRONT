@@ -1,3 +1,4 @@
+import { clearOfflineData } from '@/offline/db.js'
 const defaultCahce = {
   user: null,
   session: null
@@ -49,10 +50,12 @@ export const getToken = () => {
   return session?.token;
 }
 
+// Выход: стираем и всё сохранённое для работы без интернета (данные
+// галереи не должны оставаться на устройстве)
 export const logout = () => {
   CACHE = defaultCahce
   localStorage.clear()
-  window.location.reload()
+  clearOfflineData().finally(() => window.location.reload())
 }
 
 // ==================== Имперсонация (вход под другим пользователем из админ-панели) ====================

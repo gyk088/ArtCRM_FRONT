@@ -13,6 +13,12 @@ const SERVER_ERROR = {
 }
 
 export const notifyServerError = (serverMessage, duration) => {
+  // действие недоступно без интернета (src/offline/apiCache.js) — это не ошибка сервера
+  const offline = typeof serverMessage === 'string' && serverMessage.startsWith('Нет интернета')
+  if (offline) {
+    notification.warning({ key: 'offline-blocked', message: 'Нет интернета', description: serverMessage, duration: duration || 5 })
+    return
+  }
   notification.error({
     message: 'Ошибка сервера',
     description: SERVER_ERROR[serverMessage] || serverMessage,

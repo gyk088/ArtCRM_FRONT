@@ -310,6 +310,7 @@ import {
   SkinOutlined
 } from '@ant-design/icons-vue'
 import { useNotifications, setNotificationNavigator } from '@/stores/notifications.js'
+import { syncState } from '@/offline/sync.js'
 
 const collapsed = ref(false);
 // Открывается кнопкой MobileMenuButton, которая лежит на каждой странице
@@ -446,9 +447,13 @@ onMounted(() => {
 
 // Функция выхода
 const handleLogout = () => {
+  // при выходе всё сохранённое на устройстве стирается — и неотправленные изменения
+  const unsent = syncState.items.length
   Modal.confirm({
     title: 'Выход из системы',
-    content: 'Вы уверены, что хотите выйти?',
+    content: unsent
+      ? `На этом устройстве есть неотправленные изменения (${unsent}) — они были сделаны без интернета. При выходе они пропадут. Лучше дождаться интернета, чтобы они отправились.`
+      : 'Вы уверены, что хотите выйти?',
     okText: 'Да, выйти',
     cancelText: 'Отмена',
     onOk: async () => {

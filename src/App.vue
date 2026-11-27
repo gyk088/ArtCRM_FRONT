@@ -3,6 +3,8 @@ a-config-provider(:locale="locale" :theme="appTheme")
   component(
     :is="layoutName"
   )
+  OfflineBanner
+  SyncPanel
 </template>
 
 <script>
@@ -10,6 +12,8 @@ import { defineComponent, computed } from "vue";
 import EmptyLayout from "@/layouts/Empty.vue";
 import MainLayout from "@/layouts/Home.vue";
 import PublicLayout from "@/layouts/Public.vue";
+import OfflineBanner from "@/components/OfflineBanner.vue";
+import SyncPanel from "@/components/SyncPanel.vue";
 import { useRoute } from "vue-router";
 import ruRU from "ant-design-vue/es/locale/ru_RU";
 import dayjs from "dayjs";
@@ -25,6 +29,8 @@ export default defineComponent({
     EmptyLayout,
     MainLayout,
     PublicLayout,
+    OfflineBanner,
+    SyncPanel,
   },
 
   setup() {
